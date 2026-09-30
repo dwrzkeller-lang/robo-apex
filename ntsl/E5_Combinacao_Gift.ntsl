@@ -1,0 +1,450 @@
+// =====================================================================
+//  ROBO KELLER - E5 - Combinacao perfeita + Gift na MM9 (Oliver Velez + Mario Pisani)
+//  Tipo no Profit: Indicador (no grafico de preco). NAO envia ordens.
+//  Linhas: BRANCA = entrada | VERMELHA = stop | VERDE = alvo
+//  (aparecem enquanto a ordem esta armada ou a operacao esta aberta).
+//  Mesmas regras e mesma execucao do programa ROBO KELLER.
+//  Parametros por ativo (Tick, Slip, CustoPts, horarios): veja o LEIA-ME.
+//  Gerado por ferramentas/gerar_ntsl.py - edite la, nao aqui.
+// =====================================================================
+input
+  Tick(5.0);
+  Slip(5.0);
+  CustoPts(3.0);
+  AlvoR(2.0);
+  MaxStopsDia(2);
+  Intraday(1);
+  HoraInicio(1005);
+  HoraFimEntradas(1630);
+  HoraZeragem(1650);
+var
+  vA : Float;
+  vATR : Float;
+  vAlvo : Float;
+  vB : Integer;
+  vBarEnt : Integer;
+  vBarSinal : Integer;
+  vCC : Float;
+  vCGat : Float;
+  vCH : Float;
+  vCL : Float;
+  vCM20 : Float;
+  vCM200 : Float;
+  vCM5 : Float;
+  vCM9 : Float;
+  vCO : Float;
+  vCOk : Boolean;
+  vCR : Float;
+  vCStp : Float;
+  vCTipo : Integer;
+  vCVW : Float;
+  vCVal : Integer;
+  vDif : Float;
+  vDir : Integer;
+  vEnt : Float;
+  vEst : Integer;
+  vFimDia : Boolean;
+  vFora : Boolean;
+  vFrac : Float;
+  vGanho : Float;
+  vGat : Float;
+  vJ : Integer;
+  vK : Integer;
+  vLo : Float;
+  vM : Integer;
+  vM20 : Float;
+  vM200 : Float;
+  vM5 : Float;
+  vM9 : Float;
+  vMG : Float;
+  vMP : Float;
+  vMinB : Integer;
+  vNb : Integer;
+  vNpb : Integer;
+  vOk : Boolean;
+  vParcial : Integer;
+  vPerda : Float;
+  vPode : Boolean;
+  vPreco : Float;
+  vPts : Float;
+  vRSI : Float;
+  vRes : Float;
+  vRisco : Float;
+  vSair : Integer;
+  vSeguir : Boolean;
+  vSinal : Boolean;
+  vStops : Integer;
+  vStp : Float;
+  vTR : Float;
+  vTemA1 : Integer;
+  vTemAlvo : Integer;
+  vTipo : Integer;
+  vToque : Boolean;
+  vUlt : Integer;
+  vVC : Float;
+  vVGat : Float;
+  vVH : Float;
+  vVL : Float;
+  vVM20 : Float;
+  vVM200 : Float;
+  vVM5 : Float;
+  vVM9 : Float;
+  vVO : Float;
+  vVOk : Boolean;
+  vVR : Float;
+  vVStp : Float;
+  vVTipo : Integer;
+  vVVW : Float;
+  vVVal : Integer;
+  vVW : Float;
+  vVal : Integer;
+  vX : Float;
+begin
+  // ---------------- series (todo candle)
+  vM5 := Media(5, Close);
+  vM9 := Media(9, Close);
+  vM20 := Media(20, Close);
+  vM200 := Media(200, Close);
+  if Intraday = 1 then vVW := VWAP(1)
+  else vVW := Close;
+  vTR := High - Low;
+  if CurrentBar > 1 then
+  begin
+    if High - Close[1] > vTR then vTR := High - Close[1];
+    if Close[1] - Low > vTR then vTR := Close[1] - Low;
+  end;
+  vATR := 0;
+  if CurrentBar > 20 then
+  begin
+    for vK := 0 to 13 do vATR := vATR + vTR[vK];
+    vATR := vATR / 14;
+  end;
+  if CurrentBar > 1 then vDif := Close - Close[1]
+  else vDif := 0;
+  vGanho := 0;
+  vPerda := 0;
+  if vDif > 0 then vGanho := vDif;
+  if vDif < 0 then vPerda := -vDif;
+  if CurrentBar < 5 then
+  begin
+    vMG := vGanho;
+    vMP := vPerda;
+  end
+  else
+  begin
+    vMG := (vMG[1] + vGanho) / 2;
+    vMP := (vMP[1] + vPerda) / 2;
+  end;
+  if vMP = 0 then vRSI := 100
+  else vRSI := 100 - 100 / (1 + vMG / vMP);
+  // compra = preco normal | venda = preco invertido (a mesma regra serve para os dois lados)
+  vCH := High;
+  vCL := Low;
+  vCO := Open;
+  vCC := Close;
+  vCM5 := vM5;
+  vCM9 := vM9;
+  vCM20 := vM20;
+  vCM200 := vM200;
+  vCVW := vVW;
+  vCR := vRSI;
+  vVH := -Low;
+  vVL := -High;
+  vVO := -Open;
+  vVC := -Close;
+  vVM5 := -vM5;
+  vVM9 := -vM9;
+  vVM20 := -vM20;
+  vVM200 := -vM200;
+  vVVW := -vVW;
+  vVR := 100 - vRSI;
+
+  // ---------------- decide uma vez por candle, com o candle FECHADO ([1])
+  if (CurrentBar > 230) and (CurrentBar <> vUlt) then
+  begin
+    vUlt := CurrentBar;
+    vB := CurrentBar - 1;
+    vA := vATR[1];
+    if Date[1] <> Date[2] then vStops := 0;
+    vFimDia := (Intraday = 1) and ((Time[1] >= HoraZeragem) or (Date <> Date[1]));
+    // candles do dia ate o candle fechado (VWAP)
+    vNb := 0;
+    vSeguir := true;
+    if Intraday = 1 then
+      for vK := 1 to 220 do
+        if vSeguir then
+        begin
+          if Date[vK] = Date[1] then vNb := vNb + 1
+          else vSeguir := false;
+        end;
+    vMinB := 4;
+    if BarDuration > 0 then
+      if Floor(30 / BarDuration) > 4 then vMinB := Floor(30 / BarDuration);
+
+    // 1) saida marcada no fechamento anterior (RSI-2): executa na abertura
+    if (vEst = 2) and (vSair = 1) then
+    begin
+      vPreco := Open[1] - vDir * Slip;
+      vRes := vPts + vFrac * vDir * (vPreco - vEnt) - CustoPts;
+      if vRes < 0 then vStops := vStops + 1;
+      vEst := 0;
+      vSair := 0;
+      if vRes >= 0 then PlotText("SAIDA +", clLime, 2, 8)
+      else PlotText("SAIDA -", clRed, 2, 8);
+    end;
+
+    // 2) ordem armada: expira, cancela se o preco foi ao stop antes, ou executa
+    if vEst = 1 then
+    begin
+      if vB > vBarSinal + vVal then vEst := 0
+      else
+      begin
+        vOk := false;
+        if vTipo = 1 then
+        begin
+          vOk := true;
+          vPreco := Open[1] + vDir * Slip;
+        end
+        else
+        begin
+          if (vDir = 1) and (High[1] >= vGat) then
+          begin
+            vOk := true;
+            vPreco := vGat;
+            if Open[1] > vPreco then vPreco := Open[1];
+            vPreco := vPreco + Slip;
+          end;
+          if (vDir = -1) and (Low[1] <= vGat) then
+          begin
+            vOk := true;
+            vPreco := vGat;
+            if Open[1] < vPreco then vPreco := Open[1];
+            vPreco := vPreco - Slip;
+          end;
+          if not vOk then
+            if ((vDir = 1) and (Low[1] <= vStp)) or ((vDir = -1) and (High[1] >= vStp)) then vEst := 0;
+        end;
+        if vOk then
+        begin
+          if vDir * (vPreco - vStp) <= Tick / 2 then vEst := 0
+          else
+          begin
+            vEst := 2;
+            vEnt := vPreco;
+            vBarEnt := vB;
+            vSair := 0;
+            vRisco := vDir * (vEnt - vStp);
+            vPts := 0;
+            vFrac := 1;
+            vParcial := 0;
+            vTemAlvo := 0;
+            vTemA1 := 0;
+            if AlvoR > 0 then
+            begin
+              vAlvo := vEnt + vDir * AlvoR * vRisco;
+              vTemAlvo := 1;
+            end;
+          end;
+        end;
+      end;
+    end;
+
+    // 3) operacao aberta: stop primeiro (hipotese pior), depois alvo, depois saida propria
+    if vEst = 2 then
+    begin
+      if (vB <> vBarEnt) and (vDir * (Open[1] - vStp) <= 0) then
+      begin
+        vPreco := Open[1] - vDir * Slip;
+        vRes := vPts + vFrac * vDir * (vPreco - vEnt) - CustoPts;
+        if vRes < 0 then vStops := vStops + 1;
+        vEst := 0;
+        vSair := 0;
+        if vRes >= 0 then PlotText("STOP +", clLime, 2, 8)
+        else PlotText("STOP -", clRed, 2, 8);
+      end
+      else if ((vDir = 1) and (Low[1] <= vStp)) or ((vDir = -1) and (High[1] >= vStp)) then
+      begin
+        vPreco := vStp - vDir * Slip;
+        vRes := vPts + vFrac * vDir * (vPreco - vEnt) - CustoPts;
+        if vRes < 0 then vStops := vStops + 1;
+        vEst := 0;
+        vSair := 0;
+        if vRes >= 0 then PlotText("STOP +", clLime, 2, 8)
+        else PlotText("STOP -", clRed, 2, 8);
+      end
+      else
+      begin
+        if (vEst = 2) and (vTemAlvo = 1) then
+        begin
+          if (vB <> vBarEnt) and (vDir * (Open[1] - vAlvo) >= 0) then
+          begin
+            vPreco := Open[1];
+            vRes := vPts + vFrac * vDir * (vPreco - vEnt) - CustoPts;
+            if vRes < 0 then vStops := vStops + 1;
+            vEst := 0;
+            vSair := 0;
+            if vRes >= 0 then PlotText("ALVO +", clLime, 2, 8)
+            else PlotText("ALVO -", clRed, 2, 8);
+          end
+          else if ((vDir = 1) and (High[1] >= vAlvo + Tick)) or ((vDir = -1) and (Low[1] <= vAlvo - Tick)) then
+          begin
+            vPreco := vAlvo;
+            vRes := vPts + vFrac * vDir * (vPreco - vEnt) - CustoPts;
+            if vRes < 0 then vStops := vStops + 1;
+            vEst := 0;
+            vSair := 0;
+            if vRes >= 0 then PlotText("ALVO +", clLime, 2, 8)
+            else PlotText("ALVO -", clRed, 2, 8);
+          end;
+        end;
+      end;
+    end;
+
+    // 4) fim do dia: zera e cancela
+    if vFimDia then
+    begin
+      if vEst = 2 then
+      begin
+        vPreco := Close[1] - vDir * Slip;
+        vRes := vPts + vFrac * vDir * (vPreco - vEnt) - CustoPts;
+        if vRes < 0 then vStops := vStops + 1;
+        vEst := 0;
+        vSair := 0;
+        if vRes >= 0 then PlotText("ZERAGEM +", clLime, 2, 8)
+        else PlotText("ZERAGEM -", clRed, 2, 8);
+      end;
+      if vEst = 1 then vEst := 0;
+    end;
+
+    // 5) procura o setup no candle fechado (compra e venda)
+    vPode := (Intraday = 0) or ((Time[1] >= HoraInicio) and (Time[1] < HoraFimEntradas) and (vStops < MaxStopsDia));
+    if (vEst <> 2) and (not vFimDia) and vPode then
+    begin
+      // --- compra
+      vCOk := false;
+      if (vCM9[1] > vCM20[1]) and (vCM20[1] > vCM200[1]) and (vCM9[1] > vCM9[4]) and (vCM20[1] - vCM20[6] >= 0.3 * vA) then
+      begin
+        vJ := 1 + 6;
+        for vK := 0 to 5 do
+        begin
+          vM := 7 - vK;
+          if vCH[vM] >= vCH[vJ] then vJ := vM;
+        end;
+        vNpb := vJ - 2;
+        if (vNpb >= 1) and (vNpb <= 3) then
+        begin
+          vToque := false;
+          vFora := false;
+          for vK := 1 to vJ - 1 do
+          begin
+            if vCL[vK] <= vCM9[vK] + 0.1 * vA then vToque := true;
+            if vCC[vK] < vCM20[vK] then vFora := true;
+          end;
+          vSinal := (vCC[1] > vCO[1]) and (vCC[1] > vCH[2]);
+          if vToque and (not vFora) and vSinal then
+          begin
+            vLo := vCL[1];
+            for vK := 1 to vJ - 1 do
+              if vCL[vK] < vLo then vLo := vCL[vK];
+            vCGat := -Floor(-((vCH[1] + Tick) / Tick - 0.0000001)) * Tick;
+            vCStp := Floor((vLo - Tick) / Tick + 0.0000001) * Tick;
+            vX := vCGat - vCStp;
+            if (vX > 0) and (vX >= 0.3 * vA) and (vX <= 2.5 * vA) then
+            begin
+              vCOk := true;
+              vCTipo := 0;
+              vCVal := 2;
+            end;
+          end;
+        end;
+      end;
+      // --- venda (mesma regra no grafico invertido)
+      vVOk := false;
+      if (vVM9[1] > vVM20[1]) and (vVM20[1] > vVM200[1]) and (vVM9[1] > vVM9[4]) and (vVM20[1] - vVM20[6] >= 0.3 * vA) then
+      begin
+        vJ := 1 + 6;
+        for vK := 0 to 5 do
+        begin
+          vM := 7 - vK;
+          if vVH[vM] >= vVH[vJ] then vJ := vM;
+        end;
+        vNpb := vJ - 2;
+        if (vNpb >= 1) and (vNpb <= 3) then
+        begin
+          vToque := false;
+          vFora := false;
+          for vK := 1 to vJ - 1 do
+          begin
+            if vVL[vK] <= vVM9[vK] + 0.1 * vA then vToque := true;
+            if vVC[vK] < vVM20[vK] then vFora := true;
+          end;
+          vSinal := (vVC[1] > vVO[1]) and (vVC[1] > vVH[2]);
+          if vToque and (not vFora) and vSinal then
+          begin
+            vLo := vVL[1];
+            for vK := 1 to vJ - 1 do
+              if vVL[vK] < vLo then vLo := vVL[vK];
+            vVGat := -Floor(-((vVH[1] + Tick) / Tick - 0.0000001)) * Tick;
+            vVStp := Floor((vLo - Tick) / Tick + 0.0000001) * Tick;
+            vX := vVGat - vVStp;
+            if (vX > 0) and (vX >= 0.3 * vA) and (vX <= 2.5 * vA) then
+            begin
+              vVOk := true;
+              vVTipo := 0;
+              vVVal := 2;
+            end;
+          end;
+        end;
+      end;
+      if vCOk and (not vVOk) then
+      begin
+        vEst := 1;
+        vDir := 1;
+        vGat := vCGat;
+        vStp := vCStp;
+        vTipo := vCTipo;
+        vVal := vCVal;
+        vBarSinal := vB;
+        PlotText("COMPRA E5 COMBINACAO+GIFT", clAqua, 0, 9);
+        Alert(clAqua);
+      end
+      else if vVOk and (not vCOk) then
+      begin
+        vEst := 1;
+        vDir := -1;
+        vGat := -vVGat;
+        vStp := -vVStp;
+        vTipo := vVTipo;
+        vVal := vVVal;
+        vBarSinal := vB;
+        PlotText("VENDA E5 COMBINACAO+GIFT", clFuchsia, 1, 9);
+        Alert(clFuchsia);
+      end;
+    end;
+  end;
+
+  // ---------------- linhas: entrada (branca), stop (vermelha), alvo (verde)
+  if vEst = 1 then
+  begin
+    Plot(vGat);
+    Plot2(vStp);
+    if AlvoR > 0 then Plot3(vGat + AlvoR * (vGat - vStp))
+    else NoPlot(3);
+  end
+  else if vEst = 2 then
+  begin
+    Plot(vEnt);
+    Plot2(vStp);
+    if vTemAlvo = 1 then Plot3(vAlvo)
+    else NoPlot(3);
+  end
+  else
+  begin
+    NoPlot(1);
+    NoPlot(2);
+    NoPlot(3);
+  end;
+  SetPlotColor(1, clWhite);
+  SetPlotColor(2, clRed);
+  SetPlotColor(3, clLime);
+end;

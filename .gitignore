@@ -1,0 +1,9 @@
+# dados baixados, cache, historico e desenhos ficam so no seu computador
+dados/
+__pycache__/
+*.pyc
+# o executavel vai na pagina de Releases
+*.exe
+build/
+dist/
+*.spec

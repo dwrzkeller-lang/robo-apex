@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Robô Keller</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topo">
+  <div class="marca">
+    <div class="logo">RK</div>
+    <div>
+      <div class="titulo">ROBÔ KELLER</div>
+      <div class="sub">Pisani · Velez · RSI-2 — informativo, não envia ordens</div>
+    </div>
+  </div>
+  <label class="campo"><span>Ativo</span><select id="ativo"></select></label>
+  <label class="campo"><span>Tempo gráfico</span><select id="tf"></select></label>
+  <label class="campo"><span>Gestão da operação</span><select id="gestao"></select></label>
+  <label class="campo pequeno"><span id="rotContratos">Contratos</span><input type="number" id="contratos" min="1" step="1" value="1"></label>
+  <div class="status-dados" id="statusDados">carregando…</div>
+</header>
+
+<nav class="estrategias" id="barraEst" aria-label="Estratégias"></nav>
+
+<main>
+  <nav class="ferramentas" id="ferramentas" aria-label="Ferramentas de desenho">
+    <button data-f="cursor" class="on" title="Cursor (Esc)"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.5L10 19z"/></svg></button>
+    <button data-f="tendencia" title="Linha de tendência"><svg viewBox="0 0 24 24"><path d="M4 19L20 5"/><circle cx="4" cy="19" r="2"/><circle cx="20" cy="5" r="2"/></svg></button>
+    <button data-f="horizontal" title="Linha horizontal (suporte/resistência)"><svg viewBox="0 0 24 24"><path d="M2 12h20"/></svg></button>
+    <button data-f="vertical" title="Linha vertical"><svg viewBox="0 0 24 24"><path d="M12 2v20"/></svg></button>
+    <button data-f="fibo" title="Fibonacci de retração"><svg viewBox="0 0 24 24"><path d="M3 5h18M3 9h18M3 12h18M3 15h18M3 19h18" stroke-dasharray="2 1.5"/></svg></button>
+    <button data-f="retangulo" title="Retângulo"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12"/></svg></button>
+    <button data-f="regua" title="Régua (mede pontos, % e dinheiro)"><svg viewBox="0 0 24 24"><path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/></svg></button>
+    <button data-f="pincel" title="Pincel (marcar livre)"><svg viewBox="0 0 24 24"><path d="M3 21c3 0 5-2 5-4s2-3 3-3l9-9-2-2-9 9c0 1-1 3-3 3s-4 2-4 5z"/></svg></button>
+    <button data-f="texto" title="Texto"><svg viewBox="0 0 24 24"><path d="M5 5h14M12 5v14"/></svg></button>
+    <button data-f="borracha" title="Borracha (clique no desenho)"><svg viewBox="0 0 24 24"><path d="M4 16l8-8 6 6-5 5H8z"/><path d="M13 19h7"/></svg></button>
+    <div class="sep"></div>
+    <button id="ima" class="toggle" title="Ímã: gruda na máxima/mínima/abertura/fechamento"><svg viewBox="0 0 24 24"><path d="M6 3v8a6 6 0 0012 0V3h-4v8a2 2 0 01-4 0V3z"/></svg></button>
+    <input type="color" id="corDesenho" value="#ffd23f" title="Cor do desenho">
+    <select id="espDesenho" title="Espessura"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option></select>
+    <button id="desfazer" title="Desfazer (Ctrl+Z)"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 010 10h-3"/></svg></button>
+    <button id="limparDesenhos" title="Apagar todos os desenhos deste ativo"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
+  </nav>
+
+  <section class="grafico" id="areaGrafico">
+    <div id="chart"></div>
+    <canvas id="desenho"></canvas>
+    <div class="legenda" id="legenda"></div>
+    <div class="faixa-grafico" id="faixaGrafico"></div>
+    <div class="aviso-carregando" id="carregando">Carregando dados…</div>
+    <div class="toast" id="toast"></div>
+  </section>
+
+  <aside class="painel" id="painel">
+    <div class="abas" role="tablist">
+      <button data-aba="vivo" class="on" role="tab">Ao vivo</button>
+      <button data-aba="sim" role="tab">Simulação</button>
+      <button data-aba="cal" role="tab">Calendário</button>
+      <button data-aba="cmp" role="tab">Comparar</button>
+      <button data-aba="news" role="tab">Notícias <span class="badge oculto" id="badgeNews">0</span></button>
+    </div>
+
+    <!-- ============================== AO VIVO ============================== -->
+    <section class="aba on" id="aba-vivo">
+      <div class="erro oculto" id="erroVivo"></div>
+      <div id="radarVivo"></div>
+      <div class="card momento" id="cardVivo"><div class="estado">—</div></div>
+      <div class="card" id="confVivo"></div>
+      <div class="card oculto" id="tabelaVivo"></div>
+      <div class="card" id="ctxVivo"></div>
+      <div class="card" id="ultimosVivo"></div>
+      <div class="card linha-controles">
+        <label class="chk"><input type="checkbox" id="autoVivo" checked> atualizar a cada 60 s</label>
+        <label class="chk"><input type="checkbox" id="somVivo" checked> alarme sonoro</label>
+        <button id="btAtualizar" class="mini-btn">Atualizar agora</button>
+      </div>
+    </section>
+
+    <!-- ============================== SIMULAÇÃO ============================== -->
+    <section class="aba" id="aba-sim">
+      <div class="card">
+        <div class="rot">SIMULAR COM DADOS REAIS</div>
+        <div class="grade2">
+          <label class="campo"><span>De</span><input type="date" id="simDe"></label>
+          <label class="campo"><span>Até</span><input type="date" id="simAte"></label>
+          <label class="campo"><span>Capital inicial</span><input type="number" id="simCapital" min="1" step="100" value="10000"></label>
+          <label class="campo"><span>Parar o dia após N stops</span><input type="number" id="simStops" min="1" max="20" step="1" value="2"></label>
+        </div>
+        <div class="nota" id="simDisponivel"></div>
+        <div class="botoes">
+          <button id="btSimular" class="primario">Calcular resultado</button>
+          <button id="btAssistir" class="secundario">▶ Assistir candle a candle</button>
+        </div>
+        <div class="replay oculto" id="replayCtl">
+          <button id="rpPlay" title="Play / pausa (espaço)">⏸</button>
+          <button id="rpPasso" title="Próximo candle (→)">▶|</button>
+          <select id="rpVel" title="Velocidade">
+            <option value="2">2 candles/s</option><option value="5" selected>5 candles/s</option>
+            <option value="15">15 candles/s</option><option value="50">50 candles/s</option><option value="200">200 candles/s</option>
+          </select>
+          <button id="rpFim" title="Pular para o fim">⏭ fim</button>
+          <button id="rpSair" title="Parar o replay">✕</button>
+          <div class="rp-prog"><div id="rpBarra"></div></div>
+          <div class="rp-txt" id="rpTxt"></div>
+        </div>
+      </div>
+      <div class="erro oculto" id="erroSim"></div>
+      <div class="card momento oculto" id="cardReplay"></div>
+      <div id="simResultado" class="vazio-bloco">Escolha o ativo, o tempo gráfico, a estratégia (ou TODAS) e o período, e clique em <b>Calcular resultado</b>.</div>
+    </section>
+
+    <!-- ============================== CALENDÁRIO ============================== -->
+    <section class="aba" id="aba-cal">
+      <div class="card">
+        <div class="rot">CALENDÁRIO DE RESULTADOS <span class="dir" id="calFonteTxt"></span></div>
+        <div class="linha-controles">
+          <label class="campo cresce"><span>Mostrar</span><select id="calFiltro"></select></label>
+        </div>
+        <div class="cal-meses" id="calMeses"></div>
+        <div class="cal-nav"><button id="calAnt">◀</button><b id="calTitulo">—</b><button id="calProx">▶</button></div>
+        <div class="cal-grade" id="calGrade"></div>
+        <div class="nota">Cada dia mostra o resultado em dinheiro com os contratos do topo e o número de operações. Clique num dia para ver as operações.</div>
+      </div>
+      <div id="calResumo"></div>
+      <div id="calDia"></div>
+    </section>
+
+    <!-- ============================== COMPARAR ============================== -->
+    <section class="aba" id="aba-cmp">
+      <div class="card">
+        <div class="rot">COMPARAR TODAS AS ESTRATÉGIAS EM TODOS OS ATIVOS</div>
+        <div class="nota">Usa o tempo gráfico e a gestão escolhidos no topo, 1 contrato, todo o histórico disponível. Clique numa célula para abrir a simulação dela.</div>
+        <div class="ativos-cmp" id="cmpAtivos"></div>
+        <div class="botoes"><button id="btComparar" class="primario">Comparar</button></div>
+        <div class="rp-prog oculto" id="cmpProg"><div id="cmpBarra"></div></div>
+      </div>
+      <div class="erro oculto" id="erroCmp"></div>
+      <div id="cmpResultado"></div>
+    </section>
+
+    <!-- ============================== NOTÍCIAS ============================== -->
+    <section class="aba" id="aba-news">
+      <div class="card">
+        <div class="rot">NOTÍCIAS QUE MEXEM NO MERCADO <span class="dir" id="newsAtual">—</span></div>
+        <div class="grade2">
+          <label class="campo"><span>Impacto</span><select id="newsImpacto"><option value="ALTO">Só alto</option><option value="MEDIO" selected>Alto e médio</option><option value="TODOS">Todas</option></select></label>
+          <label class="campo"><span>Mexe em</span><select id="newsAtivo"><option value="">WIN e WDO</option><option value="WIN">WIN (bolsa)</option><option value="WDO">WDO (dólar)</option></select></label>
+        </div>
+        <label class="campo" style="margin-top:6px"><span>Buscar</span><input type="text" id="newsBusca" placeholder="ex.: Copom, Petrobras, IPCA"></label>
+        <div class="nota">Banco Central, Valor, InfoMoney, Money Times, g1, E-Investidor, Investing e Google Notícias, atualizados a cada 60 s (últimas 36 h). O impacto é estimado por palavras-chave: confira a notícia antes de operar.</div>
+      </div>
+      <div class="erro oculto" id="erroNews"></div>
+      <div id="newsLista"></div>
+    </section>
+  </aside>
+</main>
+
+<footer class="rodape"><span class="base-status" id="baseStatus"></span>
+  Robô <b>informativo</b>: não envia ordens. Resultados passados medidos com custos e escorregamento, mas não garantem o futuro.
+  WIN e WDO no Yahoo são substitutos (Ibovespa à vista e USD/BRL); para o contrato real, exporte um CSV do Profit para a pasta <code>dados</code>.
+</footer>
+
+<script src="lightweight-charts.js"></script>
+<script src="app.js"></script>
+<script src="sim.js"></script>
+<script src="comparar.js"></script>
+<script src="radar.js"></script>
+<script src="calendario.js"></script>
+<script src="noticias.js"></script>
+<script src="desenho.js"></script>
+</body>
+</html>
