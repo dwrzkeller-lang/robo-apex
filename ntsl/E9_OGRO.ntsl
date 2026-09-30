@@ -32,6 +32,9 @@ var
   vCA1 : Float;
   vCA2 : Float;
   vCC : Float;
+  vCE20 : Float;
+  vCE200 : Float;
+  vCE500 : Float;
   vCGat : Float;
   vCH : Float;
   vCL : Float;
@@ -42,18 +45,23 @@ var
   vCO : Float;
   vCOk : Boolean;
   vCR : Float;
+  vCR9 : Float;
   vCStp : Float;
   vCTipo : Integer;
   vCVW : Float;
   vCVal : Integer;
   vDif : Float;
   vDir : Integer;
+  vE20 : Float;
+  vE200 : Float;
+  vE500 : Float;
   vEnt : Float;
   vEst : Integer;
   vFimDia : Boolean;
   vFrac : Float;
   vGanho : Float;
   vGat : Float;
+  vIniE : Integer;
   vJ : Integer;
   vK : Integer;
   vM : Integer;
@@ -63,7 +71,9 @@ var
   vM5 : Float;
   vM9 : Float;
   vMG : Float;
+  vMG9 : Float;
   vMP : Float;
+  vMP9 : Float;
   vMinB : Integer;
   vNb : Integer;
   vNpb : Integer;
@@ -75,6 +85,7 @@ var
   vPreco : Float;
   vPts : Float;
   vRSI : Float;
+  vRSI9 : Float;
   vRes : Float;
   vRet : Float;
   vRisco : Float;
@@ -90,6 +101,9 @@ var
   vVA1 : Float;
   vVA2 : Float;
   vVC : Float;
+  vVE20 : Float;
+  vVE200 : Float;
+  vVE500 : Float;
   vVGat : Float;
   vVH : Float;
   vVL : Float;
@@ -100,6 +114,7 @@ var
   vVO : Float;
   vVOk : Boolean;
   vVR : Float;
+  vVR9 : Float;
   vVStp : Float;
   vVTipo : Integer;
   vVVW : Float;
@@ -145,6 +160,32 @@ begin
   end;
   if vMP = 0 then vRSI := 100
   else vRSI := 100 - 100 / (1 + vMG / vMP);
+  // IFR(9) de Wilder e medias exponenciais 20/200/500 (comecam no 1o preco, como no programa)
+  if CurrentBar < 5 then
+  begin
+    vMG9 := vGanho;
+    vMP9 := vPerda;
+  end
+  else
+  begin
+    vMG9 := (vMG9[1] * 8 + vGanho) / 9;
+    vMP9 := (vMP9[1] * 8 + vPerda) / 9;
+  end;
+  if vMP9 = 0 then vRSI9 := 100
+  else vRSI9 := 100 - 100 / (1 + vMG9 / vMP9);
+  if vIniE = 0 then
+  begin
+    vE20 := Close;
+    vE200 := Close;
+    vE500 := Close;
+    vIniE := 1;
+  end
+  else
+  begin
+    vE20 := vE20[1] + (Close - vE20[1]) * 2 / 21;
+    vE200 := vE200[1] + (Close - vE200[1]) * 2 / 201;
+    vE500 := vE500[1] + (Close - vE500[1]) * 2 / 501;
+  end;
   // compra = preco normal | venda = preco invertido (a mesma regra serve para os dois lados)
   vCH := High;
   vCL := Low;
@@ -156,6 +197,10 @@ begin
   vCM200 := vM200;
   vCVW := vVW;
   vCR := vRSI;
+  vCR9 := vRSI9;
+  vCE20 := vE20;
+  vCE200 := vE200;
+  vCE500 := vE500;
   vVH := -Low;
   vVL := -High;
   vVO := -Open;
@@ -166,6 +211,10 @@ begin
   vVM200 := -vM200;
   vVVW := -vVW;
   vVR := 100 - vRSI;
+  vVR9 := 100 - vRSI9;
+  vVE20 := -vE20;
+  vVE200 := -vE200;
+  vVE500 := -vE500;
 
   // ---------------- decide uma vez por candle, com o candle FECHADO ([1])
   if (CurrentBar > 230) and (CurrentBar <> vUlt) then

@@ -17,7 +17,7 @@
   const hora = (t) => new Date(t * 1000).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
   async function buscar() {
-    if (N.carregando) return;
+    if (N.carregando) return null;
     N.carregando = true;
     try {
       const d = await RK.json("/api/noticias");
@@ -43,8 +43,10 @@
         if (top) RK.toast("📰 " + top.titulo, "aviso");
       }
       if (RK.aba === "news") render();
+      return d.itens.length;
     } catch (e) {
       RK.erro("erroNews", e);
+      return null;
     } finally {
       N.carregando = false;
     }
@@ -76,7 +78,9 @@
     render();
     buscar();
   });
-  RK.on("config", () => { buscar(); setInterval(buscar, 60000); });
+  // a tela de abertura faz a 1a busca; depois, a cada 60 s (mesmo com outra aba aberta)
+  RK.noticiasPrimeira = () => buscar();
+  RK.on("config", () => setInterval(buscar, 60000));
   setInterval(() => { if (RK.aba === "news" && N.dados) render(); }, 30000);          // atualiza o "há X min"
 
   // status da base de 5 meses no rodapé

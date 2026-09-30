@@ -16,7 +16,9 @@
     if (!ativos.length) return RK.erro("erroCmp", new Error("Marque pelo menos um ativo."));
     try {
       const r = await RK.json("/api/comparar", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ativos, tf: RK.pref.tf, gestao: RK.pref.gestao, maxstops: RK.pref.maxstops }) });
+        body: JSON.stringify({ ativos, tf: RK.pref.tf, gestao: RK.pref.gestao, maxstops: RK.pref.maxstops,
+          per: RK.pref.per === "custom" ? "tudo" : RK.pref.per,
+          de: RK.pref.per === "custom" ? RK.isoInt(RK.pref.de) : 0, ate: RK.pref.per === "custom" ? RK.isoInt(RK.pref.ate) : 0 }) });
       if (r.jaRodando) RK.toast("A comparação anterior ainda está rodando; mostrando o andamento.", "aviso");
       acompanhar();
     } catch (e) { RK.erro("erroCmp", e); }
@@ -45,9 +47,12 @@
     if (!st.pedido || !st.linhas.length) { $("cmpResultado").innerHTML = st.rodando ? `<div class="vazio-bloco">Comparando… ${st.feito}/${st.total}</div>` : ""; return; }
     const p = st.pedido, cods = RK.cfg.estrategias.map((e) => e.cod).concat("TODAS");
     const nomeTf = (RK.cfg.tempos.find((t) => +t.tf === +p.tf) || {}).nome || p.tf;
-    const difere = +p.tf !== +RK.pref.tf || p.gestao !== RK.pref.gestao;
-    let html = `<div class="card"><div class="rot">RESULTADO · ${RK.esc(nomeTf)} · ${RK.esc(RK.cfg.gestoes[p.gestao])}<span class="dir">${st.feito}/${st.total} ativos</span></div>
-      ${difere ? `<div class="nota" style="color:var(--laranja)">Atenção: esta tabela é de ${RK.esc(nomeTf)} / ${RK.esc(RK.cfg.gestoes[p.gestao])}; o topo está em outra configuração. Clique em Comparar para refazer.</div>` : ""}
+    const perAtual = RK.pref.per === "custom" ? "tudo" : RK.pref.per;
+    const difere = +p.tf !== +RK.pref.tf || p.gestao !== RK.pref.gestao || (p.per || "tudo") !== perAtual;
+    const l0 = st.linhas.find((l) => l.dataIni);
+    let html = `<div class="card"><div class="rot">RESULTADO · ${RK.esc(nomeTf)}${l0 ? ` · ${RK.dataTxt(l0.dataIni)} a ${RK.dataTxt(l0.dataFim)}` : ""}<span class="dir">${st.feito}/${st.total} ativos</span></div>
+      <div class="nota">Gestão: ${RK.esc(RK.cfg.gestoes[p.gestao])}.</div>
+      ${difere ? `<div class="nota" style="color:var(--laranja)">Atenção: o topo mudou (tempo, período ou gestão) depois desta comparação. Clique em Comparar para refazer.</div>` : ""}
       <div class="nota">Cada célula: <b>resultado com 1 contrato/lote</b> (líquido de custos, na moeda do ativo), número de operações e acerto. Cor = veredito estatístico.</div>
       <div class="rolagem" style="max-height:none"><table class="tab cmp"><tr><th>Ativo</th>${cods.map((c) => `<th class="n" title="${RK.esc(RK.nomeEst(c))}">${c === "TODAS" ? "TODAS" : c}</th>`).join("")}</tr>`;
     for (const l of st.linhas) {
@@ -69,12 +74,12 @@
   const fmtCurto = (v) => (v >= 0 ? " +" : " −") + Math.abs(v).toLocaleString("pt-BR", { maximumFractionDigits: 0 });
 
   function abrir(ativo, est, p) {
-    RK.pref.ativo = ativo; RK.pref.est = est; RK.pref.tf = +p.tf; RK.pref.gestao = p.gestao; RK.salvarPref();
-    $("ativo").value = ativo; $("tf").value = p.tf; $("gestao").value = p.gestao;
-    $("ativo").dispatchEvent(new Event("change"));             // ajusta contratos/lotes e avisa as outras abas
-    RK.marcarEst();
+    RK.pref.gestao = p.gestao; RK.pref.tf = +p.tf; RK.pref.ativo = ativo; RK.pref.est = est;
+    if (est !== "TODAS") RK.pref.ultEst = est;
+    RK.salvarPref();
+    RK.atualizarTopo();                                          // selects, contratos/lotes e estratégia
+    RK.emit("mudou", "ativo");
     RK.trocarAba("sim");
-    $("simDe").value = ""; $("simAte").value = "";
     $("btSimular").click();
   }
 

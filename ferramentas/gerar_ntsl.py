@@ -326,6 +326,72 @@ begin
 end;
 """)
 
+REGRAS["E10"] = dict(nome="E10 XTRADERS", titulo="E10 - XTRADERS: Keltner em dia lateral (setup do Adriano Mendes) - so intraday", alvo=0.0,
+                     modo="fixo", codigo="""
+v{P}Ok := false;
+if (Intraday = 1) and (vNb >= 7) then
+begin
+  vHi := v{P}H[1];
+  vLo := v{P}L[1];
+  for vK := 1 to vNb do
+  begin
+    if v{P}H[vK] > vHi then vHi := v{P}H[vK];
+    if v{P}L[vK] < vLo then vLo := v{P}L[vK];
+  end;
+  vM1 := v{P}E200[1];
+  vM2b := v{P}E500[1];
+  if vM2b < vM1 then
+  begin
+    vX := vM1;
+    vM1 := vM2b;
+    vM2b := vX;
+  end;
+  vX := v{P}VW[1] - v{P}VW[7];
+  if vX < 0 then vX := -vX;
+  if (vLo <= vM2b) and (vHi >= vM1) and (vX <= 0.3 * vA) then
+  begin
+    vPH := v{P}H[vNb + 1];
+    vPL := v{P}L[vNb + 1];
+    vSeguir2 := true;
+    for vK := vNb + 1 to vNb + 220 do
+      if vSeguir2 then
+      begin
+        if Date[vK] = Date[vNb + 1] then
+        begin
+          if v{P}H[vK] > vPH then vPH := v{P}H[vK];
+          if v{P}L[vK] < vPL then vPL := v{P}L[vK];
+        end
+        else vSeguir2 := false;
+      end;
+    if (v{P}C[1] >= vPL) and (v{P}C[1] <= vPH) then
+    begin
+      vMe := v{P}E20[1];
+      vBd := vMe - 2.0 * vA;
+      vBf := vMe - 2.5 * vA;
+      vIfr := v{P}R9[1];
+      if v{P}R9[2] < vIfr then vIfr := v{P}R9[2];
+      if (v{P}L[1] <= vBd) and (v{P}C[1] > vBd) and (vIfr <= 35) then
+      begin
+        vX := v{P}L[1];
+        if vBf < vX then vX := vBf;
+        v{P}Stp := Floor((vX - 0.25 * vA - Tick) / Tick + 0.0000001) * Tick;
+        vRisco2 := v{P}C[1] - v{P}Stp;
+        vPremio := vMe - v{P}C[1];
+        if (vRisco2 > 0) and (vRisco2 <= 2.5 * vA) and (vPremio >= 0.6 * vRisco2) then
+        begin
+          v{P}Gat := v{P}C[1];
+          v{P}A1 := vMe;
+          v{P}A2 := vMe;
+          v{P}Ok := true;
+          v{P}Tipo := 1;
+          v{P}Val := 1;
+        end;
+      end;
+    end;
+  end;
+end;
+""")
+
 for _c in ("E1", "E2", "E3", "E4", "E5"):
     REGRAS[_c]["modo"] = "R"
 REGRAS["E6"]["modo"] = "propria"
@@ -391,6 +457,32 @@ begin
 end;
 if vMP = 0 then vRSI := 100
 else vRSI := 100 - 100 / (1 + vMG / vMP);
+// IFR(9) de Wilder e medias exponenciais 20/200/500 (comecam no 1o preco, como no programa)
+if CurrentBar < 5 then
+begin
+  vMG9 := vGanho;
+  vMP9 := vPerda;
+end
+else
+begin
+  vMG9 := (vMG9[1] * 8 + vGanho) / 9;
+  vMP9 := (vMP9[1] * 8 + vPerda) / 9;
+end;
+if vMP9 = 0 then vRSI9 := 100
+else vRSI9 := 100 - 100 / (1 + vMG9 / vMP9);
+if vIniE = 0 then
+begin
+  vE20 := Close;
+  vE200 := Close;
+  vE500 := Close;
+  vIniE := 1;
+end
+else
+begin
+  vE20 := vE20[1] + (Close - vE20[1]) * 2 / 21;
+  vE200 := vE200[1] + (Close - vE200[1]) * 2 / 201;
+  vE500 := vE500[1] + (Close - vE500[1]) * 2 / 501;
+end;
 // compra = preco normal | venda = preco invertido (a mesma regra serve para os dois lados)
 vCH := High;
 vCL := Low;
@@ -402,6 +494,10 @@ vCM20 := vM20;
 vCM200 := vM200;
 vCVW := vVW;
 vCR := vRSI;
+vCR9 := vRSI9;
+vCE20 := vE20;
+vCE200 := vE200;
+vCE500 := vE500;
 vVH := -Low;
 vVL := -High;
 vVO := -Open;
@@ -411,7 +507,11 @@ vVM9 := -vM9;
 vVM20 := -vM20;
 vVM200 := -vM200;
 vVVW := -vVW;
-vVR := 100 - vRSI;"""
+vVR := 100 - vRSI;
+vVR9 := 100 - vRSI9;
+vVE20 := -vE20;
+vVE200 := -vE200;
+vVE500 := -vE500;"""
 
 
 def fechar(rotulo):
@@ -652,7 +752,7 @@ SetPlotColor(3, clLime);"""
 
 TIPOS = {"Integer": ["vK", "vM", "vM2", "vJ", "vNpb", "vAc", "vNb", "vMinB", "vUlt", "vB", "vEst", "vDir", "vTipo", "vVal",
                      "vBarSinal", "vBarEnt", "vStops", "vSair", "vCTipo", "vVTipo", "vCVal", "vVVal",
-                     "vTemAlvo", "vTemA1", "vParcial", "vN15", "vA0"],
+                     "vTemAlvo", "vTemA1", "vParcial", "vN15", "vA0", "vIniE"],
          "Boolean": ["vToque", "vFora", "vSinal", "vOk", "vFimDia", "vPode", "vCOk", "vVOk", "vSeguir", "vSeguir2"]}
 
 
@@ -700,7 +800,8 @@ def gerar():
         if f.endswith(".ntsl"):
             os.remove(os.path.join(SAIDA, f))
     nomes = {"E1": "E1_Halt_MM20", "E2": "E2_Fibonacci", "E3": "E3_VWAP", "E4": "E4_Rompimento",
-             "E5": "E5_Combinacao_Gift", "E6": "E6_RSI2", "E7": "E7_ORB", "E8": "E8_Gap", "E9": "E9_OGRO"}
+             "E5": "E5_Combinacao_Gift", "E6": "E6_RSI2", "E7": "E7_ORB", "E8": "E8_Gap", "E9": "E9_OGRO",
+             "E10": "E10_XTraders_Keltner"}
     for cod, r in REGRAS.items():
         corpo = "begin\n" + ind(SERIES, 2) + "\n\n" + ind(processo(r).replace("{NOME}", r["nome"]), 2) + "\nend;\n"
         extra = ""

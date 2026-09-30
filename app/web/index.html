@@ -4,29 +4,80 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Robô Keller</title>
+<link rel="icon" type="image/png" href="icone-64.png">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
+<!-- ============================== tela de abertura ============================== -->
+<div class="splash" id="splash">
+  <div class="splash-janela">
+    <div class="splash-topo">
+      <img src="icone.png" alt="">
+      <div><b>ROBÔ KELLER</b><small>day trade informativo · não envia ordens</small></div>
+    </div>
+    <ul class="splash-passos" id="splashPassos">
+      <li data-p="dados">Carregando dados do mercado</li>
+      <li data-p="est">Carregando estratégias</li>
+      <li data-p="resumo">Montando o resumo</li>
+      <li data-p="news">Buscando notícias</li>
+    </ul>
+    <div class="splash-barra"><i id="splashBarra"></i></div>
+    <div class="splash-txt" id="splashTxt">Iniciando…</div>
+  </div>
+</div>
+
+<!-- ============================== topo ============================== -->
 <header class="topo">
   <div class="marca">
-    <div class="logo">RK</div>
-    <div>
-      <div class="titulo">ROBÔ KELLER</div>
-      <div class="sub">Pisani · Velez · RSI-2 — informativo, não envia ordens</div>
-    </div>
+    <img class="logo" src="icone-64.png" alt="">
+    <div class="titulo">ROBÔ KELLER</div>
   </div>
   <label class="campo"><span>Ativo</span><select id="ativo"></select></label>
-  <label class="campo"><span>Tempo gráfico</span><select id="tf"></select></label>
-  <label class="campo"><span>Gestão da operação</span><select id="gestao"></select></label>
+  <label class="campo"><span>Tempo</span><select id="tf"></select></label>
+  <div class="campo"><span>Estratégia</span>
+    <div class="junto"><select id="est"></select><button id="btTodas" class="bt-todas" title="Roda todas as estratégias juntas: uma operação por vez, a primeira ordem que executar vale">▶ Todas</button></div>
+  </div>
+  <div class="campo"><span>Período <b id="periodoTxt" class="periodo-txt"></b></span>
+    <div class="seg" id="periodo">
+      <button data-p="hoje">Hoje</button><button data-p="5d">5 dias</button><button data-p="1m">1 mês</button>
+      <button data-p="3m">3 meses</button><button data-p="tudo">Tudo</button><button data-p="custom" title="Escolher as datas">📅</button>
+    </div>
+  </div>
   <label class="campo pequeno"><span id="rotContratos">Contratos</span><input type="number" id="contratos" min="1" step="1" value="1"></label>
-  <div class="status-dados" id="statusDados">carregando…</div>
+  <button id="btAjustes" class="bt-icone" title="Ajustes: gestão da operação, capital, stops por dia, som">⚙</button>
+  <button id="btRobo" class="bt-robo" title="Testa todas as estratégias em 5, 15 e 60 min neste ativo e mostra a que mais se encaixa agora, com a projeção de ganho e perda">⚡ RODAR ROBÔ</button>
+  <div class="status" id="statusDados"><i class="luz"></i><span>carregando…</span></div>
 </header>
 
-<nav class="estrategias" id="barraEst" aria-label="Estratégias"></nav>
+<!-- escolher datas -->
+<div class="popover oculto" id="popDatas">
+  <div class="rot">ESCOLHER O PERÍODO</div>
+  <div class="grade2">
+    <label class="campo"><span>De</span><input type="date" id="perDe"></label>
+    <label class="campo"><span>Até</span><input type="date" id="perAte"></label>
+  </div>
+  <div class="nota" id="perDisponivel"></div>
+  <div class="botoes"><button id="perCancelar">Cancelar</button><button id="perAplicar" class="primario">Aplicar</button></div>
+</div>
+
+<!-- ajustes -->
+<div class="popover oculto" id="popAjustes">
+  <div class="rot">AJUSTES</div>
+  <label class="campo"><span>Gestão da operação</span><select id="gestao"></select></label>
+  <div class="grade2">
+    <label class="campo"><span>Capital inicial</span><input type="number" id="capital" min="1" step="100" value="10000"></label>
+    <label class="campo"><span>Parar o dia após N stops</span><input type="number" id="maxstops" min="1" max="20" step="1" value="2"></label>
+  </div>
+  <label class="chk"><input type="checkbox" id="autoVivo" checked> atualizar ao vivo a cada 60 s</label>
+  <label class="chk"><input type="checkbox" id="somVivo" checked> alarme sonoro (ordem armada e notícia forte)</label>
+  <div class="nota">Desenhos: clique numa linha para selecionar e aperte <b>Delete</b> para apagar (sem seleção, apaga o último). Ctrl+Z desfaz.</div>
+  <div class="botoes"><button id="btAtualizar">Atualizar agora</button><button id="ajFechar" class="primario">Fechar</button></div>
+</div>
 
 <main>
   <nav class="ferramentas" id="ferramentas" aria-label="Ferramentas de desenho">
-    <button data-f="cursor" class="on" title="Cursor (Esc)"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.5L10 19z"/></svg></button>
+    <button data-f="cursor" class="on" title="Cursor: clique num desenho para selecionar (Delete apaga)"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.5L10 19z"/></svg></button>
     <button data-f="tendencia" title="Linha de tendência"><svg viewBox="0 0 24 24"><path d="M4 19L20 5"/><circle cx="4" cy="19" r="2"/><circle cx="20" cy="5" r="2"/></svg></button>
     <button data-f="horizontal" title="Linha horizontal (suporte/resistência)"><svg viewBox="0 0 24 24"><path d="M2 12h20"/></svg></button>
     <button data-f="vertical" title="Linha vertical"><svg viewBox="0 0 24 24"><path d="M12 2v20"/></svg></button>
@@ -48,8 +99,7 @@
     <div id="chart"></div>
     <canvas id="desenho"></canvas>
     <div class="legenda" id="legenda"></div>
-    <div class="faixa-grafico" id="faixaGrafico"></div>
-    <div class="aviso-carregando" id="carregando">Carregando dados…</div>
+    <div class="aviso-carregando oculto" id="carregando">Carregando…</div>
     <div class="toast" id="toast"></div>
   </section>
 
@@ -65,30 +115,17 @@
     <!-- ============================== AO VIVO ============================== -->
     <section class="aba on" id="aba-vivo">
       <div class="erro oculto" id="erroVivo"></div>
-      <div id="radarVivo"></div>
       <div class="card momento" id="cardVivo"><div class="estado">—</div></div>
-      <div class="card" id="confVivo"></div>
+      <div id="chipRobo"></div>
+      <div class="card" id="resumoVivo"></div>
       <div class="card oculto" id="tabelaVivo"></div>
-      <div class="card" id="ctxVivo"></div>
-      <div class="card" id="ultimosVivo"></div>
-      <div class="card linha-controles">
-        <label class="chk"><input type="checkbox" id="autoVivo" checked> atualizar a cada 60 s</label>
-        <label class="chk"><input type="checkbox" id="somVivo" checked> alarme sonoro</label>
-        <button id="btAtualizar" class="mini-btn">Atualizar agora</button>
-      </div>
     </section>
 
     <!-- ============================== SIMULAÇÃO ============================== -->
     <section class="aba" id="aba-sim">
       <div class="card">
-        <div class="rot">SIMULAR COM DADOS REAIS</div>
-        <div class="grade2">
-          <label class="campo"><span>De</span><input type="date" id="simDe"></label>
-          <label class="campo"><span>Até</span><input type="date" id="simAte"></label>
-          <label class="campo"><span>Capital inicial</span><input type="number" id="simCapital" min="1" step="100" value="10000"></label>
-          <label class="campo"><span>Parar o dia após N stops</span><input type="number" id="simStops" min="1" max="20" step="1" value="2"></label>
-        </div>
-        <div class="nota" id="simDisponivel"></div>
+        <div class="rot">SIMULAR COM DADOS REAIS <span class="dir" id="simPeriodo"></span></div>
+        <div class="nota">Usa o ativo, o tempo, a estratégia, o <b>período</b> e os contratos do topo. Capital e gestão ficam em ⚙.</div>
         <div class="botoes">
           <button id="btSimular" class="primario">Calcular resultado</button>
           <button id="btAssistir" class="secundario">▶ Assistir candle a candle</button>
@@ -108,20 +145,17 @@
       </div>
       <div class="erro oculto" id="erroSim"></div>
       <div class="card momento oculto" id="cardReplay"></div>
-      <div id="simResultado" class="vazio-bloco">Escolha o ativo, o tempo gráfico, a estratégia (ou TODAS) e o período, e clique em <b>Calcular resultado</b>.</div>
+      <div id="simResultado"></div>
     </section>
 
     <!-- ============================== CALENDÁRIO ============================== -->
     <section class="aba" id="aba-cal">
       <div class="card">
-        <div class="rot">CALENDÁRIO DE RESULTADOS <span class="dir" id="calFonteTxt"></span></div>
-        <div class="linha-controles">
-          <label class="campo cresce"><span>Mostrar</span><select id="calFiltro"></select></label>
-        </div>
+        <div class="rot">CALENDÁRIO <span class="dir" id="calFonteTxt"></span></div>
+        <select id="calFiltro" class="largo"></select>
         <div class="cal-meses" id="calMeses"></div>
         <div class="cal-nav"><button id="calAnt">◀</button><b id="calTitulo">—</b><button id="calProx">▶</button></div>
         <div class="cal-grade" id="calGrade"></div>
-        <div class="nota">Cada dia mostra o resultado em dinheiro com os contratos do topo e o número de operações. Clique num dia para ver as operações.</div>
       </div>
       <div id="calResumo"></div>
       <div id="calDia"></div>
@@ -130,8 +164,8 @@
     <!-- ============================== COMPARAR ============================== -->
     <section class="aba" id="aba-cmp">
       <div class="card">
-        <div class="rot">COMPARAR TODAS AS ESTRATÉGIAS EM TODOS OS ATIVOS</div>
-        <div class="nota">Usa o tempo gráfico e a gestão escolhidos no topo, 1 contrato, todo o histórico disponível. Clique numa célula para abrir a simulação dela.</div>
+        <div class="rot">COMPARAR ESTRATÉGIAS × ATIVOS</div>
+        <div class="nota">Tempo gráfico, período e gestão do topo, 1 contrato. Clique numa célula para abrir a simulação.</div>
         <div class="ativos-cmp" id="cmpAtivos"></div>
         <div class="botoes"><button id="btComparar" class="primario">Comparar</button></div>
         <div class="rp-prog oculto" id="cmpProg"><div id="cmpBarra"></div></div>
@@ -144,30 +178,38 @@
     <section class="aba" id="aba-news">
       <div class="card">
         <div class="rot">NOTÍCIAS QUE MEXEM NO MERCADO <span class="dir" id="newsAtual">—</span></div>
-        <div class="grade2">
-          <label class="campo"><span>Impacto</span><select id="newsImpacto"><option value="ALTO">Só alto</option><option value="MEDIO" selected>Alto e médio</option><option value="TODOS">Todas</option></select></label>
-          <label class="campo"><span>Mexe em</span><select id="newsAtivo"><option value="">WIN e WDO</option><option value="WIN">WIN (bolsa)</option><option value="WDO">WDO (dólar)</option></select></label>
+        <div class="grade3">
+          <select id="newsImpacto" title="Impacto"><option value="ALTO">Só alto impacto</option><option value="MEDIO" selected>Alto e médio</option><option value="TODOS">Todas</option></select>
+          <select id="newsAtivo" title="Mexe em"><option value="">WIN e WDO</option><option value="WIN">WIN (bolsa)</option><option value="WDO">WDO (dólar)</option></select>
+          <input type="text" id="newsBusca" placeholder="buscar: Copom, IPCA…">
         </div>
-        <label class="campo" style="margin-top:6px"><span>Buscar</span><input type="text" id="newsBusca" placeholder="ex.: Copom, Petrobras, IPCA"></label>
-        <div class="nota">Banco Central, Valor, InfoMoney, Money Times, g1, E-Investidor, Investing e Google Notícias, atualizados a cada 60 s (últimas 36 h). O impacto é estimado por palavras-chave: confira a notícia antes de operar.</div>
       </div>
       <div class="erro oculto" id="erroNews"></div>
       <div id="newsLista"></div>
+      <div class="nota">Fontes: Banco Central, Valor, InfoMoney, Money Times, g1, E-Investidor, Investing e Google Notícias, a cada 60 s. O impacto é estimado por palavras-chave: confira antes de operar.</div>
     </section>
   </aside>
 </main>
 
-<footer class="rodape"><span class="base-status" id="baseStatus"></span>
-  Robô <b>informativo</b>: não envia ordens. Resultados passados medidos com custos e escorregamento, mas não garantem o futuro.
-  WIN e WDO no Yahoo são substitutos (Ibovespa à vista e USD/BRL); para o contrato real, exporte um CSV do Profit para a pasta <code>dados</code>.
+<!-- janela do "RODAR ROBÔ" -->
+<div class="modal oculto" id="modalRobo">
+  <div class="modal-janela">
+    <button class="modal-fechar" id="roboFechar" title="Fechar (Esc)">✕</button>
+    <div id="roboConteudo"></div>
+  </div>
+</div>
+
+<footer class="rodape">
+  <span>Robô <b>informativo</b>: não envia ordens. Resultado passado não garante o futuro.</span>
+  <span class="base-status" id="baseStatus"></span>
 </footer>
 
 <script src="lightweight-charts.js"></script>
 <script src="app.js"></script>
 <script src="sim.js"></script>
+<script src="calendario.js"></script>
 <script src="comparar.js"></script>
 <script src="radar.js"></script>
-<script src="calendario.js"></script>
 <script src="noticias.js"></script>
 <script src="desenho.js"></script>
 </body>

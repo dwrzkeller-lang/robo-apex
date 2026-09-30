@@ -20,6 +20,8 @@ As regras de compra sao escritas uma unica vez. A venda e o espelho exato: o rob
   E8  Fechamento de gap ....... gaps pequenos dentro da faixa do dia anterior fecham na maioria das vezes
   E9  OGRO: pivo + Fibonacci .. rompimento do pivo com retracao de no maximo 50% e alvos na projecao de
                                 Fibonacci, medias simples alinhadas (estilo Andre Machado, "Ogro de Wall Street")
+  E10 XTRADERS: Keltner lateral  setup do Adriano Mendes (XTraders) para dias sem direcao: canais de Keltner
+                                2,0/2,5 na MME20, IFR(9), alvo na media de 20
 """
 import math
 
@@ -35,6 +37,19 @@ def sma(x, p):
             s -= x[i - p]
         if i >= p - 1:
             out[i] = s / p
+    return out
+
+
+def ema(x, p):
+    """Media movel exponencial (a mesma do Profit: alfa = 2 / (p + 1), comeca no 1o preco)."""
+    out = [None] * len(x)
+    if not x:
+        return out
+    k = 2.0 / (p + 1)
+    e = x[0]
+    for i, v in enumerate(x):
+        e = v if i == 0 else e + (v - e) * k
+        out[i] = e
     return out
 
 
@@ -115,6 +130,11 @@ class Grafico:
         self.mm200 = neg(sma(B["c"], 200))
         r2 = rsi(B["c"], 2)
         self.rsi2 = [None if x is None else 100.0 - x for x in r2] if espelho else r2
+        r9 = rsi(B["c"], 9)
+        self.rsi9 = [None if x is None else 100.0 - x for x in r9] if espelho else r9
+        self.me20 = neg(ema(B["c"], 20))
+        self.me200 = neg(ema(B["c"], 200))
+        self.me500 = neg(ema(B["c"], 500))
         self.vw = neg(vwap_dia(B["h"], B["l"], B["c"], B["v"], B["d"])) if self.intraday else None
         self.ini_dia = inicio_do_dia(B["d"])
         self.gap_real = bool(B.get("gap_real"))    # a fonte tem gap de abertura de verdade (futuro/CFD, nao indice a vista)
@@ -468,6 +488,54 @@ def e9_atencao(G, i):
     return _ogro(G, i) is not None and e9_ogro(G, i) is None
 
 
+# ------------------------------------------------------------------------------------------ E10
+KELT_DENTRO, KELT_FORA, KELT_STOP_ATR, KELT_IFR = 2.0, 2.5, 0.25, 35.0
+
+
+def _lateral(G, i):
+    """Dia lateral (Adriano Mendes): MME200 e MME500 cortando os precos do dia, VWAP plana e preco dentro do
+    range do dia anterior. Em dia de medias alinhadas o Keltner nao vale."""
+    if not G.intraday:
+        return False
+    s = G.ini_dia[i]
+    if i - s < 6:
+        return False
+    a = G.atr[i]
+    hi, lo = max(G.h[s:i + 1]), min(G.l[s:i + 1])
+    m1, m2 = min(G.me200[i], G.me500[i]), max(G.me200[i], G.me500[i])
+    if not (lo <= m2 and hi >= m1):
+        return False                                           # 200 e 500 dentro da faixa do dia
+    if abs(G.vw[i] - G.vw[i - 6]) > 0.3 * a:
+        return False                                           # VWAP plana (ultimos 6 candles)
+    ant = _dia_anterior(G, s)
+    if not ant:
+        return False
+    pc, ph, pl = ant
+    return pl <= G.c[i] <= ph                                  # dentro do range de ontem
+
+
+def e10_keltner(G, i):
+    if not _lateral(G, i):
+        return None
+    a, m = G.atr[i], G.me20[i]
+    b_dentro, b_fora = m - KELT_DENTRO * a, m - KELT_FORA * a
+    if not (G.l[i] <= b_dentro and G.c[i] > b_dentro):
+        return None                                            # tocou a zona das bandas e fechou para dentro
+    ifr = min(G.rsi9[i], G.rsi9[i - 1])
+    if ifr > KELT_IFR:
+        return None                                            # IFR(9) esticado
+    stop = G.abaixo(min(G.l[i], b_fora) - KELT_STOP_ATR * a - G.tick)
+    risco, premio = G.c[i] - stop, m - G.c[i]
+    if risco <= 0 or risco > 2.5 * a or premio < 0.6 * risco:
+        return None
+    return dict(tipo="abertura", gatilho=None, stop=stop, validade=1, alvos=(None, m),
+                info="banda de Keltner, IFR(9) %.0f" % ifr)
+
+
+def e10_atencao(G, i):
+    return _lateral(G, i) and G.l[i] <= G.me20[i] - (KELT_DENTRO - 0.5) * G.atr[i] and e10_keltner(G, i) is None
+
+
 # ------------------------------------------------------------------------------------------ catalogo
 ESTRATEGIAS = {
     "E1": dict(nome="Halt na MM20", autor="Mario Pisani + Oliver Velez", fn=e1_halt_mm20, aten=e1_atencao,
@@ -547,6 +615,15 @@ ESTRATEGIAS = {
                        "Pernada A→B de pelo menos 2 ATR; correção até C que retrai de 23,6% a no máximo 50%",
                        "Compra 1 tick acima do topo B (rompimento do pivô); stop 1 tick abaixo do fundo C",
                        "Alvos na projeção de Fibonacci da pernada a partir de C: 100% (metade + stop no 0x0) e 161,8% (resto)"]),
+    "E10": dict(nome="XTRADERS: Keltner lateral", autor="Adriano Mendes (XTraders)", fn=e10_keltner, aten=e10_atencao,
+                gestao="fixo", saida=None, intraday=True,
+                aguardando="dia lateral com o preço chegando na banda de Keltner",
+                ideal="2 e 5 min, índices em dia lateral (médias emboladas, VWAP plana). Alvo curto, acerto alto",
+                regras=["Só em dia lateral: MME200 e MME500 cortando os preços do dia, VWAP plana e preço dentro do range de ontem",
+                        "Canais de Keltner na MME20: bandas de 2,0 e 2,5 ATR (a zona de pressão fica entre as duas)",
+                        "Compra quando o candle toca a banda de baixo e fecha de volta para dentro, com IFR(9) abaixo de 35 (venda: o inverso)",
+                        "Entra a mercado; stop atrás da banda de 2,5; alvo na média de 20 (a 'zona de segurança' dele)",
+                        "Só entra se o alvo valer pelo menos 0,6R. Em dia de médias alinhadas não opera (lá valem E1-E9)"]),
 }
 
 GESTOES = {

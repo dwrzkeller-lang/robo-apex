@@ -19,7 +19,7 @@ import threading
 import traceback
 import urllib.parse
 import webbrowser
-from datetime import date
+from datetime import date, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import time
@@ -115,6 +115,31 @@ def _i_da_data(d, alvo, primeiro=True):
     return -1
 
 
+PERIODOS = ("hoje", "5d", "1m", "3m", "tudo")
+
+
+def janela(d, per="tudo", de=0, ate=0):
+    """Indices (inicio, fim) do periodo escolhido no topo. Presets contam a partir do ultimo dia com dados."""
+    n = len(d)
+    if per in ("hoje", "5d", "1m", "3m"):
+        ult = d[-1]
+        dias = sorted(set(d))
+        if per == "hoje":
+            de = ult
+        elif per == "5d":
+            de = dias[-5] if len(dias) >= 5 else dias[0]
+        else:
+            dt = date(ult // 10000, ult // 100 % 100, ult % 100) - timedelta(days=30 if per == "1m" else 91)
+            de = int(dt.strftime("%Y%m%d"))
+        ate = 0
+    i_ini = max(AQUECIMENTO, _i_da_data(d, de)) if de else AQUECIMENTO
+    i_fim = _i_da_data(d, ate, primeiro=False) if ate else n - 1
+    if i_fim < i_ini:
+        raise ValueError("Período vazio: não há candles entre as datas escolhidas (os primeiros %d candles servem só para "
+                         "aquecer as médias)." % AQUECIMENTO)
+    return i_ini, i_fim
+
+
 def _int(q, nome, padrao):
     try:
         return int(q.get(nome, [padrao])[0])
@@ -161,12 +186,8 @@ def api_sim(q):
     Gs = preparar(B, sc)
     n = len(B["c"])
     d = B["d"]
-    de = _int(q, "de", 0)
-    ate = _int(q, "ate", 0)
-    i_ini = max(AQUECIMENTO, _i_da_data(d, de) if de else AQUECIMENTO)
-    i_fim = _i_da_data(d, ate, primeiro=False) if ate else n - 1
-    if i_fim < i_ini:
-        raise ValueError("Período vazio: não há candles entre as datas escolhidas (depois dos %d candles de aquecimento)." % AQUECIMENTO)
+    per = q.get("per", ["tudo"])[0]
+    i_ini, i_fim = janela(d, per if per in PERIODOS else "tudo", _int(q, "de", 0), _int(q, "ate", 0))
     codigos = list(ESTRATEGIAS) if todas else [est]
     r = simular(Gs, sc, codigos, gestao=gestao, contratos=contratos, max_stops=max_stops, juntas=todas,
                 i_ini=i_ini, i_fim=i_fim, com_atencao=com_aten)
@@ -199,7 +220,8 @@ def api_sim(q):
                   moeda=cfg.get("moeda", "R$"), lote=cfg.get("lote", "contrato"), tf=tf, nomeTf=df.NOME_TEMPO.get(tf, "%d min" % tf),
                   valorPonto=sc["valor_ponto"], custo=sc["custo"], slip=sc["slip"], fracionado=sc["fracionado"],
                   horaInicio=sc["hora_inicio"], horaFim=sc["hora_fim"], horaZeragem=sc["hora_zeragem"], intraday=tf < 1440,
-                  est=est, gestao=gestao, contratos=contratos, capital=capital, maxStops=max_stops,
+                  est=est, gestao=gestao, contratos=contratos, capital=capital, maxStops=max_stops, per=per,
+                  aoVivo=i_fim == n - 1,
                   iIni=r["ini"], iFim=r["fim"], dataIni=d[r["ini"]], dataFim=d[r["fim"]],
                   dataMin=d[AQUECIMENTO], dataMax=d[-1], ultimo=n - 1, codigos=r["codigos"]),
         t=t, d=d, hm=B["hm"], o=rd(B["o"]), h=rd(B["h"]), l=rd(B["l"]), c=rd(B["c"]),
@@ -251,9 +273,9 @@ def _comparar(pedido):
                 sc = df.sessao_cfg(cfg)
                 Gs = preparar(B, sc)
                 d = B["d"]
-                i_ini = max(AQUECIMENTO, _i_da_data(d, pedido["de"])) if pedido["de"] else AQUECIMENTO
-                linha.update(nome=cfg["nome"], moeda=cfg.get("moeda", "R$"), dataIni=d[i_ini], dataFim=d[-1],
-                             dias=len(set(d[i_ini:])))
+                i_ini, i_fim = janela(d, pedido["per"], pedido["de"], pedido["ate"])
+                linha.update(nome=cfg["nome"], moeda=cfg.get("moeda", "R$"), dataIni=d[i_ini], dataFim=d[i_fim],
+                             dias=len(set(d[i_ini:i_fim + 1])))
                 res = {}
                 for cod in list(ESTRATEGIAS) + ["TODAS"]:
                     cods = list(ESTRATEGIAS) if cod == "TODAS" else [cod]
@@ -261,7 +283,7 @@ def _comparar(pedido):
                         res[cod] = None
                         continue
                     r = simular(Gs, sc, cods, gestao=pedido["gestao"], contratos=1.0, max_stops=pedido["maxstops"],
-                                juntas=cod == "TODAS", i_ini=i_ini)
+                                juntas=cod == "TODAS", i_ini=i_ini, i_fim=i_fim)
                     res[cod] = _resumo(estatisticas(r["trades"], 10000.0, lambda i: d[i]))
                 linha["res"] = res
             except Exception as e:
@@ -317,7 +339,8 @@ class Handler(BaseHTTPRequestHandler):
                 tf = int(p.get("tf", 5))
                 pedido = dict(ativos=[a for a in p.get("ativos", []) if a in df.ATIVOS or a.startswith("CSV:")][:30],
                               tf=tf if tf in df.TEMPOS else 5, gestao=p.get("gestao") if p.get("gestao") in GESTOES else "padrao",
-                              maxstops=max(1, min(50, int(p.get("maxstops", 2)))), de=int(p.get("de") or 0))
+                              maxstops=max(1, min(50, int(p.get("maxstops", 2)))), de=int(p.get("de") or 0),
+                              ate=int(p.get("ate") or 0), per=p.get("per") if p.get("per") in PERIODOS else "tudo")
                 if not pedido["ativos"]:
                     return self._json(dict(erro="Escolha pelo menos um ativo."), 400)
                 with CMP_LOCK:
@@ -427,8 +450,21 @@ def abrir_janela(url):
     webbrowser.open(url)
 
 
+def _splash(txt=None, fechar=False):
+    """Tela de abertura do .exe (PyInstaller --splash). No Python puro nao existe e nada acontece."""
+    try:
+        import pyi_splash                                      # noqa: F401  (so existe dentro do .exe)
+        if fechar:
+            pyi_splash.close()
+        elif txt:
+            pyi_splash.update_text(txt)
+    except Exception:
+        pass
+
+
 def main():
     args = sys.argv[1:]
+    _splash("Abrindo o robô…")
     porta = int(args[args.index("--porta") + 1]) if "--porta" in args else 8765
     porta = porta_livre(porta)
     srv = ThreadingHTTPServer(("127.0.0.1", porta), Handler)
@@ -440,7 +476,10 @@ def main():
     print(" Feche esta janela para encerrar o robo.")
     print("=" * 66)
     if "--sem-janela" not in args:
-        threading.Timer(0.8, abrir_janela, args=(url,)).start()
+        _splash("Abrindo a janela…")
+        abrir_janela(url)                                      # o servidor ja escuta: a pagina espera o serve_forever
+        time.sleep(1.2)
+    _splash(fechar=True)
     if "--sem-base" not in args:
         # completa a base de 5 meses (so baixa o que falta; a Dukascopy e lenta, entao vai em segundo plano)
         threading.Thread(target=historico.trabalho, args=(BASE,), daemon=True).start()

@@ -248,7 +248,7 @@ def conferir(chave="WIN", tf=5):
     pasta = os.path.join(RAIZ, "ntsl")
     tudo_ok = True
     for arq in sorted(os.listdir(pasta)):
-        cod = arq[:2]
+        cod = arq.split("_")[0]
         ex = dict(extra, FracParcial=0.5 if sc["fracionado"] else 0.0, GapReal=1 if B.get("gap_real") else 0)
         if cod in ("E7", "E8"):
             ex["HoraInicio"] = 0                   # ORB e gap usam o candle de abertura

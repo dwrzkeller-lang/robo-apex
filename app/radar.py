@@ -103,8 +103,8 @@ def rodar(carregar, cfg_de, chave, gestao, contratos, capital, max_stops):
     aptas.sort(key=lambda m: -m["encaixe"])
     escolha = aptas[0] if aptas else None
     for m in linhas:
-        # projecao so para o que aparece em destaque (melhor tempo de cada estrategia): e a conta mais pesada
-        if melhor_tf.get(m["est"]) is m:
+        # projecao so para o que aparece em destaque (melhor tempo de cada estrategia e a escolhida): e a conta mais pesada
+        if melhor_tf.get(m["est"]) is m or m is escolha:
             m["proj1m"] = projecao(m["valores"], m["opsDia"], m["pregoesMes"], caminhos=1500)
             m["projAno"] = projecao(m["valores"], m["opsDia"], m["pregoesAno"], caminhos=1500)
         del m["valores"]

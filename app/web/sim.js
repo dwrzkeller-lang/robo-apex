@@ -3,46 +3,25 @@
 (() => {
   "use strict";
   const RK = window.RK, $ = RK.$;
-  const SIM = { D: null, seq: 0, k: null, timer: null, rodando: false, emReplay: false, velho: true, chaveDatas: "", ultRender: 0 };
+  const SIM = { D: null, seq: 0, k: null, timer: null, rodando: false, emReplay: false, velho: true, ultRender: 0 };
   RK.sim = SIM;
 
-  // ---------------------------------------------------------------- datas disponíveis
-  function ajustarDatas(D) {
-    const m = D.meta, de = $("simDe"), ate = $("simAte");
-    const min = RK.dataISO(m.dataMin), max = RK.dataISO(m.dataMax), chave = m.ativo + "|" + m.tf;
-    de.min = ate.min = min; de.max = ate.max = max;
-    if (SIM.chaveDatas !== chave || !de.value || de.value < min || de.value > max) de.value = min;
-    if (SIM.chaveDatas !== chave || !ate.value || ate.value > max || ate.value < min) ate.value = max;
-    SIM.chaveDatas = chave;
-    const lote = m.fracionado ? "lote" : "contrato";
-    $("simDisponivel").innerHTML = `Dados em ${m.nomeTf}: <b>${RK.dataTxt(m.dataMin)}</b> a <b>${RK.dataTxt(m.dataMax)}</b>. ` +
-      `Custos considerados: escorregamento de ${RK.fmt(m.slip)} pts na entrada e no stop + ${RK.dinheiro(m.custo, D)} por ${lote} em cada lado.`;
-  }
-  RK.on("dadosVivo", (D) => { if (!SIM.D || SIM.velho) ajustarDatas(D); });
-
-  function lerForm() {
-    const cap = parseFloat(String($("simCapital").value).replace(",", "."));
-    const st = parseInt($("simStops").value, 10);
-    RK.pref.capital = cap > 0 ? cap : 10000; RK.pref.maxstops = st > 0 ? Math.min(20, st) : 2;
-    $("simCapital").value = RK.pref.capital; $("simStops").value = RK.pref.maxstops;
-    RK.salvarPref();
-  }
+  // período mostrado no cartão (vem do topo)
+  function textoPeriodo(D) { $("simPeriodo").textContent = D ? `${RK.dataTxt(D.meta.dataIni)} a ${RK.dataTxt(D.meta.dataFim)}` : ""; }
+  RK.on("dadosVivo", (D) => { if (!SIM.D || SIM.velho) textoPeriodo(D); });
 
   // ---------------------------------------------------------------- calcular
   async function simular({ assistir = false } = {}) {
     pararReplay(false);
-    lerForm();
     const seq = ++SIM.seq;
     RK.erro("erroSim", null);
     $("btSimular").disabled = $("btAssistir").disabled = true;
     $("carregando").classList.remove("oculto");
     try {
-      const de = $("simDe").value, ate = $("simAte").value;
-      if (de && ate && de > ate) throw new Error("A data inicial é depois da data final.");
-      const D = await RK.json("/api/sim?" + RK.parametros({ de: RK.isoInt(de), ate: RK.isoInt(ate), aten: 1 }));
+      const D = await RK.json("/api/sim?" + RK.parametros({ aten: 1 }));
       if (seq !== SIM.seq) return;
       SIM.D = D; SIM.velho = false;
-      ajustarDatas(D);
+      textoPeriodo(D);
       if (RK.aba !== "sim") return;
       if (assistir) iniciarReplay();
       else {
@@ -143,34 +122,34 @@
     const per = `${RK.dataTxt(m.dataIni)} a ${RK.dataTxt(m.dataFim)}`;
     const premissas = `<div class="nota">Gestão: ${RK.esc(RK.cfg.gestoes[m.gestao])} · ${RK.num(m.contratos, m.fracionado ? 2 : 0)} ${lote} · para o dia após ${m.maxStops} stops${m.intraday ? ` · entradas até ${hora(m.horaFim)}, zeragem ${hora(m.horaZeragem)}` : " · swing (sem zeragem)"}.
       ${(m.gestao === "parcial" || m.gestao === "conducao") && !m.fracionado && m.contratos < 2 ? "<b>Com 1 contrato não há parcial</b>: no 1:1 o stop só vai para o 0x0 (use 2 contratos ou mais). " : ""}Execução conservadora: ordem stop com escorregamento, alvo só conta se passar 1 tick, candle que toca stop e alvo conta como stop, custos descontados.</div>`;
-    let html = `<div class="card"><div class="rot">RESULTADO · ${cab} <span class="dir">${per}</span></div>${RK.seloVeredito(st)}`;
+    let html = `<div class="card"><div class="rot">RESULTADO · ${cab} <span class="dir">${per}</span></div>`;
     if (st.n) {
-      html += `<div class="kpis">
-        <div><small>Resultado</small><b class="${RK.cls(st.total)}">${RK.dinheiro(st.total, D, true)}</b><em>${RK.pct((100 * st.total) / m.capital)} do capital</em></div>
-        <div><small>Operações</small><b>${st.n}</b><em>${Math.round((st.acerto * st.n) / 100)} ganhos · ${st.n - Math.round((st.acerto * st.n) / 100)} perdas/0x0</em></div>
-        <div><small>Acerto</small><b>${RK.pct(st.acerto)}</b><em>empate em ${RK.pct(st.empate)}</em></div>
-        <div><small>Média por operação</small><b class="${RK.cls(st.mediaDin)}">${RK.dinheiro(st.mediaDin, D, true)}</b><em>margem de erro ±${RK.dinheiro(st.icDin, D)} · ${RK.R(st.expR)}</em></div>
-        <div><small>Ganho médio ÷ perda média</small><b>${RK.num(st.payoff, 2)}</b></div>
-        <div><small>Fator de lucro</small><b>${RK.num(st.fatorLucro, 2)}</b><em>ganhos ÷ perdas em dinheiro</em></div>
-        <div><small>Pior queda</small><b class="ruim">${RK.dinheiro(-st.ddMax, D)}</b><em>${RK.pct(st.ddPct)} do pico</em></div>
-        <div><small>Perdas seguidas</small><b>${st.perdasSeguidas}</b><em>maior sequência</em></div>
-        <div><small>Capital final</small><b>${RK.dinheiro(st.capitalFinal, D)}</b><em>começou com ${RK.dinheiro(m.capital, D)}</em></div>
-      </div>
-      <div class="nota">Média por operação na 1ª metade: <b class="${RK.cls(st.exp1)}">${RK.dinheiro(st.exp1, D, true)}</b> · na 2ª metade: <b class="${RK.cls(st.exp2)}">${RK.dinheiro(st.exp2, D, true)}</b>.
-      Capital recomendado para aguentar a pior queda com folga: <b>${RK.dinheiro(3 * st.ddMax, D)}</b> (3× a pior queda).</div>`;
+      html += `<div class="resumo-topo"><div><div class="grande ${RK.cls(st.total)}">${RK.dinheiro(st.total, D, true)}</div>
+          <div class="sub">${st.n} operações · acerto ${RK.pct(st.acerto, 0)} (empata com ${RK.pct(st.empate, 0)}) · ${RK.pct((100 * st.total) / m.capital)} do capital</div></div>${RK.seloCurto(st)}</div>
+        <canvas class="graf" id="cvCapital"></canvas>
+        <div class="kpis">
+          <div><small>Média por operação</small><b class="${RK.cls(st.mediaDin)}">${RK.dinheiro(st.mediaDin, D, true)}</b><em>± ${RK.dinheiro(st.icDin, D)}</em></div>
+          <div><small>Pior queda</small><b class="ruim">${RK.dinheiro(-st.ddMax, D)}</b><em>${RK.pct(st.ddPct, 0)} do pico</em></div>
+          <div><small>Capital final</small><b>${RK.dinheiro(st.capitalFinal, D)}</b><em>começou com ${RK.dinheiro(m.capital, D)}</em></div>
+          <div><small>Ganho ÷ perda</small><b>${RK.num(st.payoff, 2)}</b><em>fator de lucro ${RK.num(st.fatorLucro, 2)}</em></div>
+          <div><small>Perdas seguidas</small><b>${st.perdasSeguidas}</b><em>maior sequência</em></div>
+          <div><small>1ª / 2ª metade</small><b class="${RK.cls(st.exp1)}">${RK.dinheiro(st.exp1, D, true)}</b><em class="${RK.cls(st.exp2)}">${RK.dinheiro(st.exp2, D, true)} por operação</em></div>
+        </div>
+        <details><summary>Como ler · premissas</summary><div class="nota">${RK.esc(st.explica || "")} Capital recomendado para aguentar a pior queda com folga: <b>${RK.dinheiro(3 * st.ddMax, D)}</b> (3× a pior queda).</div>${premissas}</details>`;
+    } else {
+      html += `<div class="resumo-topo"><div><div class="grande neutro">sem operações</div><div class="sub">${RK.esc(st.explica || "")}</div></div>${RK.seloCurto(st)}</div>${premissas}`;
     }
-    html += premissas + `</div>`;
+    html += `</div>`;
     if (st.n) {
-      html += `<div class="card"><div class="rot">CURVA DO CAPITAL <span class="dir neutro">uma marca por operação</span></div><canvas class="graf" id="cvCapital"></canvas></div>`;
       html += `<div class="card"><div class="rot">RESULTADO POR MÊS</div><canvas class="graf baixo" id="cvMeses"></canvas>
         <table class="tab"><tr><th>Mês</th><th class="n">Ops</th><th class="n">Acerto</th><th class="n">Em R</th><th class="n">Resultado</th></tr>` +
         st.meses.map((x) => `<tr><td>${String(x.mes).slice(4)}/${String(x.mes).slice(0, 4)}</td><td class="n">${x.n}</td><td class="n">${RK.pct((100 * x.ganhos) / x.n, 0)}</td><td class="n ${RK.cls(x.R)}">${RK.R(x.R, 1)}</td><td class="n ${RK.cls(x.dinheiro)}">${RK.dinheiro(x.dinheiro, D, true)}</td></tr>`).join("") + `</table></div>`;
     }
     if (m.est === "TODAS" && D.porEst) {
-      html += `<div class="card"><div class="rot">CADA ESTRATÉGIA: SOZINHA × DENTRO DO "TODAS"</div><div class="rolagem"><table class="tab">
+      html += `<div class="card"><details><summary style="margin-top:0">Cada estratégia: sozinha × dentro do "TODAS"</summary><div class="rolagem" style="margin-top:6px"><table class="tab">
         <tr><th>Estratégia</th><th class="n">Sozinha: ops</th><th class="n">acerto</th><th class="n">média</th><th class="n">resultado</th><th class="n">No TODAS: ops</th><th class="n">resultado</th></tr>` +
         Object.entries(D.porEst).map(([c, r]) => { const s = r.isolada, j = r.naJunta; return `<tr><td title="${RK.esc(s.veredito)}">${c} ${RK.esc(RK.nomeEst(c))}</td><td class="n">${s.n}</td><td class="n">${RK.pct(s.acerto)}</td><td class="n ${RK.cls(s.expR)}">${RK.R(s.expR)}</td><td class="n ${RK.cls(s.total)}">${RK.dinheiro(s.total, D, true)}</td><td class="n">${j.n}</td><td class="n ${RK.cls(j.total)}">${RK.dinheiro(j.total, D, true)}</td></tr>`; }).join("") +
-        `</table></div><div class="nota">No "TODAS" só existe uma operação por vez: quando uma estratégia está posicionada, os sinais das outras são ignorados.</div></div>`;
+        `</table></div><div class="nota">No "TODAS" só existe uma operação por vez: quando uma estratégia está posicionada, os sinais das outras são ignorados.</div></details></div>`;
     }
     if (st.n) {
       html += `<div class="card"><div class="rot">OPERAÇÕES (${st.n}) <button class="mini-btn" id="btCsv">Exportar CSV</button></div><div class="rolagem"><table class="tab">
@@ -252,17 +231,13 @@
   }
 
   // link direto (abre a simulação já calculada, ou o replay parado em um candle)
-  RK.simDemo = async ({ de, ate, acao, passos }) => {
-    if (de) $("simDe").value = de;
-    if (ate) $("simAte").value = ate;
+  RK.simDemo = async ({ acao, passos }) => {
     await simular({ assistir: acao === "replay" });
     if (acao === "replay" && SIM.emReplay) { tocar(false); if (passos) avancar(passos); RK.mostrar(SIM.D, SIM.k); }
     await new Promise((ok) => setTimeout(ok, 800));       // deixa o gráfico redesenhar
   };
 
   // ---------------------------------------------------------------- ligações
-  $("simCapital").value = RK.pref.capital; $("simStops").value = RK.pref.maxstops;
-  $("simCapital").onchange = lerForm; $("simStops").onchange = lerForm;
   $("btSimular").onclick = () => simular();
   $("btAssistir").onclick = () => simular({ assistir: true });
   $("rpPlay").onclick = () => { if (SIM.k >= SIM.D.meta.iFim) return; tocar(!SIM.rodando); };
@@ -277,7 +252,6 @@
   });
   RK.on("mudou", (o) => {
     SIM.velho = true;
-    if (o === "ativo" || o === "tf") { $("simDe").value = ""; $("simAte").value = ""; }
     if (SIM.emReplay) pararReplay(false);
     if (RK.aba === "sim" && SIM.D) simular();
   });
@@ -287,6 +261,9 @@
     if (SIM.D) {
       RK.mostrar(SIM.D, SIM.k ?? SIM.D.meta.iFim, { manterZoom: RK.graficoMostra() === SIM.D });
       desenharGraficos();
-    } else if (RK.vivo.D) ajustarDatas(RK.vivo.D);
+    } else if (RK.vivo.D) {
+      textoPeriodo(RK.vivo.D);
+      $("simResultado").innerHTML = `<div class="card nota">Clique em <b>Calcular resultado</b> para ver quanto ${RK.esc(RK.nomeEst(RK.pref.est))} teria feito no período, ou em <b>Assistir</b> para ver candle a candle.</div>`;
+    }
   });
 })();

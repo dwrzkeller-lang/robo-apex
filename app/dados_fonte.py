@@ -138,6 +138,7 @@ def agrupar(cfg, minutos, tf):
     """Candles de 1 minuto (t UTC, o, h, l, c, v) -> candles de tf minutos no horario local da bolsa."""
     b = _barras_vazias(tf)
     sessao, fds = cfg["sessao"], cfg.get("fim_de_semana", False)
+    s0 = sessao[0] // 100 * 60 + sessao[0] % 100
     atual = None
     for t, o, h, l, c, v in minutos:
         dt = hora_local(cfg, t)
@@ -147,7 +148,7 @@ def agrupar(cfg, minutos, tf):
         if hm < sessao[0] or hm > sessao[1]:
             continue
         m = dt.hour * 60 + dt.minute
-        m0 = m - m % tf
+        m0 = s0 + ((m - s0) // tf) * tf                        # candles alinhados na abertura da bolsa (NY abre 9:30)
         ini = dt.replace(hour=m0 // 60, minute=m0 % 60, second=0, microsecond=0)
         if atual is None or atual[0] != ini:
             if atual:
@@ -174,6 +175,7 @@ def _baixar_yahoo(simbolo, intervalo="5m", periodo="60d"):
 
 def _yahoo_para_barras(js, cfg, tf=5):
     escala, sessao, fds = cfg["escala"], cfg["sessao"], cfg.get("fim_de_semana", False)
+    s0 = sessao[0] // 100 * 60 + sessao[0] % 100          # a grade dos candles comeca na abertura da bolsa
     res = js["chart"]["result"][0]
     ts = res.get("timestamp") or []
     q = res["indicators"]["quote"][0]
@@ -198,7 +200,7 @@ def _yahoo_para_barras(js, cfg, tf=5):
         dt = hora_local(cfg, t)
         if not fds and dt.weekday() >= 5:
             continue
-        if (dt.hour * 60 + dt.minute) % tf:
+        if (dt.hour * 60 + dt.minute - s0) % tf:
             continue        # retrato do preco "agora" (fora da grade do tempo grafico), nao e candle
         hm = dt.hour * 100 + dt.minute
         if hm < sessao[0] or hm > sessao[1]:
@@ -300,10 +302,13 @@ def carregar(base, chave, tf=5):
         raise ValueError("ativo desconhecido: %s" % chave)
     cfg = ATIVOS[chave]
     tem_base = chave in historico.DUKAS or chave in historico.BINANCE
-    if tf >= 1440 or not tem_base or historico.dias_na_base(base, chave) < 10:
+    # usa a fonte com mais historico: o Yahoo tem 60 dias em 2-30 min e 2 anos em 60 min;
+    # a base de 5 meses so entra quando ja tiver mais dias que isso (ela cresce em segundo plano)
+    dias_yahoo = 60 if tf < 60 else 730
+    if tf >= 1440 or not tem_base or historico.dias_na_base(base, chave) <= dias_yahoo:
         b, fonte = carregar_yahoo(base, chave, tf)
-        if tem_base and tf < 1440:
-            fonte += " · base de 5 meses ainda baixando"
+        if tem_base and tf < 60:
+            fonte += " · base de 5 meses baixando (%d dias)" % historico.dias_na_base(base, chave)
         return b, fonte
     agora = time.time()
     ck = ("b", chave, tf)

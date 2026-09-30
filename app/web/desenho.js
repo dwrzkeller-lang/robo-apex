@@ -10,6 +10,7 @@
     [-0.272, "127,2%"], [-0.618, "161,8%"]];
   const COR_FIBO = { 0: "#9aa5b5", 0.236: "#8bc34a", 0.382: "#ffaa3c", 0.5: "#ff8c00", 0.618: "#ffd700", 0.786: "#c87828", 1: "#9aa5b5", "-0.272": "#22d3ee", "-0.618": "#3b9cff" };
   let desenhos = [], ferramenta = "cursor", inicio = null, preview = null, pincel = null, chave = null, sujo = 0, arrasto = null, assinatura = "";
+  let selecionado = null;           // id do desenho clicado (a tecla Delete apaga ele)
 
   // ---------------------------------------------------------------- coordenadas
   const barraSeg = () => (RK.D ? RK.D.meta.tf * 60 : 300);
@@ -49,7 +50,7 @@
   const nomeChave = () => "desenhos_" + String(RK.ativo).replace(/[^A-Za-z0-9_\-.]/g, "_");
   async function carregar() {
     const k = nomeChave(); if (k === chave) return;
-    chave = k; desenhos = (await RK.api.get(k).catch(() => null)) || []; sujo++;
+    chave = k; selecionado = null; desenhos = (await RK.api.get(k).catch(() => null)) || []; sujo++;
   }
   let salvarT = null;
   function salvar() { sujo++; clearTimeout(salvarT); const k = chave, lista = desenhos.slice(); salvarT = setTimeout(() => RK.api.set(k, lista).catch(() => RK.toast("Não consegui salvar os desenhos", "erro")), 400); }
@@ -64,10 +65,20 @@
   }
   document.querySelectorAll("#ferramentas button[data-f]").forEach((b) => (b.onclick = () => usar(b.dataset.f)));
   $("ima").onclick = () => $("ima").classList.toggle("on");
-  $("desfazer").onclick = () => { if (desenhos.length) { desenhos.pop(); salvar(); } };
+  $("desfazer").onclick = () => { if (desenhos.length) { desenhos.pop(); selecionado = null; salvar(); } };
+  // Delete / Backspace: apaga o desenho selecionado (clique nele com o cursor); sem seleção, apaga o último
+  function apagarSelecionado() {
+    if (!desenhos.length) { RK.toast("Não há desenhos neste ativo.", "aviso"); return; }
+    let k = selecionado == null ? -1 : desenhos.findIndex((d) => d.id === selecionado);
+    const qual = k >= 0 ? "o desenho selecionado" : "o último desenho";
+    if (k < 0) k = desenhos.length - 1;
+    desenhos.splice(k, 1); selecionado = null; salvar();
+    RK.toast(`Apaguei ${qual}.`, "ok");
+  }
   $("limparDesenhos").onclick = () => { if (desenhos.length && confirm(`Apagar os ${desenhos.length} desenhos deste ativo?`)) { desenhos = []; salvar(); } };
   RK.on("tecla", (e) => {
-    if (e.key === "Escape") usar("cursor");
+    if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); apagarSelecionado(); return; }
+    if (e.key === "Escape") { usar("cursor"); selecionado = null; sujo++; }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); $("desfazer").click(); }
   });
   const estilo = () => ({ cor: $("corDesenho").value, esp: +$("espDesenho").value });
@@ -77,7 +88,7 @@
     if (!RK.D || ferramenta === "cursor") return;
     const p = pontoDoEvento(e); if (!p) return;
     cv.setPointerCapture(e.pointerId);
-    if (ferramenta === "borracha") { const k = acertar(e); if (k >= 0) { desenhos.splice(k, 1); salvar(); } return; }
+    if (ferramenta === "borracha") { const k = acertar(e); if (k >= 0) { desenhos.splice(k, 1); selecionado = null; salvar(); } return; }
     if (ferramenta === "horizontal" || ferramenta === "vertical") { novo(ferramenta, [p]); usar("cursor"); return; }
     if (ferramenta === "texto") {
       const txt = prompt("Texto da anotação:"); if (txt) novo("texto", [p], { texto: txt.slice(0, 120) }); usar("cursor"); return;
@@ -114,7 +125,13 @@
   }
   area.addEventListener("pointerdown", (e) => {
     if (ferramenta !== "cursor" || !RK.D) return;
-    const alvo = pontaPerto(e); if (!alvo) return;
+    const alvo = pontaPerto(e);
+    if (!alvo) {                                   // clique na linha seleciona (Delete apaga); fora dela, tira a seleção
+      const k = acertar(e), novo = k >= 0 ? desenhos[k].id : null;
+      if (novo !== selecionado) { selecionado = novo; sujo++; }
+      return;
+    }
+    selecionado = desenhos[alvo.k].id; sujo++;
     e.stopPropagation(); e.preventDefault(); arrasto = alvo; area.setPointerCapture(e.pointerId);
   }, true);
   area.addEventListener("pointermove", (e) => {
@@ -173,7 +190,9 @@
     const P = d.pts.map((q) => [xDe(q.t), yDe(q.p)]);
     if (P.some(([a, b]) => a == null || b == null)) return;
     const Wp = RK.chart.timeScale().width();
-    ctx.strokeStyle = d.cor; ctx.fillStyle = d.cor; ctx.lineWidth = d.esp; ctx.setLineDash(temp ? [5, 4] : []);
+    const sel = !temp && d.id === selecionado;
+    ctx.strokeStyle = d.cor; ctx.fillStyle = d.cor; ctx.lineWidth = d.esp + (sel ? 2 : 0); ctx.setLineDash(temp ? [5, 4] : []);
+    ctx.shadowColor = sel ? d.cor : "transparent"; ctx.shadowBlur = sel ? 10 : 0;
     ctx.beginPath();
     switch (d.tipo) {
       case "tendencia": ctx.moveTo(...P[0]); ctx.lineTo(...P[1]); ctx.stroke(); break;
@@ -213,6 +232,7 @@
       }
     }
     ctx.setLineDash([]);
+    ctx.shadowBlur = 0; ctx.shadowColor = "transparent";
     if (ferramenta === "cursor" && !temp && d.tipo !== "pincel" && d.tipo !== "texto")
       for (const q of P) { ctx.fillStyle = "#0d1016"; ctx.strokeStyle = d.cor; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(q[0], q[1], 3, 0, 7); ctx.fill(); ctx.stroke(); }
   }
