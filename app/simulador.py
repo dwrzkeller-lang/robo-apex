@@ -46,14 +46,16 @@ def alvos_da_gestao(g, ent, risco, alvos_ordem):
     if g == "conducao":
         return ent + risco, None, ""
     if g == "fixo" and alvos_ordem:
-        return None, alvos_ordem[1], "alvo (gap fechado)"
+        return None, alvos_ordem[1], "alvo da estratégia"
     if g == "fibo" and alvos_ordem:
         return alvos_ordem[0], alvos_ordem[1], "alvo Fibonacci 161,8%"
     return None, None, ""
 
 
 def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, juntas=False,
-            i_ini=None, i_fim=None, com_atencao=False):
+            i_ini=None, i_fim=None, com_atencao=False, i_formando=None):
+    """i_formando = indice do candle que ainda nao fechou (ao vivo). Nele o preco ja negociado vale para executar
+    ordem, stop e alvo, mas nenhuma decisao que depende do FECHAMENTO e tomada (sinal novo, saida por fechamento)."""
     G = Gs[1]
     n = G.n if i_fim is None else min(G.n, i_fim + 1)
     ini = max(AQUECIMENTO, i_ini or 0)
@@ -181,6 +183,8 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                 return fechar(s, p, p["frac"], o, i, "alvo (abriu além)")
             if h >= p["alvo"] + tick:
                 return fechar(s, p, p["frac"], p["alvo"], i, p["rot"] or "alvo")
+        if i == i_formando:
+            return
         if g == "conducao" and p["parcial"]:
             if c < Gp.mm9[i] and Gp.mm9[i] > ent:
                 p["sair"] = "fechou além da MM9 (condução)"
@@ -217,7 +221,7 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                     p = s["pos"]
                     fechar(s, p, p["frac"], p["G"].c[i] - slip, i, "zeragem do dia")
                 cancelar(s, i, "fim do dia")
-            if s["pos"] is None and not fim_dia and not (G.intraday and s["stops"] >= max_stops):
+            if s["pos"] is None and not fim_dia and i != i_formando and not (G.intraday and s["stops"] >= max_stops):
                 for cod in s["cods"]:
                     if not pode_entrar(i, cod):
                         continue

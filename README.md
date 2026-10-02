@@ -42,11 +42,37 @@ tiver histórico positivo com pelo menos 20 operações, ele diz **FICAR DE FORA
 
 | Aba | O que faz |
 |---|---|
-| **Ao vivo** | Cartão "o que fazer agora" (aguardando, atenção, ordem armada com entrada/stop/alvo e risco em dinheiro, ou em operação) e o resultado da estratégia no período, com a curva e o veredito. Os detalhes ficam recolhidos. |
+| **Ao vivo** | Cartão "o que fazer agora" (aguardando, atenção, ordem armada com entrada/stop/alvo e risco em dinheiro, ou em operação), o **teste ao vivo**, o resultado da estratégia no período (curva e veredito) e a lista de **operações**: clique numa para ver no gráfico e ler o passo a passo (sinal → entrada → stop → alvo → saída). Atualiza a cada 30 s. |
 | **Simulação** | Resultado do período com curva do capital, resultado por mês e cada operação (CSV). **Assistir candle a candle** faz o gráfico andar como se fosse ao vivo. |
 | **Calendário** | Resultado de cada dia; clique no dia para ver cada operação (estratégia, horário, entrada, saída, motivo, R e dinheiro). Com Todas dá para ver cada estratégia sozinha. |
 | **Comparar** | As 10 estratégias + Todas em todos os ativos, no período escolhido, colorido pelo veredito. |
 | **Notícias** | Banco Central, Valor, InfoMoney, Money Times, g1, E-Investidor, Investing e Google Notícias, a cada 60 s, com o impacto estimado e se mexe no WIN, no WDO ou nos dois. Notícia forte nova acende o contador e apita. |
+
+**Teste ao vivo (simulado, sem dinheiro):** o botão **▶ Ligar** na aba Ao vivo deixa a estratégia escolhida rodando
+a partir do próximo candle. Cada operação fica registrada (lista + gráfico) e o robô avisa com som: "tic-tic" quando
+arma a ordem, "ta-dam" quando executa, e um som para saída no ganho e outro para saída na perda. Dá para ligar testes
+em vários ativos ao mesmo tempo e trocar de ativo: eles continuam rodando (o número verde na aba mostra quantos).
+**■ Parar** encerra e guarda o resultado. O teste fica salvo em `dados/estado_testes.json`; se o robô ficou fechado,
+ao abrir ele reconstitui pelos candles o que teria acontecido nesse intervalo.
+
+**Candle aberto:** ao vivo, o último candle ainda está se formando. Nele o robô executa ordem, stop e alvo (o preço já
+negociou), mas **sinal novo só sai depois que o candle fecha**, para o sinal não aparecer e sumir.
+
+**Operações no gráfico:** cada operação aparece com a faixa de risco (vermelha, até o stop), a faixa do alvo (verde) e
+a linha da entrada até a saída. A operação clicada ganha os preços escritos e o candle de sinal marcado. Em
+**Indicadores** dá para deixar só a linha ou só as setas.
+
+**Indicadores** (botão no canto do gráfico): médias móveis à vontade (simples ou exponencial, período e cor), VWAP,
+Bandas de Bollinger, Canal de Keltner (o da E10), volume, IFR/RSI e estocástico lento, estes dois em faixas próprias
+embaixo do gráfico. São só para leitura: as estratégias não mudam.
+
+**⌖ Centralizar** (ou tecla **Home**) volta para o último candle com a escala automática; **↔** mostra o período
+inteiro. Ao trocar de ativo, tempo, estratégia ou período o gráfico já volta sozinho para o preço.
+
+**Largura do painel:** arraste a divisória entre o gráfico e o painel; duplo clique nela volta ao padrão.
+
+**Sons próprios (opcional):** os sons são sintetizados pelo robô. Para usar os seus (por exemplo os do Profit), coloque
+arquivos `.wav`, `.mp3` ou `.ogg` na pasta `dados/sons` com os nomes `ordem`, `entrada`, `ganho`, `perda` e `aviso`.
 
 **Desenhos** (barra à esquerda): tendência, horizontal, vertical, Fibonacci, retângulo, régua, pincel, texto, borracha,
 ímã. Clique numa linha para selecionar (ela brilha) e aperte **Delete** para apagar; sem nada selecionado, o Delete
@@ -152,7 +178,8 @@ app/noticias.py      notícias (RSS/Atom) com classificação de impacto
 app/historico.py     base de 5 meses (Dukascopy e Binance)
 app/dados_fonte.py   fontes, fusos, custos por ativo, CSV do Profit
 app/robo_keller.py   servidor local: /api/config, /api/sim, /api/radar, /api/noticias, /api/base, /api/comparar
-app/web/             tela (app.js, sim.js, radar.js, calendario.js, comparar.js, noticias.js, desenho.js)
+app/web/             tela (app.js, ind.js = indicadores, ops.js = operações e teste ao vivo, sim.js, radar.js,
+                     calendario.js, comparar.js, noticias.js, desenho.js)
 ferramentas/backtest.py       relatório no terminal:  python ferramentas/backtest.py WIN --tf 15
 ferramentas/gerar_ntsl.py     gera a pasta ntsl a partir das mesmas regras
 ferramentas/conferir_ntsl.py  confere o NTSL contra o simulador

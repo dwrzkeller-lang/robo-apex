@@ -241,6 +241,8 @@
     if (!RK.D) return;
     const Wp = RK.chart.timeScale().width(), Hp = cv.clientHeight - RK.chart.timeScale().height();
     ctx.save(); ctx.beginPath(); ctx.rect(0, 0, Wp, Hp); ctx.clip();
+    const util = { W: Wp, H: Hp, x: (i) => RK.chart.timeScale().logicalToCoordinate(i), y: yDe, rotulo };
+    for (const f of RK.camadas) { ctx.save(); try { f(ctx, util); } catch (e) { console.error(e); } ctx.restore(); }
     for (const d of desenhos) desenharUm(d, false);
     if (preview) desenharUm(Object.assign({ tipo: ferramenta, pts: preview }, estilo()), true);
     if (pincel && pincel.length > 1) desenharUm(Object.assign({ tipo: "pincel", pts: pincel }, estilo()), true);
@@ -256,6 +258,7 @@
     }
     requestAnimationFrame(laco);
   }
+  RK.redesenhar = () => { sujo++; };
   RK.on("carregado", carregar);
   requestAnimationFrame(laco);
 })();

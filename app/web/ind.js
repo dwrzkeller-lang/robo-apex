@@ -1,0 +1,237 @@
+/* ROBÔ KELLER — indicadores do gráfico (botão "Indicadores"): médias móveis à escolha, VWAP, Bandas de Bollinger,
+   Canal de Keltner, volume, IFR e estocástico. São só para LER o gráfico: as estratégias usam os indicadores
+   calculados no servidor e não mudam com o que for ligado ou desligado aqui. */
+(() => {
+  "use strict";
+  const RK = window.RK, $ = RK.$, chart = RK.chart;
+  const CORES = ["#ff5b6e", "#3b9cff", "#b35cff", "#22e39a", "#ffa53a", "#22d3ee", "#e056fd", "#d9e0ea"];
+  const padrao = () => ({
+    medias: [{ tipo: "MMS", n: 9, cor: "#ff5b6e", on: true }, { tipo: "MMS", n: 20, cor: "#3b9cff", on: true }, { tipo: "MMS", n: 200, cor: "#b35cff", on: true }],
+    vwap: true, boll: false, kelt: false, vol: false, ifr: false, ifrN: 14, estoc: false, ops: "detalhe",
+  });
+  function validar(c) {
+    const p = padrao();
+    if (!c || typeof c !== "object" || !Array.isArray(c.medias)) return p;
+    const medias = c.medias.filter((m) => m && (m.tipo === "MMS" || m.tipo === "MME") && m.n >= 2 && m.n <= 600).slice(0, 8)
+      .map((m) => ({ tipo: m.tipo, n: Math.round(m.n), cor: /^#[0-9a-f]{6}$/i.test(m.cor) ? m.cor : "#d9e0ea", on: !!m.on }));
+    return { medias, vwap: !!c.vwap, boll: !!c.boll, kelt: !!c.kelt, vol: !!c.vol, ifr: !!c.ifr,
+      ifrN: c.ifrN >= 2 && c.ifrN <= 100 ? Math.round(c.ifrN) : 14, estoc: !!c.estoc, ops: ["detalhe", "simples", "nada"].includes(c.ops) ? c.ops : "detalhe" };
+  }
+  let cfg = validar(RK.pref.ind);
+  const salvar = () => { RK.pref.ind = cfg; RK.salvarPref(); };
+
+  // ---------------------------------------------------------------- contas (as mesmas fórmulas do servidor)
+  const vazio = (n) => new Array(n).fill(null);
+  function sma(x, p) {
+    const out = vazio(x.length); let s = 0;
+    for (let i = 0; i < x.length; i++) { s += x[i]; if (i >= p) s -= x[i - p]; if (i >= p - 1) out[i] = s / p; }
+    return out;
+  }
+  function ema(x, p) {            // igual ao Profit: alfa = 2 / (p + 1), começa no 1º preço
+    const out = vazio(x.length), k = 2 / (p + 1); let e = x[0];
+    for (let i = 0; i < x.length; i++) { e = i === 0 ? x[0] : e + (x[i] - e) * k; out[i] = i >= p - 1 ? e : null; }
+    return out;
+  }
+  function desvio(x, p, media) {
+    const out = vazio(x.length);
+    for (let i = p - 1; i < x.length; i++) { let s = 0; for (let j = i - p + 1; j <= i; j++) s += (x[j] - media[i]) ** 2; out[i] = Math.sqrt(s / p); }
+    return out;
+  }
+  function atr(D, p) {
+    const tr = D.c.map((_, i) => (i === 0 ? D.h[0] - D.l[0] : Math.max(D.h[i] - D.l[i], Math.abs(D.h[i] - D.c[i - 1]), Math.abs(D.l[i] - D.c[i - 1]))));
+    return sma(tr, p);
+  }
+  function rsi(c, p) {            // IFR de Wilder
+    const out = vazio(c.length);
+    if (c.length <= p) return out;
+    let g = 0, q = 0;
+    for (let i = 1; i <= p; i++) { const d = c[i] - c[i - 1]; g += Math.max(d, 0); q += Math.max(-d, 0); }
+    let mg = g / p, mp = q / p;
+    out[p] = mp === 0 ? 100 : 100 - 100 / (1 + mg / mp);
+    for (let i = p + 1; i < c.length; i++) {
+      const d = c[i] - c[i - 1];
+      mg = (mg * (p - 1) + Math.max(d, 0)) / p; mp = (mp * (p - 1) + Math.max(-d, 0)) / p;
+      out[i] = mp === 0 ? 100 : 100 - 100 / (1 + mg / mp);
+    }
+    return out;
+  }
+  function estocastico(D, p = 14, lento = 3, sinal = 3) {      // estocástico lento (14, 3, 3)
+    const n = D.c.length, bruto = vazio(n);
+    for (let i = p - 1; i < n; i++) {
+      let mx = -Infinity, mn = Infinity;
+      for (let j = i - p + 1; j <= i; j++) { if (D.h[j] > mx) mx = D.h[j]; if (D.l[j] < mn) mn = D.l[j]; }
+      bruto[i] = mx > mn ? (100 * (D.c[i] - mn)) / (mx - mn) : 50;
+    }
+    const media = (x, q) => { const out = vazio(n); for (let i = 0; i < n; i++) { let s = 0, ok = true; for (let j = i - q + 1; j <= i; j++) { if (j < 0 || x[j] == null) { ok = false; break; } s += x[j]; } if (ok) out[i] = s / q; } return out; };
+    const k = media(bruto, lento);
+    return [k, media(k, sinal)];
+  }
+
+  // ---------------------------------------------------------------- séries
+  // item = { s: série, calc: (D) => valores, rot, cor, casas (null = casas do ativo), hist }
+  let itens = [], paineis = [], calcD = null;
+  const semEscala = { autoscaleInfoProvider: () => null };       // linhas não esticam a escala: quem manda são os candles
+  const base = { priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false };
+  const linha = (cor, w, extra) => chart.addLineSeries(Object.assign({ color: cor, lineWidth: w }, base, semEscala, extra));
+  const oscilador = (cor, id, w = 2) => chart.addLineSeries(Object.assign({ color: cor, lineWidth: w, priceScaleId: id,
+    autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }) }, base));
+  const guia = (s, v) => s.createPriceLine({ price: v, color: "#3a475e", lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: "" });
+
+  function montar() {
+    itens.forEach((x) => chart.removeSeries(x.s));
+    itens = []; paineis = []; calcD = null;
+    const add = (s, calc, rot, cor, extra) => itens.push(Object.assign({ s, calc, rot, cor, val: null }, extra));
+    cfg.medias.filter((m) => m.on).forEach((m) =>
+      add(linha(m.cor, m.n >= 20 ? 2 : 1), (D) => (m.tipo === "MME" ? ema : sma)(D.c, m.n), (m.tipo === "MME" ? "MME" : "MM") + m.n, m.cor));
+    if (cfg.vwap) add(linha("#ffd23f", 2), (D) => D.vw, "VWAP", "#ffd23f");
+    if (cfg.boll) {
+      const memo = (D) => (D._boll = D._boll || (() => { const m = sma(D.c, 20), d = desvio(D.c, 20, m); return [m.map((v, i) => (v == null ? null : v + 2 * d[i])), m.map((v, i) => (v == null ? null : v - 2 * d[i]))]; })());
+      add(linha("#8fa3bf", 1), (D) => memo(D)[0], "Bollinger ↑", "#8fa3bf");
+      add(linha("#8fa3bf", 1), (D) => memo(D)[1], "↓", "#8fa3bf");
+    }
+    if (cfg.kelt) {               // o canal da estratégia E10: MME20 ± 2,0 e 2,5 ATR(14)
+      const memo = (D) => (D._kelt = D._kelt || { m: ema(D.c, 20), a: atr(D, 14) });
+      const banda = (mult) => (D) => { const k = memo(D); return k.m.map((v, i) => (v == null || k.a[i] == null ? null : v + mult * k.a[i])); };
+      add(linha("#2bb5a0", 1), banda(2.0), "Keltner ↑", "#2bb5a0");
+      add(linha("#2bb5a0", 1), banda(-2.0), "↓", "#2bb5a0");
+      add(linha("#2bb5a0", 1, { lineStyle: 2 }), banda(2.5), "", "#2bb5a0");
+      add(linha("#2bb5a0", 1, { lineStyle: 2 }), banda(-2.5), "", "#2bb5a0");
+    }
+    if (cfg.vol) {
+      const s = chart.addHistogramSeries(Object.assign({ priceScaleId: "vol", priceFormat: { type: "volume" } }, base));
+      add(s, (D) => (D.meta.temVolume ? D.v : null), "Vol", "#8491a5", { hist: true, casas: 0 });
+    }
+    if (cfg.ifr) {
+      const s = oscilador("#ffa53a", "ifr"); guia(s, 70); guia(s, 30);
+      add(s, (D) => rsi(D.c, cfg.ifrN), "IFR" + cfg.ifrN, "#ffa53a", { casas: 1 });
+      paineis.push({ id: "ifr", nome: `IFR ${cfg.ifrN} (70 / 30)` });
+    }
+    if (cfg.estoc) {
+      const memo = (D) => (D._est = D._est || estocastico(D));
+      const sk = oscilador("#3b9cff", "est"), sd = oscilador("#ff5b6e", "est", 1); guia(sk, 80); guia(sk, 20);
+      add(sk, (D) => memo(D)[0], "Estoc %K", "#3b9cff", { casas: 1 });
+      add(sd, (D) => memo(D)[1], "%D", "#ff5b6e", { casas: 1 });
+      paineis.push({ id: "est", nome: "Estocástico 14, 3, 3 (80 / 20)" });
+    }
+    arrumar();
+  }
+
+  // divide a altura: preço em cima, volume no pé do preço, osciladores em faixas embaixo
+  const ALT = 0.16, VAO = 0.02;
+  function arrumar() {
+    const n = paineis.length, pe = n ? n * (ALT + VAO) + 0.03 : 0.08;
+    chart.priceScale("right").applyOptions({ scaleMargins: { top: 0.08, bottom: pe } });
+    paineis.forEach((p, j) => {                 // j = 0 é a faixa de cima
+      const baixo = 0.01 + (n - 1 - j) * (ALT + VAO);
+      p.topo = 1 - baixo - ALT; p.base = 1 - baixo;
+      chart.priceScale(p.id).applyOptions({ scaleMargins: { top: p.topo, bottom: baixo } });
+    });
+    if (cfg.vol) chart.priceScale("vol").applyOptions({ scaleMargins: { top: 1 - pe - 0.13, bottom: pe } });
+  }
+  // faixas dos osciladores: uma linha separando e o nome
+  RK.camadas.push((ctx, u) => {
+    for (const p of paineis) {
+      const y = Math.round(u.H * (p.topo - VAO / 2)) + 0.5;
+      ctx.strokeStyle = "#232c3b"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(u.W, y); ctx.stroke();
+      ctx.font = "10px Segoe UI, system-ui"; ctx.fillStyle = "#8491a5"; ctx.textAlign = "left"; ctx.textBaseline = "top";
+      ctx.fillText(p.nome, 8, y + 3);
+    }
+  });
+
+  function calcular(D) {
+    for (const x of itens) { let v = null; try { v = x.calc(D); } catch (e) { console.error(e); } x.val = v || null; }
+    calcD = D;
+  }
+  const corVol = (D, i) => (D.c[i] >= D.o[i] ? "rgba(38,166,154,.45)" : "rgba(239,83,80,.45)");
+  const ponto = (x, D, i) => {
+    const v = x.val[i];
+    if (v == null) return { time: D.t[i] };
+    return x.hist ? { time: D.t[i], value: v, color: corVol(D, i) } : { time: D.t[i], value: v };
+  };
+  const api = (RK.ind = {
+    pintar(D, k) {
+      if (calcD !== D) calcular(D);
+      for (const x of itens) {
+        if (!x.val) { x.s.setData([]); continue; }
+        const out = new Array(k + 1);
+        for (let i = 0; i <= k; i++) out[i] = ponto(x, D, i);
+        x.s.setData(out);
+      }
+    },
+    avancar(D, i) {
+      if (calcD !== D) return api.pintar(D, i);
+      for (const x of itens) if (x.val) x.s.update(ponto(x, D, i));
+    },
+    legenda(D, k) {
+      if (calcD !== D) return "";
+      let h = "";
+      for (const x of itens) {
+        if (!x.rot || !x.val || x.val[k] == null) continue;
+        h += `<span><i style="background:${x.cor}"></i>${x.rot} ${x.casas === 0 ? RK.num(x.val[k], 0) : RK.fmt(x.val[k], x.casas ?? undefined)}</span>`;
+      }
+      return h;
+    },
+    ops: () => cfg.ops,
+    ligar(nomes) {                 // link direto: ?ind=vol,ifr,estoc,boll,kelt (não muda o que está salvo)
+      cfg = validar(Object.assign({}, cfg, Object.fromEntries(nomes.filter((n) => ["vwap", "boll", "kelt", "vol", "ifr", "estoc"].includes(n)).map((n) => [n, true]))));
+      montar(); RK.repintar();
+    },
+  });
+
+  // ---------------------------------------------------------------- janela de escolha
+  const pop = $("popInd");
+  function desenharJanela() {
+    const D = RK.D, semVol = D && !D.meta.temVolume, semVwap = D && !D.vw;
+    const chk = (id, txt, on, extra = "", desab = false) => `<label class="chk"><input type="checkbox" data-k="${id}" ${on ? "checked" : ""} ${desab ? "disabled" : ""}> ${txt}${extra}</label>`;
+    pop.innerHTML = `<div class="rot">INDICADORES</div>
+      <div class="ind-titulo">Médias móveis</div>
+      <div id="indMedias">${cfg.medias.map((m, j) => `<div class="ind-media" data-j="${j}">
+        <input type="checkbox" data-m="on" ${m.on ? "checked" : ""} title="mostrar">
+        <select data-m="tipo" title="MMS = simples · MME = exponencial"><option value="MMS" ${m.tipo === "MMS" ? "selected" : ""}>Simples</option><option value="MME" ${m.tipo === "MME" ? "selected" : ""}>Exponencial</option></select>
+        <input type="number" data-m="n" min="2" max="600" step="1" value="${m.n}" title="períodos">
+        <input type="color" data-m="cor" value="${m.cor}" title="cor">
+        <button data-m="x" title="remover">✕</button></div>`).join("")}</div>
+      <button id="indMais" class="mini-btn" ${cfg.medias.length >= 8 ? "disabled" : ""}>+ adicionar média</button>
+      <div class="ind-titulo">No preço</div>
+      ${chk("vwap", "VWAP (preço médio do dia)", cfg.vwap, semVwap ? ' <em class="neutro">· só no intraday</em>' : "")}
+      ${chk("boll", "Bandas de Bollinger (20, 2)", cfg.boll)}
+      ${chk("kelt", "Canal de Keltner (MME20 ± 2,0 e 2,5 ATR)", cfg.kelt)}
+      ${chk("vol", "Volume", cfg.vol, semVol ? ' <em class="neutro">· este ativo não traz volume</em>' : "")}
+      <div class="ind-titulo">Embaixo do gráfico</div>
+      ${chk("ifr", "IFR / RSI de", cfg.ifr, ` <input type="number" id="indIfrN" min="2" max="100" step="1" value="${cfg.ifrN}" class="curto"> períodos`)}
+      ${chk("estoc", "Estocástico lento (14, 3, 3)", cfg.estoc)}
+      <div class="ind-titulo">Operações no gráfico</div>
+      <select id="indOps" class="largo">
+        <option value="detalhe" ${cfg.ops === "detalhe" ? "selected" : ""}>Completo: entrada, stop, alvo e saída de cada operação</option>
+        <option value="simples" ${cfg.ops === "simples" ? "selected" : ""}>Simples: só a linha da entrada até a saída</option>
+        <option value="nada" ${cfg.ops === "nada" ? "selected" : ""}>Só as setas (a operação clicada continua aparecendo)</option>
+      </select>
+      <div class="nota">Os indicadores são só para leitura do gráfico: as estratégias não mudam.</div>
+      <div class="botoes"><button id="indPadrao">Voltar ao padrão</button><button id="indFechar" class="primario">Fechar</button></div>`;
+    const aplicar = (redesenha = false) => { salvar(); montar(); RK.repintar(); if (redesenha) desenharJanela(); };
+    pop.querySelectorAll("input[data-k]").forEach((el) => (el.onchange = () => { cfg[el.dataset.k] = el.checked; aplicar(); }));
+    pop.querySelectorAll(".ind-media").forEach((row) => {
+      const m = cfg.medias[+row.dataset.j];
+      row.querySelector('[data-m="on"]').onchange = (e) => { m.on = e.target.checked; aplicar(); };
+      row.querySelector('[data-m="tipo"]').onchange = (e) => { m.tipo = e.target.value; aplicar(); };
+      row.querySelector('[data-m="n"]').onchange = (e) => { const v = Math.round(+e.target.value); m.n = v >= 2 && v <= 600 ? v : m.n; e.target.value = m.n; aplicar(); };
+      row.querySelector('[data-m="cor"]').onchange = (e) => { m.cor = e.target.value; aplicar(); };
+      row.querySelector('[data-m="x"]').onclick = () => { cfg.medias.splice(+row.dataset.j, 1); aplicar(true); };
+    });
+    $("indMais").onclick = () => {
+      const usados = new Set(cfg.medias.map((m) => m.n)), n = [50, 72, 100, 21, 34, 5, 500].find((v) => !usados.has(v)) || 50;
+      cfg.medias.push({ tipo: "MMS", n, cor: CORES[cfg.medias.length % CORES.length], on: true }); aplicar(true);
+    };
+    $("indIfrN").onchange = (e) => { const v = Math.round(+e.target.value); cfg.ifrN = v >= 2 && v <= 100 ? v : 14; e.target.value = cfg.ifrN; aplicar(); };
+    $("indOps").onchange = (e) => { cfg.ops = e.target.value; salvar(); RK.redesenhar(); };
+    $("indPadrao").onclick = () => { cfg = padrao(); aplicar(true); };
+    $("indFechar").onclick = RK.fecharPopovers;
+  }
+  $("btInd").onclick = () => {
+    const aberto = !pop.classList.contains("oculto");
+    RK.fecharPopovers();
+    if (!aberto) { desenharJanela(); pop.classList.remove("oculto"); }
+  };
+
+  montar();
+})();

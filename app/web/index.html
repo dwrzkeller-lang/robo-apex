@@ -69,8 +69,9 @@
     <label class="campo"><span>Capital inicial</span><input type="number" id="capital" min="1" step="100" value="10000"></label>
     <label class="campo"><span>Parar o dia após N stops</span><input type="number" id="maxstops" min="1" max="20" step="1" value="2"></label>
   </div>
-  <label class="chk"><input type="checkbox" id="autoVivo" checked> atualizar ao vivo a cada 60 s</label>
-  <label class="chk"><input type="checkbox" id="somVivo" checked> alarme sonoro (ordem armada e notícia forte)</label>
+  <label class="chk"><input type="checkbox" id="autoVivo" checked> atualizar ao vivo a cada 30 s</label>
+  <label class="chk"><input type="checkbox" id="somVivo" checked> sons (ordem armada, entrada, saída, notícia forte)</label>
+  <div class="ouvir" id="ouvirSons"><span>ouvir:</span><button data-s="ordem">ordem armada</button><button data-s="entrada">entrada</button><button data-s="ganho">ganho</button><button data-s="perda">perda</button></div>
   <div class="nota">Desenhos: clique numa linha para selecionar e aperte <b>Delete</b> para apagar (sem seleção, apaga o último). Ctrl+Z desfaz.</div>
   <div class="botoes"><button id="btAtualizar">Atualizar agora</button><button id="ajFechar" class="primario">Fechar</button></div>
 </div>
@@ -99,13 +100,21 @@
     <div id="chart"></div>
     <canvas id="desenho"></canvas>
     <div class="legenda" id="legenda"></div>
+    <div class="graf-botoes">
+      <button id="btInd" title="Médias móveis, VWAP, Bollinger, Keltner, volume, IFR, estocástico e como as operações aparecem no gráfico">Indicadores</button>
+      <button id="btPeriodoTodo" title="Mostrar o período inteiro escolhido no topo">↔</button>
+      <button id="btCentro" title="Voltar para o último candle com a escala automática (tecla Home)">⌖ Centralizar</button>
+    </div>
+    <div class="popover oculto" id="popInd"></div>
     <div class="aviso-carregando oculto" id="carregando">Carregando…</div>
     <div class="toast" id="toast"></div>
   </section>
 
+  <div class="divisor" id="divisor" title="Arraste para ajustar a largura do painel · duplo clique volta ao padrão"></div>
+
   <aside class="painel" id="painel">
     <div class="abas" role="tablist">
-      <button data-aba="vivo" class="on" role="tab">Ao vivo</button>
+      <button data-aba="vivo" class="on" role="tab">Ao vivo <span class="badge verde oculto" id="badgeTestes" title="testes ao vivo rodando">0</span></button>
       <button data-aba="sim" role="tab">Simulação</button>
       <button data-aba="cal" role="tab">Calendário</button>
       <button data-aba="cmp" role="tab">Comparar</button>
@@ -117,7 +126,9 @@
       <div class="erro oculto" id="erroVivo"></div>
       <div class="card momento" id="cardVivo"><div class="estado">—</div></div>
       <div id="chipRobo"></div>
+      <div class="card" id="cardTeste"></div>
       <div class="card" id="resumoVivo"></div>
+      <div class="card oculto" id="cardOps"></div>
       <div class="card oculto" id="tabelaVivo"></div>
     </section>
 
@@ -206,11 +217,13 @@
 
 <script src="lightweight-charts.js"></script>
 <script src="app.js"></script>
+<script src="ind.js"></script>
 <script src="sim.js"></script>
 <script src="calendario.js"></script>
 <script src="comparar.js"></script>
 <script src="radar.js"></script>
 <script src="noticias.js"></script>
 <script src="desenho.js"></script>
+<script src="ops.js"></script>
 </body>
 </html>

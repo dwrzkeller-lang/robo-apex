@@ -7,6 +7,7 @@ Nao envia ordens: informa o momento de entrada e simula o resultado com dados re
 Uso:  python robo_keller.py            (ou o RoboKeller.exe)
       python robo_keller.py --sem-janela --porta 8765
 """
+import bisect
 import json
 import mimetypes
 import os
@@ -60,6 +61,36 @@ def carregar(chave, tf):
     if len(B["c"]) < AQUECIMENTO + 20:
         raise RuntimeError("Poucos candles (%d) em %s. Preciso de pelo menos %d." % (len(B["c"]), chave, AQUECIMENTO + 20))
     return B, fonte, cfg
+
+
+_GS = {}
+
+
+def graficos(chave, tf, B, sc):
+    """Candles + indicadores dos dois lados; reaproveita enquanto os candles forem os mesmos (cache de dados)."""
+    ck = (chave, tf)
+    v = _GS.get(ck)
+    if v and v[0] is B:
+        return v[1]
+    Gs = preparar(B, sc)
+    if len(_GS) >= 6:
+        _GS.pop(next(iter(_GS)), None)
+    _GS[ck] = (B, Gs)
+    return Gs
+
+
+def formando(B, cfg, chave):
+    """True se o ultimo candle ainda nao fechou (o relogio da bolsa ainda esta dentro dele)."""
+    if chave.startswith("CSV:") or not B["t"]:
+        return False
+    agora = time.time()
+    local = agora + 3600 * df.offset_horas(cfg.get("fuso", "BRT"), agora)
+    tf = B.get("tf", 5)
+    if tf >= 1440:
+        g = time.gmtime(local)
+        fim = (cfg.get("sessao") or (0, 2359))[1]
+        return B["d"][-1] == g.tm_year * 10000 + g.tm_mon * 100 + g.tm_mday and g.tm_hour * 100 + g.tm_min <= fim
+    return local < B["t"][-1] + tf * 60
 
 
 def dow(hs, ls, cs, forca=2):
@@ -183,20 +214,23 @@ def api_sim(q):
     sc = df.sessao_cfg(cfg)
     if not cfg.get("fracionado"):
         contratos = max(1.0, round(contratos))
-    Gs = preparar(B, sc)
+    Gs = graficos(chave, tf, B, sc)
     n = len(B["c"])
     d = B["d"]
     per = q.get("per", ["tudo"])[0]
     i_ini, i_fim = janela(d, per if per in PERIODOS else "tudo", _int(q, "de", 0), _int(q, "ate", 0))
     codigos = list(ESTRATEGIAS) if todas else [est]
+    aberto = formando(B, cfg, chave)
+    i_form = n - 1 if aberto else None
     r = simular(Gs, sc, codigos, gestao=gestao, contratos=contratos, max_stops=max_stops, juntas=todas,
-                i_ini=i_ini, i_fim=i_fim, com_atencao=com_aten)
+                i_ini=i_ini, i_fim=i_fim, com_atencao=com_aten, i_formando=i_form)
     dsai = lambda i: d[i]                                      # noqa: E731
     st = estatisticas(r["trades"], capital, dsai)
     por_est = {}
     if todas:
         for cod in r["codigos"]:
-            ri = simular(Gs, sc, [cod], gestao=gestao, contratos=contratos, max_stops=max_stops, i_ini=i_ini, i_fim=i_fim)
+            ri = simular(Gs, sc, [cod], gestao=gestao, contratos=contratos, max_stops=max_stops, i_ini=i_ini, i_fim=i_fim,
+                         i_formando=i_form)
             por_est[cod] = dict(isolada=_resumo(estatisticas(ri["trades"], capital, dsai)),
                                 naJunta=_resumo(estatisticas([t for t in r["trades"] if t["est"] == cod], capital, dsai)),
                                 # operacoes da estrategia sozinha (para o calendario): entrada, saida, lado, R, dinheiro, motivo, precos
@@ -215,20 +249,93 @@ def api_sim(q):
         tr.update(t_sinal=t[tr["i_sinal"]], t_ent=t[tr["i_ent"]], t_sai=t[tr["i_sai"]])
     for od in r["ordens"]:
         od["t_sinal"] = t[od["i_sinal"]]
+    for ab in r["abertas"]:
+        ab.update(t_sinal=t[ab["i_sinal"]], t_ent=t[ab["i_ent"]])
+    vol = B["v"]
     return dict(
         meta=dict(ativo=chave, nome=cfg["nome"], fonte=fonte, tick=cfg["tick"], decimais=cfg["decimais"],
                   moeda=cfg.get("moeda", "R$"), lote=cfg.get("lote", "contrato"), tf=tf, nomeTf=df.NOME_TEMPO.get(tf, "%d min" % tf),
                   valorPonto=sc["valor_ponto"], custo=sc["custo"], slip=sc["slip"], fracionado=sc["fracionado"],
                   horaInicio=sc["hora_inicio"], horaFim=sc["hora_fim"], horaZeragem=sc["hora_zeragem"], intraday=tf < 1440,
                   est=est, gestao=gestao, contratos=contratos, capital=capital, maxStops=max_stops, per=per,
-                  aoVivo=i_fim == n - 1,
+                  aoVivo=i_fim == n - 1, formando=aberto and i_fim == n - 1, temVolume=any(vol[-400:]),
                   iIni=r["ini"], iFim=r["fim"], dataIni=d[r["ini"]], dataFim=d[r["fim"]],
                   dataMin=d[AQUECIMENTO], dataMax=d[-1], ultimo=n - 1, codigos=r["codigos"]),
-        t=t, d=d, hm=B["hm"], o=rd(B["o"]), h=rd(B["h"]), l=rd(B["l"]), c=rd(B["c"]),
+        t=t, d=d, hm=B["hm"], o=rd(B["o"]), h=rd(B["h"]), l=rd(B["l"]), c=rd(B["c"]), v=[round(x or 0, 2) for x in vol],
         mm9=rd(G.mm9), mm20=rd(G.mm20), mm200=rd(G.mm200), vw=rd(G.vw) if G.vw else None,
         trades=r["trades"], ordens=r["ordens"], abertas=r["abertas"],
         aten={str(k): v for k, v in r["aten"].items()}, atenUlt=aten_ult,
         stats=st, porEst=por_est, contexto=contexto(chave))
+
+
+# ------------------------------------------------------------------------------------------ /api/teste
+def api_teste(q):
+    """Teste ao vivo (simulado, sem dinheiro): a estrategia e ligada no candle `desde` e so entra em candles depois dele.
+    Devolve so as operacoes e o estado (sem os candles), para a tela acompanhar varios testes ao mesmo tempo."""
+    chave = q.get("ativo", ["WIN"])[0]
+    tf = _int(q, "tf", 5)
+    if tf not in df.TEMPOS:
+        tf = 5
+    est = q.get("est", ["E1"])[0]
+    todas = est == "TODAS"
+    if not todas and est not in ESTRATEGIAS:
+        raise ValueError("estratégia desconhecida: %s" % est)
+    gestao = q.get("gestao", ["padrao"])[0]
+    if gestao not in GESTOES:
+        gestao = "padrao"
+    contratos = _float(q, "contratos", 1.0, 0.01, 10000)
+    capital = _float(q, "capital", 10000.0, 1.0, 1e9)
+    max_stops = int(_float(q, "maxstops", 2, 1, 50))
+    desde = _int(q, "desde", 0)
+    ate = _int(q, "ate", 0)                     # teste parado: so conta ate este candle
+
+    B, fonte, cfg = carregar(chave, tf)
+    tf = B.get("tf", tf)
+    sc = df.sessao_cfg(cfg)
+    if not cfg.get("fracionado"):
+        contratos = max(1.0, round(contratos))
+    t, d = B["t"], B["d"]
+    n = len(t)
+    i_ini = max(AQUECIMENTO, bisect.bisect_right(t, desde))
+    i_fim = (bisect.bisect_right(t, ate) - 1) if ate else n - 1
+    aberto = formando(B, cfg, chave) and i_fim == n - 1
+    k = max(0, min(i_fim, n - 1))
+    meta = dict(ativo=chave, tf=tf, nomeTf=df.NOME_TEMPO.get(tf, "%d min" % tf), est=est, gestao=gestao, contratos=contratos,
+                moeda=cfg.get("moeda", "R$"), decimais=cfg["decimais"], valorPonto=sc["valor_ponto"], custo=sc["custo"],
+                fracionado=sc["fracionado"], intraday=tf < 1440, desde=desde, ultimoT=t[k], preco=B["c"][k],
+                candles=max(0, i_fim - i_ini + 1), formando=aberto, fonte=fonte)
+    if i_ini > i_fim:
+        return dict(meta=meta, trades=[], abertas=[], pend=[], stats=estatisticas([], capital, lambda i: d[i]))
+    Gs = graficos(chave, tf, B, sc)
+    codigos = list(ESTRATEGIAS) if todas else [est]
+    r = simular(Gs, sc, codigos, gestao=gestao, contratos=contratos, max_stops=max_stops, juntas=todas,
+                i_ini=i_ini, i_fim=i_fim, i_formando=n - 1 if aberto else None)
+    for tr in r["trades"]:
+        tr.update(t_sinal=t[tr["i_sinal"]], t_ent=t[tr["i_ent"]], t_sai=t[tr["i_sai"]])
+    for ab in r["abertas"]:
+        ab.update(t_sinal=t[ab["i_sinal"]], t_ent=t[ab["i_ent"]])
+    pend = [od for od in r["ordens"] if od["status"] == "pendente"]
+    for od in pend:
+        od["t_sinal"] = t[od["i_sinal"]]
+    return dict(meta=meta, trades=r["trades"], abertas=r["abertas"], pend=pend,
+                stats=estatisticas(r["trades"], capital, lambda i: d[i]))
+
+
+# ------------------------------------------------------------------------------------------ sons proprios (opcional)
+SONS = ("ordem", "entrada", "ganho", "perda", "aviso")
+EXT_SOM = (".wav", ".mp3", ".ogg")
+
+
+def sons_proprios():
+    """Arquivos que o usuario colocou em dados/sons (ex.: entrada.wav). Sem arquivo, a tela usa o som sintetizado."""
+    pasta = os.path.join(df.pasta_dados(BASE), "sons")
+    out = {}
+    if os.path.isdir(pasta):
+        for arq in os.listdir(pasta):
+            nome, ext = os.path.splitext(arq.lower())
+            if nome in SONS and ext in EXT_SOM:
+                out[nome] = "sons/" + arq
+    return out
 
 
 # ------------------------------------------------------------------------------------------ /api/radar
@@ -271,7 +378,7 @@ def _comparar(pedido):
             try:
                 B, _, cfg = carregar(a, pedido["tf"])
                 sc = df.sessao_cfg(cfg)
-                Gs = preparar(B, sc)
+                Gs = graficos(a, pedido["tf"], B, sc)
                 d = B["d"]
                 i_ini, i_fim = janela(d, pedido["per"], pedido["de"], pedido["ate"])
                 linha.update(nome=cfg["nome"], moeda=cfg.get("moeda", "R$"), dataIni=d[i_ini], dataFim=d[i_fim],
@@ -375,6 +482,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(config())
             if url.path == "/api/sim":
                 return self._json(api_sim(q))
+            if url.path == "/api/teste":
+                return self._json(api_teste(q))
+            if url.path == "/api/sons":
+                return self._json(dict(sons=sons_proprios(), pasta=os.path.join(df.pasta_dados(BASE), "sons")))
             if url.path == "/api/radar":
                 return self._json(api_radar(q))
             if url.path == "/api/noticias":
@@ -397,9 +508,15 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(dict(valor=None))
                 with open(arq, encoding="utf-8") as f:
                     return self._json(dict(valor=json.load(f)))
-            caminho = "index.html" if url.path in ("/", "") else url.path.lstrip("/")
-            arq = os.path.normpath(os.path.join(WEB, caminho))
-            if not arq.startswith(os.path.normpath(WEB)) or not os.path.isfile(arq):
+            caminho = "index.html" if url.path in ("/", "") else urllib.parse.unquote(url.path.lstrip("/"))
+            raiz = WEB
+            if caminho.startswith("sons/"):                    # sons proprios ficam na pasta de dados
+                raiz, caminho = os.path.join(df.pasta_dados(BASE), "sons"), os.path.basename(caminho)
+                if os.path.splitext(caminho.lower())[1] not in EXT_SOM:
+                    self.send_error(404)
+                    return
+            arq = os.path.normpath(os.path.join(raiz, caminho))
+            if not arq.startswith(os.path.normpath(raiz)) or not os.path.isfile(arq):
                 self.send_error(404)
                 return
             tipo = mimetypes.guess_type(arq)[0] or "application/octet-stream"

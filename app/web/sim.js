@@ -66,7 +66,7 @@
       if (RK.graficoMostra() !== D) RK.mostrar(D, alvo, { manterZoom: true }); else RK.avancar(alvo);
       const ts = RK.chart.timeScale(), r = ts.getVisibleLogicalRange();
       if (r && alvo > r.to - 4) ts.setVisibleLogicalRange({ from: r.from + (alvo - (r.to - 8)), to: alvo + 8 });
-      if (RK.pref.som && +$("rpVel").value <= 5 && D.ordens.some((o) => o.i_sinal > antes && o.i_sinal <= alvo)) RK.bip(880);
+      if (RK.pref.som && +$("rpVel").value <= 5 && D.ordens.some((o) => o.i_sinal > antes && o.i_sinal <= alvo)) RK.som("ordem");
       atualizarReplay(false);
     }
     if (SIM.k >= D.meta.iFim) { pararReplay(true); RK.toast("Replay terminou: resultado completo abaixo.", "ok"); }
@@ -162,7 +162,8 @@
     $("simResultado").querySelectorAll("tr.clic").forEach((tr) => (tr.onclick = () => {
       const t = D.trades[+tr.dataset.j];
       if (RK.graficoMostra() !== D) RK.mostrar(D, SIM.k ?? D.meta.iFim, { manterZoom: true });
-      RK.focar(t.i_ent);
+      if (RK.ops) RK.ops.selecionar(t, D.meta); else RK.focar(t.i_ent);
+      $("simResultado").querySelectorAll("tr.sel").forEach((x) => x.classList.remove("sel")); tr.classList.add("sel");
     }));
     const b = $("btCsv"); if (b) b.onclick = () => exportarCsv(D);
   }

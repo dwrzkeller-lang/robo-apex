@@ -38,7 +38,7 @@
       N.primeira = false;
       if (novosAltos) {
         if (RK.aba !== "news") { N.novos += novosAltos; $("badgeNews").textContent = N.novos; $("badgeNews").classList.remove("oculto"); }
-        if (RK.pref.som) { RK.bip(660); setTimeout(() => RK.bip(990), 220); }
+        RK.som("aviso");
         const top = d.itens.find((x) => x.novo && x.impacto === "ALTO");
         if (top) RK.toast("📰 " + top.titulo, "aviso");
       }

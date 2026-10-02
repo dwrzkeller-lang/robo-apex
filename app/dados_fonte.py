@@ -228,7 +228,7 @@ def carregar_yahoo(base, chave, tf=5, guardar=True):
     cfg = ATIVOS[chave]
     agora = time.time()
     ck = ("y", chave, tf, guardar)
-    if ck in _cache and agora - _cache[ck][0] < (55 if tf < 1440 else 1800):
+    if ck in _cache and agora - _cache[ck][0] < (25 if tf < 1440 else 1800):
         return _cache[ck][1]
     sufixo = "" if tf == 5 else ("_D" if tf == 1440 else "_%dm" % tf)
     arq_cache = os.path.join(pasta_dados(base), "cache", "yahoo_%s%s.json" % (chave, sufixo))
@@ -312,7 +312,7 @@ def carregar(base, chave, tf=5):
         return b, fonte
     agora = time.time()
     ck = ("b", chave, tf)
-    if ck in _cache and agora - _cache[ck][0] < 55:
+    if ck in _cache and agora - _cache[ck][0] < 25:
         return _cache[ck][1]
     hist = _historia(base, chave, tf)
     fonte_hist = "Dukascopy" if chave in historico.DUKAS else "Binance"

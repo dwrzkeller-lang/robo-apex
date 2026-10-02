@@ -13,7 +13,7 @@
 
   // ---------------------------------------------------------------- preferências (só neste navegador)
   const PADRAO = { ativo: "WIN", tf: 5, est: "TODAS", ultEst: "E1", gestao: "padrao", contratos: 1, capital: 10000, maxstops: 2,
-    som: true, auto: true, per: "1m", de: "", ate: "" };
+    som: true, auto: true, per: "1m", de: "", ate: "", larg: {}, ind: null, opsVista: "per" };
   RK.pref = Object.assign({}, PADRAO);
   try { Object.assign(RK.pref, JSON.parse(localStorage.getItem("rk_pref") || "{}")); } catch (e) { /* sem armazenamento */ }
   RK.salvarPref = () => { try { localStorage.setItem("rk_pref", JSON.stringify(RK.pref)); } catch (e) { /* ok */ } };
@@ -58,6 +58,16 @@
     const dia = `${p2(dt.getUTCDate())}/${p2(dt.getUTCMonth() + 1)}${ano || !D.meta.intraday ? "/" + dt.getUTCFullYear() : ""}`;
     return D.meta.intraday ? `${dia} ${p2(dt.getUTCHours())}:${p2(dt.getUTCMinutes())}` : dia;
   };
+  RK.quandoT = (t, intraday = true, ano = false) => {
+    const dt = new Date(t * 1000);
+    const dia = `${p2(dt.getUTCDate())}/${p2(dt.getUTCMonth() + 1)}${ano || !intraday ? "/" + dt.getUTCFullYear() : ""}`;
+    return intraday ? `${dia} ${p2(dt.getUTCHours())}:${p2(dt.getUTCMinutes())}` : dia;
+  };
+  RK.idxT = (D, t) => {                      // índice do candle com o horário t (−1 se não existir)
+    const T = D.t; let lo = 0, hi = T.length - 1;
+    while (lo <= hi) { const m = (lo + hi) >> 1; if (T[m] === t) return m; if (T[m] < t) lo = m + 1; else hi = m - 1; }
+    return -1;
+  };
   RK.dataTxt = (d) => { const s = String(d); return `${s.slice(6, 8)}/${s.slice(4, 6)}/${s.slice(0, 4)}`; };
   RK.dataCurta = (d) => { const s = String(d); return `${s.slice(6, 8)}/${s.slice(4, 6)}`; };
   RK.dataISO = (d) => { const s = String(d); return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`; };
@@ -71,16 +81,35 @@
     const t = $("toast"); t.textContent = msg; t.className = "toast on " + tipo;
     clearTimeout(toastT); toastT = setTimeout(() => (t.className = "toast"), 4500);
   };
+  // ---------------------------------------------------------------- sons (sintetizados; ou arquivos em dados/sons)
   let audio = null;
-  RK.bip = (freq = 880) => {
+  function tom(freq, quando, dur, vol = 0.16, tipo = "sine") {
     try {
       audio = audio || new (window.AudioContext || window.webkitAudioContext)();
       if (audio.state === "suspended") audio.resume();
-      const o = audio.createOscillator(), g = audio.createGain();
-      o.frequency.value = freq; g.gain.value = 0.08; o.connect(g); g.connect(audio.destination);
-      o.start(); o.stop(audio.currentTime + 0.2);
+      const t0 = audio.currentTime + quando, o = audio.createOscillator(), g = audio.createGain();
+      o.type = tipo; o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g); g.connect(audio.destination); o.start(t0); o.stop(t0 + dur + 0.05);
     } catch (e) { /* sem som */ }
+  }
+  const sino = (f, q, d, v = 0.2) => { tom(f, q, d, v); tom(f * 2, q, d * 0.6, v * 0.3); tom(f * 3, q, d * 0.35, v * 0.12); };
+  const SINT = {
+    ordem() { tom(1175, 0, 0.09, 0.12, "triangle"); tom(1568, 0.1, 0.18, 0.12, "triangle"); },          // ordem armada: "tic-tic"
+    entrada() { sino(784, 0, 0.2); sino(1175, 0.17, 1.0, 0.22); },                                     // ordem executada: "ta-dam"
+    ganho() { [1047, 1319, 1568, 2093].forEach((f, j) => sino(f, j * 0.085, j === 3 ? 0.9 : 0.25, 0.16)); },   // saída no lucro
+    perda() { tom(330, 0, 0.3, 0.2, "triangle"); tom(247, 0.24, 0.6, 0.2, "triangle"); },               // saída no prejuízo
+    aviso() { tom(880, 0, 0.14, 0.1); tom(1320, 0.16, 0.25, 0.1); },                                   // notícia forte
   };
+  RK.sons = {};                               // sons próprios: dados/sons/entrada.wav etc.
+  RK.som = (nome, forcar = false) => {
+    if (!RK.pref.som && !forcar) return;
+    const url = RK.sons[nome];
+    if (url) { try { const a = new Audio(url); a.volume = 0.8; a.play().catch(() => SINT[nome] && SINT[nome]()); return; } catch (e) { /* cai no sintetizado */ } }
+    if (SINT[nome]) SINT[nome]();
+  };
+  RK.bip = (freq = 880) => tom(freq, 0, 0.2, 0.1);
   RK.erro = (id, e) => {
     const el = $(id);
     if (!e) { el.classList.add("oculto"); el.textContent = ""; return; }
@@ -120,18 +149,12 @@
   const S = {
     candle: chart.addCandlestickSeries({ upColor: "#26a69a", downColor: "#ef5350", borderVisible: false, wickUpColor: "#26a69a", wickDownColor: "#ef5350" }),
   };
-  const linha = (cor, w) => chart.addLineSeries({ color: cor, lineWidth: w, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
-  S.mm200 = linha(COR.mm200, 2); S.vw = linha(COR.vw, 2); S.mm20 = linha(COR.mm20, 2); S.mm9 = linha(COR.mm9, 1);
-  RK.chart = chart; RK.S = S;
+  RK.chart = chart; RK.S = S; RK.COR = COR;
+  RK.camadas = [];                            // funções que desenham por cima do gráfico (operações, painéis): ver desenho.js
+  RK.redesenhar = () => {};
 
   const G = { D: null, k: -1, linhasPreco: [] };
   RK.i = 0;
-  const serie = (D, nome, k) => {
-    const v = D[nome], out = [];
-    if (!v) return out;
-    for (let i = 0; i <= k; i++) out.push(v[i] == null ? { time: D.t[i] } : { time: D.t[i], value: v[i] });
-    return out;
-  };
   const vela = (D, i) => ({ time: D.t[i], open: D.o[i], high: D.h[i], low: D.l[i], close: D.c[i] });
 
   function marcadores(D, k) {
@@ -169,16 +192,25 @@
   }
 
   function legenda(D, k) {
-    const it = (cor, nome, v) => (v == null ? "" : `<span><i style="background:${cor}"></i>${nome} ${RK.fmt(v)}</span>`);
     $("legenda").innerHTML = `<span><b>${RK.esc(D.meta.ativo)}</b> · ${D.meta.nomeTf} · ${RK.quando(D, k, true)}</span>` +
-      `<span>A ${RK.fmt(D.o[k])} · M ${RK.fmt(D.h[k])} · m ${RK.fmt(D.l[k])} · F ${RK.fmt(D.c[k])}</span>` +
-      it(COR.mm9, "MM9", D.mm9[k]) + it(COR.mm20, "MM20", D.mm20[k]) + it(COR.mm200, "MM200", D.mm200[k]) + (D.vw ? it(COR.vw, "VWAP", D.vw[k]) : "");
+      `<span>A ${RK.fmt(D.o[k])} · M ${RK.fmt(D.h[k])} · m ${RK.fmt(D.l[k])} · F ${RK.fmt(D.c[k])}</span>` + (RK.ind ? RK.ind.legenda(D, k) : "");
   }
 
-  // janela visível = o período escolhido no topo (no máximo ~900 candles, senão o gráfico vira um borrão)
-  RK.mostrarPeriodo = (D) => {
-    const m = D.meta, ini = Math.max(m.iIni, m.iFim - 900);
+  // A escala de preço volta SEMPRE para o automático quando o gráfico é reposicionado: se o usuário arrastou o eixo de
+  // preço (isso desliga o automático) e depois trocou de ativo/tempo/estratégia, os candles ficavam fora da tela.
+  const JANELA = 220;                         // candles visíveis ao abrir (legível); o resto do período está à esquerda
+  RK.autoPreco = () => chart.priceScale("right").applyOptions({ autoScale: true });
+  RK.mostrarPeriodo = (D, tudo = false) => {
+    const m = D.meta, ini = tudo ? m.iIni : Math.max(m.iIni, m.iFim - JANELA);
+    RK.autoPreco();
     chart.timeScale().setVisibleLogicalRange({ from: ini - 2, to: m.iFim + 6 });
+  };
+  // botão "centralizar": volta para o último candle com a escala de preço automática
+  RK.centralizar = (tudo = false) => {
+    const D = G.D; if (!D) return;
+    RK.autoPreco();
+    if (G.k === D.meta.iFim) RK.mostrarPeriodo(D, tudo);
+    else chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, G.k - 140), to: G.k + 8 });
   };
   // mostra o conjunto D no gráfico até o candle k (inclusive)
   RK.mostrar = (D, k, { manterZoom = false, foco = null } = {}) => {
@@ -189,28 +221,26 @@
     chart.applyOptions({ timeScale: { timeVisible: D.meta.intraday } });
     const velas = []; for (let i = 0; i <= k; i++) velas.push(vela(D, i));
     S.candle.setData(velas);
-    S.mm9.setData(serie(D, "mm9", k)); S.mm20.setData(serie(D, "mm20", k)); S.mm200.setData(serie(D, "mm200", k));
-    S.vw.setData(D.vw ? serie(D, "vw", k) : []);
+    if (RK.ind) RK.ind.pintar(D, k);
     S.candle.setMarkers(marcadores(D, k));
     linhasDoEstado(D, k); legenda(D, k);
     if (foco != null) RK.focar(foco);
-    else if (!manterZoom || trocouAtivo) {
-      if (k === D.meta.iFim) RK.mostrarPeriodo(D);
-      else chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, k - 140), to: k + 8 });
-    }
+    else if (!manterZoom || trocouAtivo) RK.centralizar();
     if (trocouAtivo) RK.emit("carregado");
+    RK.redesenhar();
   };
   // avança o gráfico já mostrado até o candle k (replay)
   RK.avancar = (k) => {
     const D = G.D; if (!D || k <= G.k) return;
     for (let i = G.k + 1; i <= k; i++) {
       S.candle.update(vela(D, i));
-      for (const n of ["mm9", "mm20", "mm200", "vw"]) if (D[n] && D[n][i] != null) S[n].update({ time: D.t[i], value: D[n][i] });
+      if (RK.ind) RK.ind.avancar(D, i);
     }
     G.k = k; RK.i = k;
     S.candle.setMarkers(marcadores(D, k)); linhasDoEstado(D, k); legenda(D, k);
   };
-  RK.focar = (i) => chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, i - 70), to: i + 40 });
+  RK.focar = (i, ate = i) => { RK.autoPreco(); chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, i - 70), to: Math.max(i + 40, ate + 25) }); };
+  RK.repintar = () => { if (G.D) { if (RK.ind) RK.ind.pintar(G.D, G.k); legenda(G.D, G.k); RK.redesenhar(); } };
   RK.graficoMostra = () => G.D;
   chart.subscribeCrosshairMove((p) => {
     const D = G.D; if (!D) return;
@@ -351,6 +381,13 @@
   RK.escolherAtivo = (a) => {
     RK.pref.ativo = a; $("ativo").value = a; ajustarContratos(); RK.salvarPref(); RK.emit("mudou", "ativo");
   };
+  RK.irPara = ({ ativo, tf, est }) => {
+    const p = RK.pref;
+    if (ativo === p.ativo && +tf === +p.tf && est === p.est) return false;
+    p.ativo = ativo; p.tf = +tf; p.est = est; if (est !== "TODAS") p.ultEst = est;
+    RK.salvarPref(); RK.atualizarTopo(); RK.emit("mudou", "ativo");
+    return true;
+  };
   function abrirDatas() {
     RK.fecharPopovers();
     const D = V.D;
@@ -420,11 +457,12 @@
       RK.pref.maxstops = v > 0 ? Math.min(20, v) : 2; $("maxstops").value = RK.pref.maxstops; RK.salvarPref(); RK.emit("mudou", "maxstops");
     };
     $("autoVivo").onchange = (e) => { RK.pref.auto = e.target.checked; RK.salvarPref(); };
-    $("somVivo").onchange = (e) => { RK.pref.som = e.target.checked; RK.salvarPref(); if (e.target.checked) RK.bip(660); };
+    $("somVivo").onchange = (e) => { RK.pref.som = e.target.checked; RK.salvarPref(); if (e.target.checked) RK.som("entrada"); };
+    document.querySelectorAll("#ouvirSons button").forEach((b) => (b.onclick = () => RK.som(b.dataset.s, true)));
     $("btAtualizar").onclick = () => { RK.fecharPopovers(); carregarVivo(); };
     $("btRobo").onclick = () => RK.emit("rodarRobo");
     document.addEventListener("pointerdown", (e) => {
-      if (!e.target.closest(".popover") && !e.target.closest("#btAjustes") && !e.target.closest("#periodo")) RK.fecharPopovers();
+      if (!e.target.closest(".popover") && !e.target.closest("#btAjustes") && !e.target.closest("#periodo") && !e.target.closest("#btInd")) RK.fecharPopovers();
     });
   }
 
@@ -456,19 +494,44 @@
   }
   RK.carregarVivo = (s) => carregarVivo(s).catch(() => false);
 
-  function assinatura(D) {
-    if (!D) return "";
-    const e = RK.estadoEm(D, D.meta.iFim);
-    return [D.meta.ativo, D.meta.tf, D.meta.est, e.pos ? "p" + e.pos.i_ent : "", e.pend.map((o) => o.est + o.i_sinal).join(","), e.aten.map((a) => a.join("")).join(",")].join("|");
-  }
-  function avisarNovidade(antes, D) {
-    if (!antes || !D.meta.aoVivo || antes.meta.ativo !== D.meta.ativo || antes.meta.tf !== D.meta.tf || antes.meta.est !== D.meta.est) return;
-    if (assinatura(antes) === assinatura(D)) return;
-    const e = RK.estadoEm(D, D.meta.iFim);
-    const card = $("cardVivo"); card.classList.remove("pulso"); void card.offsetWidth; card.classList.add("pulso");
-    if (RK.pref.som && (e.pend.length || e.pos)) { RK.bip(880); setTimeout(() => RK.bip(1180), 250); }
-    else if (RK.pref.som && e.aten.length) RK.bip(520);
+  // O que aconteceu entre dois retratos da mesma estratégia: ordem armada, entrada executada, saída no ganho/na perda.
+  // x = { pend, abertas, trades } (cada item com est e os horários t_sinal / t_ent / t_sai); tAntes = último candle do retrato velho.
+  RK.novidades = (antes, depois, tAntes) => {
+    const chP = (o) => o.est + "|" + o.t_sinal + "|" + o.dir, chA = (a) => a.est + "|" + a.t_ent;
+    const velhasP = new Set(antes.pend.map(chP)), velhasA = new Set(antes.abertas.map(chA)), velhasT = new Set(antes.trades.map(chA));
+    const ev = [];
+    for (const t of depois.trades) if (!velhasT.has(chA(t)) && t.t_sai >= tAntes) {
+      if (!velhasA.has(chA(t))) ev.push({ tipo: "entrada", o: t });           // entrou e saiu entre duas atualizações
+      ev.push({ tipo: t.R > 0 ? "ganho" : "perda", o: t });
+    }
+    for (const a of depois.abertas) if (!velhasA.has(chA(a))) ev.push({ tipo: "entrada", o: a });
+    for (const o of depois.pend) if (!velhasP.has(chP(o))) ev.push({ tipo: "ordem", o });
+    return ev;
+  };
+  // toca o som do evento mais importante e mostra o aviso
+  RK.anunciar = (ev, meta, prefixo = "") => {
+    if (!ev.length) return;
+    const peso = { ordem: 1, entrada: 2, ganho: 3, perda: 3 };
+    const top = ev.slice().sort((a, b) => peso[b.tipo] - peso[a.tipo])[0], o = top.o;
+    const dec = meta.decimais, f = (v) => Number(v).toLocaleString("pt-BR", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+    const lado = o.dir > 0 ? "COMPRA" : "VENDA";
+    const txt = top.tipo === "ordem" ? `${o.est}: ${lado} armada${o.gatilho != null ? (o.dir > 0 ? " acima de " : " abaixo de ") + f(o.gatilho) : " (a mercado no próximo candle)"}`
+      : top.tipo === "entrada" ? `${o.est}: ${lado} executada a ${f(o.ent)}`
+        : `${o.est}: saiu (${o.motivo}) ${RK.R(o.R)} = ${RK.dinheiro(o.dinheiro, { meta }, true)}`;
+    RK.som(top.tipo);
+    RK.toast(prefixo + txt, top.tipo === "ganho" ? "ok" : top.tipo === "perda" ? "erro" : "");
     if (document.hidden) document.title = "● Robô Keller";
+  };
+  const retrato = (D) => ({ pend: D.ordens.filter((o) => o.status === "pendente"), abertas: D.abertas, trades: D.trades });
+  function avisarNovidade(antes, D) {
+    const a = antes && antes.meta, m = D.meta;
+    if (!a || !m.aoVivo || !a.aoVivo || a.ativo !== m.ativo || a.tf !== m.tf || a.est !== m.est || a.gestao !== m.gestao ||
+      a.contratos !== m.contratos || a.maxStops !== m.maxStops || a.iIni !== m.iIni) return;
+    const ev = RK.novidades(retrato(antes), retrato(D), antes.t[a.ultimo]);
+    if (!ev.length) return;
+    const card = $("cardVivo"); card.classList.remove("pulso"); void card.offsetWidth; card.classList.add("pulso");
+    if (RK.testes && RK.testes.cobre(m)) return;          // o teste ao vivo deste mesmo ativo/estratégia já avisa
+    RK.anunciar(ev, m);
   }
 
   function renderVivo(D) {
@@ -519,12 +582,43 @@
 
   // ---------------------------------------------------------------- abas
   RK.aba = "vivo";
+  // largura do painel: arraste a divisória (cada tamanho de aba guarda a sua); duplo clique volta ao padrão
+  const classeLarg = () => (RK.aba === "cmp" ? "l" : RK.aba === "sim" || RK.aba === "cal" ? "m" : "n");
+  const limiteLarg = (w) => Math.round(Math.max(300, Math.min(window.innerWidth - 380, w)));
+  function aplicarLargura() {
+    const w = (RK.pref.larg || {})[classeLarg()];
+    $("painel").style.width = w > 0 ? limiteLarg(w) + "px" : "";
+  }
+  (() => {
+    const dv = $("divisor"); let arrastando = false;
+    dv.addEventListener("pointerdown", (e) => { arrastando = true; dv.setPointerCapture(e.pointerId); document.body.classList.add("arrastando"); e.preventDefault(); });
+    dv.addEventListener("pointermove", (e) => {
+      if (!arrastando) return;
+      const w = limiteLarg(window.innerWidth - e.clientX - 3);
+      $("painel").style.width = w + "px";
+      RK.pref.larg = Object.assign({}, RK.pref.larg, { [classeLarg()]: w });
+    });
+    const fim = () => {
+      if (!arrastando) return;
+      arrastando = false; document.body.classList.remove("arrastando"); RK.salvarPref();
+      window.dispatchEvent(new Event("resize"));
+    };
+    dv.addEventListener("pointerup", fim); dv.addEventListener("pointercancel", fim);
+    dv.addEventListener("dblclick", () => {
+      const l = Object.assign({}, RK.pref.larg); delete l[classeLarg()]; RK.pref.larg = l; RK.salvarPref(); aplicarLargura();
+      window.dispatchEvent(new Event("resize"));
+    });
+    window.addEventListener("resize", () => { if (!arrastando) aplicarLargura(); });
+  })();
+  $("btCentro").onclick = () => RK.centralizar();
+  $("btPeriodoTodo").onclick = () => RK.centralizar(true);
   function trocarAba(nome) {
     RK.aba = nome;
     document.querySelectorAll(".abas button").forEach((b) => b.classList.toggle("on", b.dataset.aba === nome));
     document.querySelectorAll(".aba").forEach((s) => s.classList.toggle("on", s.id === "aba-" + nome));
     $("painel").classList.toggle("largo", nome === "cmp");
     $("painel").classList.toggle("medio", nome === "sim" || nome === "cal");
+    aplicarLargura();
     if (nome === "vivo" || nome === "cal") {
       if (V.D && !V.velho) { if (RK.graficoMostra() !== V.D) RK.mostrar(V.D, V.D.meta.iFim); if (nome === "vivo") renderVivo(V.D); }
       else RK.carregarVivo();
@@ -543,7 +637,7 @@
   // atualização automática (período que chega até hoje, aba ao vivo, janela visível)
   setInterval(() => {
     if (RK.cfg && RK.pref.auto && RK.aba === "vivo" && !document.hidden && V.D && V.D.meta.aoVivo) RK.carregarVivo(true);
-  }, 60000);
+  }, 30000);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
       document.title = "Robô Keller";
@@ -554,6 +648,7 @@
     const alvo = e.target && e.target.tagName;
     if (alvo === "INPUT" || alvo === "SELECT" || alvo === "TEXTAREA") return;
     if (e.key === "Escape") RK.fecharPopovers();
+    if (e.key === "Home") { e.preventDefault(); RK.centralizar(); }
     RK.emit("tecla", e);
   });
   window.addEventListener("error", (e) => { if (!/ResizeObserver/.test(e.message || "")) RK.toast("Erro na tela: " + e.message, "erro"); });
@@ -566,6 +661,8 @@
     const sp = RK.splash;
     try {
       sp.passo("dados", "fazendo", "conectando ao robô…");
+      // espera os outros módulos (ind, sim, calendário, operações…) carregarem: eles ouvem o evento "config"
+      if (document.readyState === "loading") await new Promise((ok) => document.addEventListener("DOMContentLoaded", ok, { once: true }));
       RK.cfg = await RK.json("/api/config");
       RK.cfg.estMap = Object.fromEntries(RK.cfg.estrategias.map((e) => [e.cod, e]));
       // link direto: ?ativo=WIN&tf=5&est=TODAS&per=5d&aba=sim&acao=simular|replay|robo&passos=40
@@ -575,6 +672,8 @@
       if (u.has("de") && u.has("ate")) { RK.pref.per = "custom"; RK.pref.de = u.get("de"); RK.pref.ate = u.get("ate"); }
       if (!(RK.pref.per in PERIODOS)) RK.pref.per = "1m";
       ligarTopo();
+      aplicarLargura();
+      RK.json("/api/sons").then((j) => { RK.sons = j.sons || {}; RK.pastaSons = j.pasta; }).catch(() => {});
       RK.emit("config", RK.cfg);
       sp.passo("dados", "fazendo", `baixando ${RK.pref.ativo} em ${RK.pref.tf >= 1440 ? "diário" : RK.pref.tf + " min"}…`);
       sp.passo("est", "fazendo");
@@ -589,6 +688,9 @@
       sp.passo("news", "fazendo", "buscando notícias do mercado…");
       const n = await Promise.race([RK.noticiasPrimeira ? RK.noticiasPrimeira() : Promise.resolve(null), espera(9000).then(() => null)]);
       sp.passo("news", n ? "feito" : "falhou", n ? `${n} notícias das últimas horas` : "notícias demorando — continuam carregando");
+      if (u.has("ind") && RK.ind) RK.ind.ligar(u.get("ind").split(","));
+      if (u.has("op") && RK.ops) RK.ops.abrir(+u.get("op") || 1);
+      if (u.get("pop") === "ind") $("btInd").click();
       const aba = u.get("aba");
       if (["sim", "cmp", "cal", "news"].includes(aba)) trocarAba(aba);
       if (aba === "sim" && u.get("acao") && RK.simDemo) await RK.simDemo({ acao: u.get("acao"), passos: +u.get("passos") || 0 });
