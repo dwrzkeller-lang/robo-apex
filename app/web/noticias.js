@@ -14,7 +14,7 @@
     if (s < 3600) return `há ${Math.floor(s / 60)} min`;
     return `há ${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min`;
   };
-  const hora = (t) => new Date(t * 1000).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const hora = (t) => RK.horaBR(t);
 
   async function buscar() {
     if (N.carregando) return null;
@@ -58,7 +58,7 @@
     const imp = $("newsImpacto").value, at = $("newsAtivo").value, busca = $("newsBusca").value.trim().toLowerCase();
     const lista = d.itens.filter((it) => (imp === "TODOS" || (imp === "ALTO" ? it.impacto === "ALTO" : it.impacto !== "BAIXO")) &&
       (!at || it.ativos.includes(at)) && (!busca || it.titulo.toLowerCase().includes(busca)));
-    $("newsAtual").textContent = `atualizado ${hora(d.atualizado)} · ${lista.length} de ${d.itens.length}`;
+    $("newsAtual").textContent = `atualizado ${hora(d.atualizado)} (Brasília) · ${lista.length} de ${d.itens.length}`;
     $("newsLista").innerHTML = (lista.length ? `<div class="news">` + lista.map((it) => {
       const cls = it.impacto === "MÉDIO" ? "MEDIO" : it.impacto;
       return `<div class="nitem ${cls} ${it.novo ? "novo" : ""}">
@@ -70,11 +70,53 @@
       (d.erros.length ? `<div class="nota">Fontes fora do ar agora: ${d.erros.map(RK.esc).join(" · ")}</div>` : "");
   }
 
+  // ---------------------------------------------------------------- agenda econômica (eventos com hora marcada)
+  const A = { dados: null, tudo: false };
+  const MOEDAS = { WIN: ["BRL", "USD"], WDO: ["BRL", "USD"], EURUSD: ["EUR", "USD"], GBPUSD: ["GBP", "USD"], USDJPY: ["JPY", "USD"],
+    AUDUSD: ["AUD", "USD", "CNY"], USTEC: ["USD"], JP225: ["JPY", "USD"], BTCUSD: ["USD"] };
+  const moedasDe = (ativo) => (RK.ehCripto(ativo) ? ["USD"] : MOEDAS[ativo] || ["USD", "All"]);
+  async function buscarAgenda() {
+    try { A.dados = await RK.json("/api/agenda"); if (RK.aba === "news") renderAgenda(); } catch (e) { /* fica com a anterior */ }
+  }
+  function diaTxt(t) {
+    const dia = RK.diaBR(t), agora = Date.now() / 1000;
+    if (dia === RK.diaBR(agora)) return "hoje";
+    if (dia === RK.diaBR(agora + 86400)) return "amanhã";
+    return new Date(t * 1000).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "short" }).replace(".", "") + " " + dia;
+  }
+  function renderAgenda() {
+    const el = $("agendaCard"), d = A.dados;
+    if (!d || !d.eventos.length) { el.classList.add("oculto"); return; }
+    const agora = Date.now() / 1000, meus = new Set(moedasDe(RK.pref.ativo).concat(["BRL", "USD"]));
+    const lista = d.eventos.filter((e) => e.t >= agora - 3600 && (A.tudo || (meus.has(e.moeda) && (e.impacto === "ALTO" || e.t <= agora + 36 * 3600))));
+    const mostra = A.tudo ? lista : lista.slice(0, 7);
+    el.classList.remove("oculto");
+    el.innerHTML = `<div class="rot">AGENDA ECONÔMICA <span class="dir">hora de Brasília</span></div>` +
+      (mostra.length ? mostra.map((e) => `<div class="ag ${e.t < agora ? "passou" : ""}" title="${RK.esc(e.original)}">
+          <span class="ag-h">${diaTxt(e.t)} ${hora(e.t)}</span><span class="tag ${e.impacto}">${e.impacto === "ALTO" ? "ALTO" : "MÉDIO"}</span>
+          <span class="ag-t"><b>${RK.esc(e.pais)}</b> · ${RK.esc(e.titulo)}${e.previsao || e.anterior ? ` <small class="neutro">${e.previsao ? "previsão " + RK.esc(e.previsao) : ""}${e.previsao && e.anterior ? " · " : ""}${e.anterior ? "anterior " + RK.esc(e.anterior) : ""}</small>` : ""}</span></div>`).join("")
+        : `<div class="nota">Nenhum evento forte para este ativo nas próximas horas.</div>`) +
+      `<div class="nota">Eventos com hora marcada que costumam mexer no mercado (Brasil, EUA e as moedas do ativo do topo). Nos estudos o mercado anda <b>mais</b> nesses horários: saltos e spread maiores. <a href="#" id="agTudo">${A.tudo ? "ver só os principais" : "ver a semana inteira"}</a></div>`;
+    $("agTudo").onclick = (ev) => { ev.preventDefault(); A.tudo = !A.tudo; renderAgenda(); };
+  }
+  // aviso no cartão "o que fazer agora": evento forte para o ativo nos próximos 30 min (ou que acabou de sair)
+  RK.agendaAviso = (ativo) => {
+    if (!A.dados) return "";
+    const agora = Date.now() / 1000, m = moedasDe(ativo);
+    const e = A.dados.eventos.find((x) => x.impacto === "ALTO" && m.includes(x.moeda) && x.t - agora <= 1800 && agora - x.t <= 600);
+    if (!e) return "";
+    const min = Math.round((e.t - agora) / 60);
+    return `<div class="detalhe aviso-agenda">⏰ ${hora(e.t)} · <b>${RK.esc(e.titulo)}</b> (${RK.esc(e.pais)}) ${min > 0 ? "em " + min + " min" : min === 0 ? "agora" : "saiu há " + -min + " min"}. Nessa hora o mercado costuma saltar e o spread abre.</div>`;
+  };
+  RK.on("config", () => { buscarAgenda(); setInterval(buscarAgenda, 30 * 60000); });
+  RK.on("mudou", (o) => { if (o === "ativo" && RK.aba === "news") renderAgenda(); });
+
   const salvar = () => { try { localStorage.setItem(PREF, JSON.stringify({ imp: $("newsImpacto").value, at: $("newsAtivo").value })); } catch (e) { /* ok */ } render(); };
   $("newsImpacto").onchange = salvar; $("newsAtivo").onchange = salvar; $("newsBusca").oninput = render;
   RK.on("aba", (nome) => {
     if (nome !== "news") return;
     N.novos = 0; $("badgeNews").classList.add("oculto");
+    renderAgenda();
     render();
     buscar();
   });

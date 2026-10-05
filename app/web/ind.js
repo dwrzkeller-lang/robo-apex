@@ -1,13 +1,15 @@
 /* ROBÔ KELLER — indicadores do gráfico (botão "Indicadores"): médias móveis à escolha, VWAP, Bandas de Bollinger,
-   Canal de Keltner, volume, IFR e estocástico. São só para LER o gráfico: as estratégias usam os indicadores
-   calculados no servidor e não mudam com o que for ligado ou desligado aqui. */
+   Canal de Keltner, volume, IFR e estocástico, e os NÍVEIS que o robô traça sozinho: máxima, mínima e fechamento de
+   ontem, abertura de hoje e os suportes e resistências (topos e fundos tocados mais de uma vez).
+   São só para LER o gráfico: as estratégias usam os indicadores calculados no servidor e não mudam com o que for
+   ligado ou desligado aqui. */
 (() => {
   "use strict";
   const RK = window.RK, $ = RK.$, chart = RK.chart;
   const CORES = ["#ff5b6e", "#3b9cff", "#b35cff", "#22e39a", "#ffa53a", "#22d3ee", "#e056fd", "#d9e0ea"];
   const padrao = () => ({
     medias: [{ tipo: "MMS", n: 9, cor: "#ff5b6e", on: true }, { tipo: "MMS", n: 20, cor: "#3b9cff", on: true }, { tipo: "MMS", n: 200, cor: "#b35cff", on: true }],
-    vwap: true, boll: false, kelt: false, vol: false, ifr: false, ifrN: 14, estoc: false, ops: "detalhe",
+    vwap: true, boll: false, kelt: false, vol: false, ifr: false, ifrN: 14, estoc: false, ops: "detalhe", niveis: true, sr: true,
   });
   function validar(c) {
     const p = padrao();
@@ -15,7 +17,8 @@
     const medias = c.medias.filter((m) => m && (m.tipo === "MMS" || m.tipo === "MME") && m.n >= 2 && m.n <= 600).slice(0, 8)
       .map((m) => ({ tipo: m.tipo, n: Math.round(m.n), cor: /^#[0-9a-f]{6}$/i.test(m.cor) ? m.cor : "#d9e0ea", on: !!m.on }));
     return { medias, vwap: !!c.vwap, boll: !!c.boll, kelt: !!c.kelt, vol: !!c.vol, ifr: !!c.ifr,
-      ifrN: c.ifrN >= 2 && c.ifrN <= 100 ? Math.round(c.ifrN) : 14, estoc: !!c.estoc, ops: ["detalhe", "simples", "nada"].includes(c.ops) ? c.ops : "detalhe" };
+      ifrN: c.ifrN >= 2 && c.ifrN <= 100 ? Math.round(c.ifrN) : 14, estoc: !!c.estoc, ops: ["detalhe", "simples", "nada"].includes(c.ops) ? c.ops : "detalhe",
+      niveis: c.niveis !== false, sr: c.sr !== false };
   }
   let cfg = validar(RK.pref.ind);
   const salvar = () => { RK.pref.ind = cfg; RK.salvarPref(); };
@@ -77,9 +80,10 @@
     autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }) }, base));
   const guia = (s, v) => s.createPriceLine({ price: v, color: "#3a475e", lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: "" });
 
-  function montar() {
+  let estMontada = null;                       // estratégia para a qual as séries foram montadas (E10 e E11 têm indicador próprio)
+  function montar(est = estMontada) {
     itens.forEach((x) => chart.removeSeries(x.s));
-    itens = []; paineis = []; calcD = null;
+    itens = []; paineis = []; calcD = null; estMontada = est;
     const add = (s, calc, rot, cor, extra) => itens.push(Object.assign({ s, calc, rot, cor, val: null }, extra));
     cfg.medias.filter((m) => m.on).forEach((m) =>
       add(linha(m.cor, m.n >= 20 ? 2 : 1), (D) => (m.tipo === "MME" ? ema : sma)(D.c, m.n), (m.tipo === "MME" ? "MME" : "MM") + m.n, m.cor));
@@ -89,7 +93,23 @@
       add(linha("#8fa3bf", 1), (D) => memo(D)[0], "Bollinger ↑", "#8fa3bf");
       add(linha("#8fa3bf", 1), (D) => memo(D)[1], "↓", "#8fa3bf");
     }
-    if (cfg.kelt) {               // o canal da estratégia E10: MME20 ± 2,0 e 2,5 ATR(14)
+    if (est === "E11") {          // a estratégia do gráfico usa a faixa de ruído: mostra as duas bordas dela
+      const borda = (lado) => (D) => {
+        if (!D.ruido) return null;
+        const out = vazio(D.c.length);
+        let s2 = 0;
+        for (let i = 1; i < D.c.length; i++) {
+          if (D.d[i] !== D.d[i - 1]) s2 = i;
+          if (s2 === 0 || D.ruido[i] == null) continue;
+          const ref = lado > 0 ? Math.max(D.o[s2], D.c[s2 - 1]) : Math.min(D.o[s2], D.c[s2 - 1]);
+          out[i] = ref * (1 + lado * D.ruido[i]);
+        }
+        return out;
+      };
+      add(linha("#22d3ee", 1, { lineStyle: 2 }), borda(1), "Faixa de ruído ↑", "#22d3ee");
+      add(linha("#22d3ee", 1, { lineStyle: 2 }), borda(-1), "↓", "#22d3ee");
+    }
+    if (cfg.kelt || est === "E10") {   // o canal da estratégia E10: MME20 ± 2,0 e 2,5 ATR(14)
       const memo = (D) => (D._kelt = D._kelt || { m: ema(D.c, 20), a: atr(D, 14) });
       const banda = (mult) => (D) => { const k = memo(D); return k.m.map((v, i) => (v == null || k.a[i] == null ? null : v + mult * k.a[i])); };
       add(linha("#2bb5a0", 1), banda(2.0), "Keltner ↑", "#2bb5a0");
@@ -138,6 +158,65 @@
     }
   });
 
+  // ---------------------------------------------------------------- níveis que o robô traça sozinho
+  const memoN = { D: null, k: -1, dia: null, sr: [] };
+  function niveisDoDia(D, k) {                 // do dia do candle k: máxima, mínima e fechamento de ontem; abertura de hoje
+    if (!D.meta.intraday) return null;
+    const d = D.d;
+    let s2 = k; while (s2 > 0 && d[s2 - 1] === d[k]) s2--;
+    if (s2 === 0) return null;
+    let a = s2 - 1; while (a > 0 && d[a - 1] === d[s2 - 1]) a--;
+    let mx = -Infinity, mn = Infinity;
+    for (let i = a; i < s2; i++) { if (D.h[i] > mx) mx = D.h[i]; if (D.l[i] < mn) mn = D.l[i]; }
+    return { ini: s2, itens: [[mx, "máx. de ontem"], [mn, "mín. de ontem"], [D.c[s2 - 1], "fech. de ontem"], [D.o[s2], "abertura de hoje"]] };
+  }
+  function suportesResistencias(D, k) {        // topos e fundos (5 candles de cada lado) dos últimos 320 candles, agrupados
+    const N = 320, L = 5, ini = Math.max(L, k - N);
+    let amp = 0, c = 0;
+    for (let i = Math.max(1, k - 60); i <= k; i++) { amp += D.h[i] - D.l[i]; c++; }
+    amp = c ? amp / c : 0;
+    if (!(amp > 0)) return [];
+    const tol = 0.6 * amp, pts = [];
+    for (let i = ini; i <= k - L; i++) {
+      let topo = true, fundo = true;
+      for (let j = 1; j <= L && (topo || fundo); j++) {
+        if (D.h[i] < D.h[i - j] || D.h[i] < D.h[i + j]) topo = false;
+        if (D.l[i] > D.l[i - j] || D.l[i] > D.l[i + j]) fundo = false;
+      }
+      if (topo) pts.push([D.h[i], i]);
+      if (fundo) pts.push([D.l[i], i]);
+    }
+    pts.sort((x, y) => x[0] - y[0]);
+    const grupos = [];
+    for (const [pr, i] of pts) {
+      const g = grupos[grupos.length - 1];
+      if (g && pr - g.soma / g.n <= tol) { g.soma += pr; g.n++; g.ult = Math.max(g.ult, i); g.pri = Math.min(g.pri, i); }
+      else grupos.push({ soma: pr, n: 1, ult: i, pri: i });
+    }
+    const agora = D.c[k];
+    return grupos.filter((g) => g.n >= 2).sort((x, y) => y.n - x.n || y.ult - x.ult).slice(0, 4)
+      .map((g) => ({ p: g.soma / g.n, n: g.n, pri: g.pri, res: g.soma / g.n >= agora }));
+  }
+  RK.camadas.push((ctx, u) => {
+    const D = RK.graficoMostra(), k = RK.i;
+    if (!D || (!cfg.niveis && !cfg.sr) || k < 30) return;
+    if (memoN.D !== D || memoN.k !== k) { memoN.D = D; memoN.k = k; memoN.dia = niveisDoDia(D, k); memoN.sr = suportesResistencias(D, k); }
+    const ocupados = [];
+    const linha = (y, x0, cor, traco, txt) => {
+      if (y == null || y < 14 || y > u.H - 4) return;
+      ctx.strokeStyle = cor; ctx.lineWidth = 1; ctx.setLineDash(traco);
+      ctx.beginPath(); ctx.moveTo(Math.max(0, x0), Math.round(y) + 0.5); ctx.lineTo(u.W, Math.round(y) + 0.5); ctx.stroke(); ctx.setLineDash([]);
+      if (ocupados.some((o) => Math.abs(o - y) < 12)) return;          // rótulo em cima de outro: fica só a linha
+      ocupados.push(y);
+      ctx.font = "10px Segoe UI, system-ui"; ctx.textAlign = "right"; ctx.textBaseline = "bottom";
+      const w = ctx.measureText(txt).width;
+      ctx.fillStyle = "rgba(11,14,20,.8)"; ctx.fillRect(u.W - w - 9, y - 13, w + 6, 12);
+      ctx.fillStyle = cor; ctx.fillText(txt, u.W - 6, y - 2);
+    };
+    if (cfg.sr) for (const g of memoN.sr) linha(u.y(g.p), u.x(g.pri) ?? 0, g.res ? "rgba(255,120,135,.75)" : "rgba(60,220,160,.75)", [], `${g.res ? "resistência" : "suporte"} · ${g.n} toques`);
+    if (cfg.niveis && memoN.dia) for (const [pr, txt] of memoN.dia.itens) linha(u.y(pr), u.x(memoN.dia.ini) ?? 0, "rgba(160,176,200,.8)", [5, 4], txt);
+  });
+
   function calcular(D) {
     for (const x of itens) { let v = null; try { v = x.calc(D); } catch (e) { console.error(e); } x.val = v || null; }
     calcD = D;
@@ -150,6 +229,7 @@
   };
   const api = (RK.ind = {
     pintar(D, k) {
+      if (estMontada !== D.meta.est) montar(D.meta.est);      // indicador próprio da estratégia entra ou sai junto com os dados dela
       if (calcD !== D) calcular(D);
       for (const x of itens) {
         if (!x.val) { x.s.setData([]); continue; }
@@ -172,8 +252,9 @@
       return h;
     },
     ops: () => cfg.ops,
-    ligar(nomes) {                 // link direto: ?ind=vol,ifr,estoc,boll,kelt (não muda o que está salvo)
-      cfg = validar(Object.assign({}, cfg, Object.fromEntries(nomes.filter((n) => ["vwap", "boll", "kelt", "vol", "ifr", "estoc"].includes(n)).map((n) => [n, true]))));
+    ligar(nomes) {                 // link direto: ?ind=vol,ifr,estoc,boll,kelt (não muda o que está salvo); "semniveis" esconde os níveis
+      cfg = validar(Object.assign({}, cfg, Object.fromEntries(nomes.filter((n) => ["vwap", "boll", "kelt", "vol", "ifr", "estoc"].includes(n)).map((n) => [n, true])),
+        nomes.includes("semniveis") ? { niveis: false, sr: false } : {}));
       montar(); RK.repintar();
     },
   });
@@ -192,6 +273,9 @@
         <input type="color" data-m="cor" value="${m.cor}" title="cor">
         <button data-m="x" title="remover">✕</button></div>`).join("")}</div>
       <button id="indMais" class="mini-btn" ${cfg.medias.length >= 8 ? "disabled" : ""}>+ adicionar média</button>
+      <div class="ind-titulo">O robô traça sozinho</div>
+      ${chk("niveis", "Níveis do dia: máxima, mínima e fechamento de ontem; abertura de hoje", cfg.niveis)}
+      ${chk("sr", "Suportes e resistências (topos e fundos tocados 2 vezes ou mais)", cfg.sr)}
       <div class="ind-titulo">No preço</div>
       ${chk("vwap", "VWAP (preço médio do dia)", cfg.vwap, semVwap ? ' <em class="neutro">· só no intraday</em>' : "")}
       ${chk("boll", "Bandas de Bollinger (20, 2)", cfg.boll)}
@@ -209,7 +293,10 @@
       <div class="nota">Os indicadores são só para leitura do gráfico: as estratégias não mudam.</div>
       <div class="botoes"><button id="indPadrao">Voltar ao padrão</button><button id="indFechar" class="primario">Fechar</button></div>`;
     const aplicar = (redesenha = false) => { salvar(); montar(); RK.repintar(); if (redesenha) desenharJanela(); };
-    pop.querySelectorAll("input[data-k]").forEach((el) => (el.onchange = () => { cfg[el.dataset.k] = el.checked; aplicar(); }));
+    pop.querySelectorAll("input[data-k]").forEach((el) => (el.onchange = () => {
+      cfg[el.dataset.k] = el.checked;
+      if (el.dataset.k === "niveis" || el.dataset.k === "sr") { salvar(); RK.redesenhar(); } else aplicar();
+    }));
     pop.querySelectorAll(".ind-media").forEach((row) => {
       const m = cfg.medias[+row.dataset.j];
       row.querySelector('[data-m="on"]').onchange = (e) => { m.on = e.target.checked; aplicar(); };
@@ -233,5 +320,5 @@
     if (!aberto) { desenharJanela(); pop.classList.remove("oculto"); }
   };
 
-  montar();
+  montar(null);
 })();

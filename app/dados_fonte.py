@@ -75,6 +75,7 @@ def sessao_cfg(cfg):
     """Parametros de execucao que o simulador usa."""
     p = cfg.get("prm", {})
     return dict(tick=cfg["tick"], slip=cfg.get("slip", cfg["tick"]), custo=cfg.get("custo", 0.0),
+                custo_pct=cfg.get("custo_pct", 0.0), passo_lote=cfg.get("passo_lote", 0.01),
                 valor_ponto=cfg.get("valor_ponto") or 1.0, fracionado=cfg.get("fracionado", False),
                 hora_inicio=p.get("HoraInicio", 905), hora_fim=p.get("HoraFimEntradas", 1700),
                 hora_zeragem=p.get("HoraZeragem", 1745))

@@ -20,7 +20,7 @@
       <li data-p="dados">Carregando dados do mercado</li>
       <li data-p="est">Carregando estratégias</li>
       <li data-p="resumo">Montando o resumo</li>
-      <li data-p="news">Buscando notícias</li>
+      <li data-p="news">Buscando notícias e agenda</li>
     </ul>
     <div class="splash-barra"><i id="splashBarra"></i></div>
     <div class="splash-txt" id="splashTxt">Iniciando…</div>
@@ -69,10 +69,10 @@
     <label class="campo"><span>Capital inicial</span><input type="number" id="capital" min="1" step="100" value="10000"></label>
     <label class="campo"><span>Parar o dia após N stops</span><input type="number" id="maxstops" min="1" max="20" step="1" value="2"></label>
   </div>
-  <label class="chk"><input type="checkbox" id="autoVivo" checked> atualizar ao vivo a cada 30 s</label>
+  <label class="chk"><input type="checkbox" id="autoVivo" checked> atualizar ao vivo (30 s; cripto a cada 10 s)</label>
   <label class="chk"><input type="checkbox" id="somVivo" checked> sons (ordem armada, entrada, saída, notícia forte)</label>
   <div class="ouvir" id="ouvirSons"><span>ouvir:</span><button data-s="ordem">ordem armada</button><button data-s="entrada">entrada</button><button data-s="ganho">ganho</button><button data-s="perda">perda</button></div>
-  <div class="nota">Desenhos: clique numa linha para selecionar e aperte <b>Delete</b> para apagar (sem seleção, apaga o último). Ctrl+Z desfaz.</div>
+  <div class="nota">Tamanho por risco, limite de perda do dia, meta e modo seletivo ficam na aba <b>Plano</b>.</div>
   <div class="botoes"><button id="btAtualizar">Atualizar agora</button><button id="ajFechar" class="primario">Fechar</button></div>
 </div>
 
@@ -115,10 +115,12 @@
   <aside class="painel" id="painel">
     <div class="abas" role="tablist">
       <button data-aba="vivo" class="on" role="tab">Ao vivo <span class="badge verde oculto" id="badgeTestes" title="testes ao vivo rodando">0</span></button>
+      <button data-aba="plano" role="tab" title="Plano de trade: tamanho pelo risco, limite do dia, modo seletivo e meta x realidade">Plano</button>
       <button data-aba="sim" role="tab">Simulação</button>
       <button data-aba="cal" role="tab">Calendário</button>
       <button data-aba="cmp" role="tab">Comparar</button>
       <button data-aba="news" role="tab">Notícias <span class="badge oculto" id="badgeNews">0</span></button>
+      <button data-aba="cripto" role="tab" title="Criptomoedas em tempo real: memes, maiores e tokens novos">Cripto <span class="badge verde oculto" id="badgeCripto" title="memes rompendo com volume agora">0</span></button>
     </div>
 
     <!-- ============================== AO VIVO ============================== -->
@@ -130,6 +132,41 @@
       <div class="card" id="resumoVivo"></div>
       <div class="card oculto" id="cardOps"></div>
       <div class="card oculto" id="tabelaVivo"></div>
+    </section>
+
+    <!-- ============================== PLANO ============================== -->
+    <section class="aba" id="aba-plano">
+      <div class="card">
+        <div class="rot">MEU PLANO <span class="dir" id="plAtivo"></span></div>
+        <div class="grade2">
+          <label class="campo"><span>Capital</span><input type="number" id="plCapital" min="1" step="100"></label>
+          <label class="campo"><span>Parar o dia após N stops</span><input type="number" id="plStops" min="1" max="20" step="1"></label>
+        </div>
+        <div class="campo" style="margin-top:8px"><span>Tamanho de cada operação</span>
+          <div class="seg" id="plTam"><button data-v="fixo" title="Sempre a quantidade escrita no topo">Fixo (o do topo)</button><button data-v="risco" title="O robô calcula a quantidade para arriscar sempre a mesma fatia do capital">Pelo risco</button></div>
+        </div>
+        <label class="campo oculto" id="plRiscoBox" style="margin-top:8px"><span>Arriscar por operação (% do capital)</span><input type="number" id="plRisco" min="0.1" max="10" step="0.1"></label>
+        <div class="grade2" style="margin-top:8px">
+          <label class="campo" title="Perda no dia que encerra as operações do dia. 0 = não usa"><span>Parar o dia ao perder</span><input type="number" id="plLoss" min="0" step="10" placeholder="0 = não usa"></label>
+          <label class="campo" title="Ganho no dia que encerra as operações do dia (a 'meta diária'). 0 = não usa"><span>Parar o dia ao ganhar</span><input type="number" id="plMeta" min="0" step="10" placeholder="0 = não usa"></label>
+        </div>
+        <label class="chk" style="margin-top:10px"><input type="checkbox" id="plSeletivo"> <span><b>Modo seletivo</b>: só opera a favor da tendência do diário e, nas estratégias de correção, só com movimento limpo</span></label>
+        <div class="nota">Tudo aqui vale para o robô inteiro: ao vivo, simulação, calendário, teste ao vivo e ⚡. Mude e veja abaixo o que cada regra fez no período do topo.</div>
+      </div>
+      <div class="erro oculto" id="erroPlano"></div>
+      <div class="card" id="plHoje"></div>
+      <div class="card" id="plEfeitos"></div>
+      <div class="card">
+        <div class="rot">META × REALIDADE <span class="dir" id="plPeriodo"></span></div>
+        <div class="grade2">
+          <label class="campo"><span>Quero ganhar por mês</span><input type="number" id="plMetaMes" min="0" step="100"></label>
+          <label class="campo"><span>Perda máxima que aceito no mês</span><input type="number" id="plQueda" min="0" step="100"></label>
+        </div>
+        <div id="plProj"></div>
+      </div>
+      <div class="nota">Para comparar: num estudo da FGV com dados da CVM, de cada 100 pessoas que fizeram day trade de mini-índice por mais de 300 pregões, <b>97 perderam dinheiro</b> e só 1 ganhou mais que um salário mínimo
+        (<a href="https://www.repec.eae.fea.usp.br/documentos/Chague_Losso_Giovannetti_47WP.pdf" target="_blank" rel="noopener noreferrer">Chague, De-Losso e Giovannetti, 2019</a>).
+        O robô mostra estatística do passado; não é recomendação de investimento.</div>
     </section>
 
     <!-- ============================== SIMULAÇÃO ============================== -->
@@ -195,9 +232,25 @@
           <input type="text" id="newsBusca" placeholder="buscar: Copom, IPCA…">
         </div>
       </div>
+      <div class="card oculto" id="agendaCard"></div>
       <div class="erro oculto" id="erroNews"></div>
       <div id="newsLista"></div>
       <div class="nota">Fontes: Banco Central, Valor, InfoMoney, Money Times, g1, E-Investidor, Investing e Google Notícias, a cada 60 s. O impacto é estimado por palavras-chave: confira antes de operar.</div>
+    </section>
+
+    <!-- ============================== CRIPTO ============================== -->
+    <section class="aba" id="aba-cripto">
+      <div class="card">
+        <div class="rot">CRIPTO EM TEMPO REAL <span class="dir" id="crStatus">—</span></div>
+        <div class="linha-cr">
+          <div class="seg" id="crSeg"><button data-s="memes">Memes</button><button data-s="maiores">Maiores</button><button data-s="dex" title="Tokens em alta nas corretoras descentralizadas (risco muito alto)">Novas (DEX)</button></div>
+          <input type="text" id="crBusca" placeholder="abrir moeda: SOL, PEPE…" title="Digite a sigla de qualquer moeda da Binance e aperte Enter">
+        </div>
+        <div id="crEstudo"></div>
+      </div>
+      <div class="erro oculto" id="erroCripto"></div>
+      <div id="crLista"></div>
+      <div class="nota" id="crRodape"></div>
     </section>
   </aside>
 </main>
@@ -225,5 +278,7 @@
 <script src="noticias.js"></script>
 <script src="desenho.js"></script>
 <script src="ops.js"></script>
+<script src="plano.js"></script>
+<script src="cripto.js"></script>
 </body>
 </html>

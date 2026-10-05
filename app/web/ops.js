@@ -103,15 +103,15 @@
 
   // ================================================================ 2. lista de operações + "como foi feita"
   function comoFoi(t, meta, aberta) {
-    const q = meta.contratos, din = (v) => RK.dinheiro(v, { meta }), f = (v) => RK.fmt(v, meta.decimais);
-    const stop = t.stop_ini ?? t.stop, riscoDin = t.risco * meta.valorPonto * q + 2 * meta.custo * q;
+    const q = t.q != null ? t.q : meta.contratos, din = (v) => RK.dinheiro(v, { meta }), f = (v) => RK.fmt(v, meta.decimais);
+    const stop = t.stop_ini ?? t.stop, riscoDin = !aberta && t.R && t.dinheiro ? Math.abs(t.dinheiro / t.R) : t.risco * meta.valorPonto * q + 2 * meta.custo * q;
     const razao = t.alvo != null && t.risco ? Math.abs(t.alvo - t.ent) / t.risco : null;
     const hora = (x) => RK.quandoT(x, meta.intraday);
     const linhas = [
       ["Sinal ▲", `candle de ${hora(t.t_sinal)} · ${RK.esc(RK.nomeEst(t.est))}${t.info ? " (" + RK.esc(t.info) + ")" : ""}`],
-      ["Entrada", `${t.dir > 0 ? "compra" : "venda"} em ${hora(t.t_ent)} a <b>${f(t.ent)}</b>`],
+      ["Entrada", `${t.dir > 0 ? "compra" : "venda"} de ${RK.unidade(meta, q)} em ${hora(t.t_ent)} a <b>${f(t.ent)}</b>${t.ctx ? " · " + RK.ctxTxt(t.ctx, null) : ""}`],
       ["Stop", `${f(stop)}${aberta && t.stop !== stop ? ` → movido para <b>${f(t.stop)}</b>` : ""} · risco ${f(t.risco)} pts = ${din(riscoDin)}`],
-      ["Alvo", t.alvo != null ? `${f(t.alvo)}${razao ? ` · ${RK.num(razao, 1)} : 1` : ""}` : `sem alvo fixo (${RK.esc(RK.cfg.gestoes[t.gestao] || t.gestao)})`],
+      ["Alvo", t.alvo != null ? `${f(t.alvo)}${razao ? ` · ${RK.num(razao, 1)} : 1` : ""}` : `sem alvo fixo (${RK.esc(RK.gestaoTxt(t.gestao))})`],
       aberta ? ["Agora", `aberta · <b class="${RK.cls(t.R)}">${RK.R(t.R)}</b>${t.parcial ? " · parcial feita, stop no 0x0" : ""}${t.sair ? " · sai na abertura do próximo candle (" + RK.esc(t.sair) + ")" : ""}`]
         : ["Saída", `${hora(t.t_sai)} a <b>${f(t.sai)}</b> · ${RK.esc(t.motivo)} → <b class="${RK.cls(t.R)}">${RK.R(t.R)} = ${RK.dinheiro(t.dinheiro, { meta }, true)}</b>${t.parcial ? " · com parcial no 1:1" : ""}`],
     ];
@@ -133,7 +133,7 @@
     const selAqui = SEL && SEL.ativo === meta.ativo && SEL.tf === meta.tf ? SEL.chave : null;
     const linha = ([t, aberta], j) => {
       const sel = chave(t) === selAqui;
-      const din = aberta ? t.R * t.risco * meta.valorPonto * meta.contratos : t.dinheiro;
+      const din = aberta ? t.R * t.risco * meta.valorPonto * (t.q != null ? t.q : meta.contratos) : t.dinheiro;
       return `<div class="op${sel ? " sel" : ""}" data-j="${j}">
           <span class="op-h">${RK.quandoT(t.t_ent, meta.intraday)}</span><span class="op-e">${t.est}</span>
           <span class="${t.dir > 0 ? "bom" : "ruim"}">${t.dir > 0 ? "C" : "V"}</span>
@@ -158,8 +158,8 @@
   T.atual = () => T.lista.find((x) => combo(x) === combo(RK.pref)) || null;
   RK.testes = { cobre: (m) => T.lista.some((x) => !x.ate && T.res[x.id] && combo(x) === combo(m)), lista: () => T.lista };
   const guardar = () => RK.api.set("testes", T.lista).catch(() => RK.toast("Não consegui salvar o teste ao vivo.", "erro"));
-  const url = (x) => "/api/teste?" + new URLSearchParams({ ativo: x.ativo, tf: x.tf, est: x.est, gestao: x.gestao, contratos: x.contratos,
-    capital: x.capital, maxstops: x.maxstops, desde: x.desde, ate: x.ate || 0 });
+  const url = (x) => "/api/teste?" + new URLSearchParams(Object.assign({ ativo: x.ativo, tf: x.tf, est: x.est, gestao: x.gestao, contratos: x.contratos,
+    capital: x.capital, maxstops: x.maxstops, desde: x.desde, ate: x.ate || 0 }, RK.planoParams(x)));
 
   async function atualizarUm(x, avisar) {
     const r = await RK.json(url(x));
@@ -191,7 +191,8 @@
     if (!D || D.meta.ativo !== p.ativo || D.meta.tf !== +p.tf) return RK.toast("Espere os dados deste ativo carregarem.", "aviso");
     T.lista = T.lista.filter((x) => { const mesmo = combo(x) === combo(p); if (mesmo) delete T.res[x.id]; return !mesmo; });
     T.lista.push({ id: Date.now(), ativo: p.ativo, tf: +p.tf, est: p.est, gestao: p.gestao, contratos: p.contratos, capital: p.capital,
-      maxstops: p.maxstops, desde: D.t[D.meta.ultimo], criado: Date.now(), ate: 0 });
+      maxstops: p.maxstops, desde: D.t[D.meta.ultimo], criado: Date.now(), ate: 0,
+      tam: p.tam, risco: p.risco, lossDia: p.lossDia, metaDia: p.metaDia, seletivo: !!p.seletivo });      // o plano fica gravado no teste
     RK.pref.opsVista = "teste"; RK.salvarPref();
     guardar(); RK.som("ordem");
     RK.toast("Teste ao vivo ligado: o robô registra as operações a partir do próximo candle.", "ok");
@@ -218,7 +219,7 @@
     let h;
     if (!x) {
       h = `<div class="rot">TESTE AO VIVO <span class="dir">simulado · sem dinheiro</span></div>
-        <button id="tLigar" class="primario largo" ${csv ? "disabled" : ""}>▶ Ligar ${RK.esc(nomeCombo(p))} · ${RK.esc(p.ativo)} · ${tfTxt(p.tf)}</button>
+        <button id="tLigar" class="primario largo" ${csv ? "disabled" : ""}>▶ Ligar ${RK.esc(nomeCombo(p))} · ${RK.esc(RK.ehCripto(p.ativo) ? RK.nomeCripto(p.ativo) : p.ativo)} · ${tfTxt(p.tf)}</button>
         <div class="nota">${csv ? "Arquivo CSV não recebe candles novos: escolha um ativo ao vivo." : "Deixa a estratégia rodando a partir de agora: cada operação fica registrada aqui e no gráfico, com aviso sonoro. Pode trocar de ativo que o teste continua."}</div>`;
     } else if (!r) {
       h = `<div class="rot">TESTE AO VIVO <span class="dir">${x.erro ? "" : "carregando…"}</span></div>${x.erro ? `<div class="erro">⚠ ${RK.esc(x.erro)}</div><div class="botoes"><button id="tApagar">Apagar teste</button></div>` : ""}`;
@@ -228,7 +229,7 @@
       h = `<div class="rot">${x.ate ? '<i class="luz hist"></i> TESTE ENCERRADO' : '<i class="luz vivo"></i> TESTE AO VIVO'}
           <span class="dir">${RK.quandoT(x.desde, m.intraday)}${x.ate ? " a " + RK.quandoT(x.ate, m.intraday) : " até agora"}</span></div>
         <div class="resumo-topo"><div><div class="grande ${RK.cls(st.total || 0)}">${RK.dinheiro(st.total || 0, meta, true)}</div>
-          <div class="sub">${st.n} operaç${st.n === 1 ? "ão" : "ões"}${st.n ? ` · acerto ${RK.pct(st.acerto, 0)}` : ""} · ${RK.num(m.contratos, m.fracionado ? 2 : 0)} ${m.fracionado ? "lote(s)" : "contrato(s)"}${agora ? " · " + agora : ""}</div></div>
+          <div class="sub">${st.n} operaç${st.n === 1 ? "ão" : "ões"}${st.n ? ` · acerto ${RK.pct(st.acerto, 0)}` : ""} · ${m.tam === "risco" ? "risco de " + RK.num(m.riscoPct, 1) + "% por operação" : RK.unidade(m, m.contratos)}${m.seletivo ? " · seletivo" : ""}${m.dia && m.dia.trava && !x.ate ? ' · <b class="ruim">parou por hoje (' + RK.esc(m.dia.trava) + ")</b>" : agora ? " · " + agora : ""}</div></div>
           ${x.ate ? "" : '<button id="tParar" title="Encerra o teste e guarda o resultado">■ Parar</button>'}</div>
         ${x.ate ? '<div class="botoes"><button id="tLigar" class="primario">▶ Novo teste</button><button id="tApagar">Apagar</button></div>' : `<div class="nota">Simulado, sem dinheiro. ${m.formando ? "O candle atual ainda está aberto: sinal novo só depois que ele fechar." : ""}</div>`}`;
     }
@@ -238,7 +239,7 @@
         const ry = T.res[y.id], tot = ry ? ry.stats.total || 0 : null;
         const est = ry && !y.ate ? (ry.abertas.length ? " · em operação" : ry.pend.length ? " · ordem armada" : "") : "";
         return `<div class="teste-linha" data-id="${y.id}" title="Abrir este teste"><i class="luz ${y.ate ? "hist" : "vivo"}"></i>
-          <span>${RK.esc(y.ativo)} · ${tfTxt(y.tf)} · ${RK.esc(y.est)}${est}</span>
+          <span>${RK.esc(RK.ehCripto(y.ativo) ? RK.nomeCripto(y.ativo) : y.ativo)} · ${tfTxt(y.tf)} · ${RK.esc(y.est)}${est}</span>
           <b class="${RK.cls(tot)}">${ry ? RK.dinheiro(tot, { meta: ry.meta }, true) : y.erro ? "erro" : "…"}</b><small>${ry ? ry.stats.n + " ops" : ""}</small></div>`;
       }).join("") + `</div>`;
     }
@@ -249,7 +250,7 @@
     bt("tApagar", () => { if (confirm("Apagar este teste e o resultado dele?")) apagar(x); });
     el.querySelectorAll(".teste-linha").forEach((d) => (d.onclick = () => {
       const y = T.lista.find((z) => String(z.id) === d.dataset.id);
-      if (y) { RK.pref.opsVista = "teste"; RK.irPara(y); if (RK.aba !== "vivo") RK.trocarAba("vivo"); }
+      if (y) { RK.pref.opsVista = "teste"; if (RK.ehCripto(y.ativo)) RK.abrirCripto(y.ativo); RK.irPara(y); if (RK.aba !== "vivo") RK.trocarAba("vivo"); }
     }));
     const n = T.lista.filter((y) => !y.ate).length, bd = $("badgeTestes");
     bd.textContent = n; bd.classList.toggle("oculto", !n);
@@ -260,7 +261,7 @@
     try {
       const l = await RK.api.get("testes");
       if (Array.isArray(l)) T.lista = l.filter((x) => x && x.id && x.ativo && x.est && x.desde > 0 &&
-        (x.est === "TODAS" || RK.cfg.estMap[x.est]) && RK.cfg.ativos.some((a) => a.chave === x.ativo));
+        (x.est === "TODAS" || RK.cfg.estMap[x.est]) && RK.ativoValido(x.ativo));
     } catch (e) { /* sem testes salvos */ }
     renderTeste();
     atualizarTodos(false);

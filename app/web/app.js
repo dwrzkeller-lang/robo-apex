@@ -13,12 +13,16 @@
 
   // ---------------------------------------------------------------- preferências (só neste navegador)
   const PADRAO = { ativo: "WIN", tf: 5, est: "TODAS", ultEst: "E1", gestao: "padrao", contratos: 1, capital: 10000, maxstops: 2,
-    som: true, auto: true, per: "1m", de: "", ate: "", larg: {}, ind: null, opsVista: "per" };
+    som: true, auto: true, per: "1m", de: "", ate: "", larg: {}, ind: null, opsVista: "per",
+    tam: "fixo", risco: 1, lossDia: 0, metaDia: 0, seletivo: false, metaMes: 0, quedaMax: 0,     // aba Plano
+    criptos: [], criptoSeg: "memes", criptoAviso: false };
   RK.pref = Object.assign({}, PADRAO);
   try { Object.assign(RK.pref, JSON.parse(localStorage.getItem("rk_pref") || "{}")); } catch (e) { /* sem armazenamento */ }
   RK.salvarPref = () => { try { localStorage.setItem("rk_pref", JSON.stringify(RK.pref)); } catch (e) { /* ok */ } };
   const PERIODOS = { hoje: "hoje", "5d": "5 dias", "1m": "1 mês", "3m": "3 meses", tudo: "tudo", custom: "datas" };
   if (!(RK.pref.per in PERIODOS)) RK.pref.per = "1m";
+  if (!Array.isArray(RK.pref.criptos)) RK.pref.criptos = [];
+  if (RK.pref.tam !== "risco") RK.pref.tam = "fixo";
 
   // ---------------------------------------------------------------- servidor
   RK.json = async (url, opts) => {
@@ -68,6 +72,10 @@
     while (lo <= hi) { const m = (lo + hi) >> 1; if (T[m] === t) return m; if (T[m] < t) lo = m + 1; else hi = m - 1; }
     return -1;
   };
+  // relógio: tudo no robô é em horário de Brasília (o do gráfico e da B3), mesmo que o computador esteja em outro fuso
+  const FUSO_BR = "America/Sao_Paulo";
+  RK.horaBR = (t, seg = false) => new Date(t * 1000).toLocaleTimeString("pt-BR", Object.assign({ timeZone: FUSO_BR, hour: "2-digit", minute: "2-digit" }, seg ? { second: "2-digit" } : {}));
+  RK.diaBR = (t) => new Date(t * 1000).toLocaleDateString("pt-BR", { timeZone: FUSO_BR, day: "2-digit", month: "2-digit" });
   RK.dataTxt = (d) => { const s = String(d); return `${s.slice(6, 8)}/${s.slice(4, 6)}/${s.slice(0, 4)}`; };
   RK.dataCurta = (d) => { const s = String(d); return `${s.slice(6, 8)}/${s.slice(4, 6)}`; };
   RK.dataISO = (d) => { const s = String(d); return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`; };
@@ -149,11 +157,17 @@
   const S = {
     candle: chart.addCandlestickSeries({ upColor: "#26a69a", downColor: "#ef5350", borderVisible: false, wickUpColor: "#26a69a", wickDownColor: "#ef5350" }),
   };
+  // Série "âncora": invisível, sempre com as mesmas datas dos candles. Com os candles SOZINHOS no gráfico, a biblioteca
+  // usa um atalho ao trocar os dados que deixa a escala de tempo apontando para objetos velhos quando as datas não mudam
+  // (por exemplo, ao trocar só de estratégia). Na troca de ativo seguinte ela apagava parte dos candles e o gráfico
+  // quebrava ("Value is null"). Com a âncora os candles nunca ficam sozinhos e o atalho nunca é usado.
+  S.ancora = chart.addLineSeries({ visible: false, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+    autoscaleInfoProvider: () => null });
   RK.chart = chart; RK.S = S; RK.COR = COR;
   RK.camadas = [];                            // funções que desenham por cima do gráfico (operações, painéis): ver desenho.js
   RK.redesenhar = () => {};
 
-  const G = { D: null, k: -1, linhasPreco: [] };
+  const G = { D: null, k: -1, linhasPreco: [], viva: null };
   RK.i = 0;
   const vela = (D, i) => ({ time: D.t[i], open: D.o[i], high: D.h[i], low: D.l[i], close: D.c[i] });
 
@@ -192,7 +206,7 @@
   }
 
   function legenda(D, k) {
-    $("legenda").innerHTML = `<span><b>${RK.esc(D.meta.ativo)}</b> · ${D.meta.nomeTf} · ${RK.quando(D, k, true)}</span>` +
+    $("legenda").innerHTML = `<span><b>${RK.esc(RK.rotAtivo(D.meta.ativo))}</b> · ${D.meta.nomeTf} · ${RK.quando(D, k, true)}</span>` +
       `<span>A ${RK.fmt(D.o[k])} · M ${RK.fmt(D.h[k])} · m ${RK.fmt(D.l[k])} · F ${RK.fmt(D.c[k])}</span>` + (RK.ind ? RK.ind.legenda(D, k) : "");
   }
 
@@ -215,12 +229,13 @@
   // mostra o conjunto D no gráfico até o candle k (inclusive)
   RK.mostrar = (D, k, { manterZoom = false, foco = null } = {}) => {
     const trocouAtivo = !G.D || G.D.meta.ativo !== D.meta.ativo || G.D.meta.tf !== D.meta.tf;
-    G.D = D; G.k = k; RK.D = D; RK.i = k; RK.ativo = D.meta.ativo;
+    G.D = D; G.k = k; G.viva = null; RK.D = D; RK.i = k; RK.ativo = D.meta.ativo;
     const dec = D.meta.decimais;
     S.candle.applyOptions({ priceFormat: { type: "price", precision: dec, minMove: Math.pow(10, -dec) } });
     chart.applyOptions({ timeScale: { timeVisible: D.meta.intraday } });
     const velas = []; for (let i = 0; i <= k; i++) velas.push(vela(D, i));
     S.candle.setData(velas);
+    S.ancora.setData(velas.map((v) => ({ time: v.time })));
     if (RK.ind) RK.ind.pintar(D, k);
     S.candle.setMarkers(marcadores(D, k));
     linhasDoEstado(D, k); legenda(D, k);
@@ -234,6 +249,7 @@
     const D = G.D; if (!D || k <= G.k) return;
     for (let i = G.k + 1; i <= k; i++) {
       S.candle.update(vela(D, i));
+      S.ancora.update({ time: D.t[i] });
       if (RK.ind) RK.ind.avancar(D, i);
     }
     G.k = k; RK.i = k;
@@ -242,6 +258,16 @@
   RK.focar = (i, ate = i) => { RK.autoPreco(); chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, i - 70), to: Math.max(i + 40, ate + 25) }); };
   RK.repintar = () => { if (G.D) { if (RK.ind) RK.ind.pintar(G.D, G.k); legenda(G.D, G.k); RK.redesenhar(); } };
   RK.graficoMostra = () => G.D;
+  // preço em tempo real (aba Cripto): mexe só no desenho do último candle; os sinais continuam vindo do servidor
+  RK.tick = (chave, preco) => {
+    const D = G.D;
+    if (!D || D.meta.ativo !== chave || !D.meta.aoVivo || G.k !== D.meta.ultimo || !(preco > 0)) return;
+    const i = G.k, agora = Date.now() / 1000 - (D.meta.intraday ? 10800 : 0);      // candles em horário de Brasília
+    if (agora >= D.t[i] + D.meta.tf * 60) return;                                 // já é outro candle: espera o servidor
+    const v = G.viva || (G.viva = vela(D, i));
+    v.close = preco; if (preco > v.high) v.high = preco; if (preco < v.low) v.low = preco;
+    S.candle.update(v);
+  };
   chart.subscribeCrosshairMove((p) => {
     const D = G.D; if (!D) return;
     let k = G.k;
@@ -266,36 +292,56 @@
 
   // cartão "o que fazer agora" (ao vivo, fim do período e replay)
   RK.cartaoMomento = (el, D, k) => {
-    const e = RK.estadoEm(D, k), m = D.meta, q = m.contratos;
-    const hist = k === m.iFim && !m.aoVivo;
-    const riscoTxt = (pts) => `${RK.fmt(pts)} pts = ${RK.dinheiro(pts * m.valorPonto * q + 2 * m.custo * q, D)}`;
+    const e = RK.estadoEm(D, k), m = D.meta;
+    const hist = k === m.iFim && !m.aoVivo, agora = k === m.iFim && m.aoVivo;
+    const qtd = (x) => (x.q != null ? x.q : m.contratos);
+    const perdaNoStop = (pts, q, ref) => (pts * m.valorPonto + 2 * m.custo + 2 * (m.custoPct || 0) * Math.abs(ref) * m.valorPonto) * q;
+    const riscoTxt = (pts, q, ref) => `${RK.fmt(pts)} pts = ${RK.dinheiro(perdaNoStop(pts, q, ref), D)}`;
+    // quanto do capital a operação perde se for stopada: sempre à vista (laranja acima de 2%, vermelho acima de 5%)
+    const capAgora = (m.dia && m.dia.capital) || m.capital;
+    const pctCap = (pts, q, ref) => {
+      if (!(capAgora > 0)) return "";
+      const p = (100 * perdaNoStop(pts, q, ref)) / capAgora;
+      return `<span class="${p > 5 ? "ruim" : p > 2 ? "alerta" : ""}">${RK.pct(p, 1)} do capital</span>`;
+    };
+    const tamTxt = (q, pts, ref, comPct = true) => (q > 0 ? `<tr><td><span class="sw" style="background:#8491a5"></span>Tamanho</td><td>${RK.unidade(m, q)}</td><td>${comPct ? pctCap(pts, q, ref) : ""}</td></tr>`
+      : `<tr><td colspan="3" class="ruim"><b>Fora do plano:</b> o lote mínimo arrisca mais que ${RK.num(m.riscoPct, 1)}% do capital. Pelo plano, não entra.</td></tr>`);
+    const aviso = agora && RK.agendaAviso ? RK.agendaAviso(m.ativo) : "";
     const tr = (cor, nome, v, extra = "") => `<tr><td><span class="sw" style="background:${cor}"></span>${nome}</td><td>${RK.fmt(v)}</td><td>${extra}</td></tr>`;
     let cls = "", html = "";
     const quem = (cod) => `<div class="quem">${RK.esc(cod)} · ${RK.esc(RK.nomeEst(cod))}${hist ? `<span class="tag-hist">FIM DO PERÍODO · ${RK.quando(D, k, true)}</span>` : ""}</div>`;
     const saiu = e.saidas.length ? `<div class="detalhe">Neste candle saiu: ${e.saidas.map((t) => `${t.est} ${RK.dirTxt(t.dir).toLowerCase()} <b class="${RK.cls(t.R)}">${RK.R(t.R)}</b> (${RK.esc(t.motivo)})`).join(" · ")}</div>` : "";
     if (e.pos) {
       const p = e.pos, R = p.Ragora;
+      const movido = p.stopAgora != null && p.stopAgora !== p.stop;      // stop já andou: o risco inicial não vale mais
       cls = "pos";
       html = `<div class="estado">${p.dir > 0 ? "COMPRADO" : "VENDIDO"} <span class="${RK.cls(R)}">${RK.R(R)}</span></div>${quem(p.est)}
         <div class="detalhe">Entrou em ${RK.quando(D, p.i_ent)}${p.parcial ? " · <b>parcial feita, stop no 0x0</b>" : ""}${p.sair ? " · <b>sai na abertura do próximo candle</b> (" + RK.esc(p.sair) + ")" : ""}</div>
-        <table>${tr("#fff", "Entrada", p.ent)}${tr(COR.perda, p.stopAgora != null && p.stopAgora !== p.stop ? "Stop (movido)" : "Stop", p.stopAgora ?? p.stop, riscoTxt(p.risco))}${p.alvo != null ? tr(COR.ganho, "Alvo", p.alvo) : ""}</table>${saiu}`;
+        <table>${tr("#fff", "Entrada", p.ent)}${tr(COR.perda, movido ? "Stop (movido)" : "Stop", p.stopAgora ?? p.stop, riscoTxt(p.risco, qtd(p), p.ent))}${p.alvo != null ? tr(COR.ganho, "Alvo", p.alvo) : ""}${tamTxt(qtd(p), p.risco, p.ent, !movido)}</table>${saiu}${aviso}`;
     } else if (e.pend.length) {
       const o = e.pend[e.pend.length - 1];
       const ref = o.gatilho ?? D.c[k], risco = Math.abs(ref - o.stop);
       cls = o.dir > 0 ? "compra" : "venda";
       const quando = o.gatilho == null ? "a mercado na abertura do próximo candle" : `${o.dir > 0 ? "acima de" : "abaixo de"} ${RK.fmt(o.gatilho)}`;
       const razao = o.alvo != null && risco ? Math.abs(o.alvo - ref) / risco : null;
+      const q = qtd(o), qv = q > 0 ? q : m.contratos;
       html = `<div class="estado">${o.dir > 0 ? "COMPRA ARMADA" : "VENDA ARMADA"}</div>${quem(o.est)}
         <div class="detalhe">${RK.dirTxt(o.dir)} ${quando} · vale ${o.validade} candle(s)${o.info ? " · " + RK.esc(o.info) : ""}</div>
-        <table>${tr(o.dir > 0 ? COR.compra : COR.venda, "Entrada", ref)}${tr(COR.perda, "Stop", o.stop, riscoTxt(risco))}${o.alvo != null ? tr(COR.ganho, `Alvo${razao ? " " + RK.num(razao, 1) + ":1" : ""}`, o.alvo, "+" + RK.dinheiro(Math.abs(o.alvo - ref) * m.valorPonto * q, D)) : `<tr><td colspan="3" class="neutro">Saída: ${RK.esc(RK.cfg.gestoes[o.gestao] || o.gestao)}</td></tr>`}</table>
-        ${e.pend.length > 1 ? `<div class="detalhe">+${e.pend.length - 1} outra(s) ordem(ns): ${e.pend.slice(0, -1).map((x) => x.est + " " + RK.dirTxt(x.dir).toLowerCase()).join(", ")} — a primeira que executar vale.</div>` : ""}${saiu}`;
+        <table>${tr(o.dir > 0 ? COR.compra : COR.venda, "Entrada", ref)}${tr(COR.perda, "Stop", o.stop, riscoTxt(risco, qv, ref))}${o.alvo != null ? tr(COR.ganho, `Alvo${razao ? " " + RK.num(razao, 1) + ":1" : ""}`, o.alvo, "+" + RK.dinheiro(Math.abs(o.alvo - ref) * m.valorPonto * qv, D)) : `<tr><td colspan="3" class="neutro">Saída: ${RK.esc(RK.gestaoTxt(o.gestao))}</td></tr>`}${tamTxt(q, risco, ref)}</table>
+        ${o.ctx != null ? `<div class="detalhe">Contexto: ${RK.ctxTxt(o.ctx, o.er)}</div>` : ""}
+        ${e.pend.length > 1 ? `<div class="detalhe">+${e.pend.length - 1} outra(s) ordem(ns): ${e.pend.slice(0, -1).map((x) => x.est + " " + RK.dirTxt(x.dir).toLowerCase()).join(", ")} — a primeira que executar vale.</div>` : ""}${saiu}${aviso}`;
+    } else if (agora && m.intraday && m.dia && m.dia.trava && m.dia.data === D.d[k]) {
+      cls = "trava";                                       // regra do plano: o dia acabou para esta estratégia
+      html = `<div class="estado">PARE POR HOJE</div><div class="detalhe"><b>${RK.esc(m.dia.trava)}</b> · resultado do dia: <b class="${RK.cls(m.dia.resultado)}">${RK.dinheiro(m.dia.resultado, D, true)}</b>.
+        O robô não arma mais entradas hoje${m.est === "TODAS" ? "" : " nesta estratégia"}.</div>${saiu}`;
     } else if (e.aten.length) {
       const [cod, dir] = e.aten[0];
       cls = "aten";
       html = `<div class="estado">ATENÇÃO: ${dir > 0 ? "COMPRA" : "VENDA"} SE FORMANDO</div>${quem(cod)}
-        <div class="detalhe">Aguardando: ${RK.esc((RK.cfg.estMap[cod] || {}).aguardando || "")}. Ainda <b>não</b> é sinal.</div>${saiu}`;
+        <div class="detalhe">Aguardando: ${RK.esc((RK.cfg.estMap[cod] || {}).aguardando || "")}. Ainda <b>não</b> é sinal.</div>${saiu}${aviso}`;
     } else {
-      html = `<div class="estado">AGUARDANDO SETUP</div><div class="detalhe">${m.est === "TODAS" ? "Nenhuma estratégia" : RK.esc(RK.nomeEst(m.est)) + " não"} tem setup ${hist ? "no fim do período (" + RK.quando(D, k, true) + ")" : "agora"}.</div>${saiu}`;
+      const leitura = k === m.iFim && m.ctx ? `<div class="detalhe">Mercado agora: ${m.ctx.diario > 0 ? "diário em alta" : m.ctx.diario < 0 ? "diário em baixa" : "diário sem tendência"} · ${m.ctx.er >= 0.35 ? "movimento limpo" : "movimento em serrote"}${m.seletivo ? " · modo seletivo ligado" : ""}</div>` : "";
+      html = `<div class="estado">AGUARDANDO SETUP</div><div class="detalhe">${m.est === "TODAS" ? "Nenhuma estratégia" : RK.esc(RK.nomeEst(m.est)) + " não"} tem setup ${hist ? "no fim do período (" + RK.quando(D, k, true) + ")" : "agora"}.</div>${leitura}${saiu}${aviso}`;
     }
     el.className = "card momento " + cls + (hist ? " hist" : "");
     el.innerHTML = html;
@@ -332,17 +378,63 @@
     const q = new URLSearchParams({ ativo: p.ativo, tf: p.tf, est: p.est, gestao: p.gestao, contratos: p.contratos,
       capital: p.capital, maxstops: p.maxstops, per: p.per === "custom" ? "tudo" : p.per });
     if (p.per === "custom") { q.set("de", RK.isoInt(p.de)); q.set("ate", RK.isoInt(p.ate)); }
+    for (const [k, v] of Object.entries(RK.planoParams())) q.set(k, v);
     for (const [k, v] of Object.entries(extra)) q.set(k, v);
     return q.toString();
   };
+  // regras do plano de trade (aba Plano) que vão em todo pedido ao servidor; só o que não é o padrão
+  RK.planoParams = (p = RK.pref) => {
+    const o = {};
+    if (p.tam === "risco") { o.tam = "risco"; o.risco = p.risco; }
+    if (p.lossDia > 0) o.lossDia = p.lossDia;
+    if (p.metaDia > 0) o.metaDia = p.metaDia;
+    if (p.seletivo) o.seletivo = 1;
+    return o;
+  };
+  // nome da gestão de uma operação: as do menu e as duas internas (saída/alvo da própria estratégia)
+  RK.gestaoTxt = (g) => RK.cfg.gestoes[g] || { propria: "regra de saída da própria estratégia", fixo: "alvo da própria estratégia" }[g] || g || "";
+  // ativos: os do robô + as criptomoedas abertas pela aba Cripto ("BN:DOGEUSDT" à vista, "BF:POPCATUSDT" futuro)
+  RK.ehCripto = (c) => /^B[NF]:[A-Z0-9]{2,24}$/.test(c || "");
+  RK.nomeCripto = (c) => { const s2 = c.slice(3); return (s2.endsWith("USDT") ? s2.slice(0, -4) + "/USDT" : s2) + (c.startsWith("BF:") ? " (futuro)" : ""); };
+  RK.infoAtivo = (c) => (RK.cfg && RK.cfg.ativos.find((x) => x.chave === c)) || RK.pref.criptos.find((x) => x.chave === c) ||
+    (RK.ehCripto(c) ? { chave: c, nome: RK.nomeCripto(c), fracionado: true, cripto: true } : null);
+  RK.ativoValido = (c) => !!RK.infoAtivo(c);
+  RK.rotAtivo = (c) => (RK.ehCripto(c) ? RK.nomeCripto(c) : c);
+  RK.unidade = (m, q) => `${RK.num(q, m.fracionado ? 2 : 0)} ${m.fracionado ? "lote" : "contrato"}${q === 1 ? "" : "s"}`;
+  RK.ctxTxt = (ctx, er) => (ctx > 0 ? '<span class="bom">a favor da tendência do diário</span>' : ctx < 0 ? '<span class="ruim">contra a tendência do diário</span>' : "diário sem tendência")
+    + (er == null ? "" : er >= 0.35 ? " · movimento limpo" : " · movimento em serrote");
   RK.periodoTexto = (D) => (D ? `${RK.dataCurta(D.meta.dataIni)} a ${RK.dataCurta(D.meta.dataFim)}` : PERIODOS[RK.pref.per]);
 
   // ---------------------------------------------------------------- topo
+  const nomeCurto = (n) => {                 // "Mini Índice (WIN) - proxy: ..." -> "Mini Índice (WIN)"; nome completo no title
+    let c = n.split(" - ")[0].replace(/\s*\(hor.*$/, "").trim();
+    if ((c.match(/\(/g) || []).length > (c.match(/\)/g) || []).length) c = c.split("(")[0].trim();
+    return c;
+  };
+  function montarAtivos() {
+    const op = (a) => `<option value="${RK.esc(a.chave)}" title="${RK.esc(a.nome)}">${RK.esc(nomeCurto(a.nome))}</option>`;
+    const cr = RK.pref.criptos;
+    $("ativo").innerHTML = (cr.length ? `<optgroup label="Mercados">` : "") + RK.cfg.ativos.map(op).join("") +
+      (cr.length ? `</optgroup><optgroup label="Cripto (Binance, tempo real)">${cr.map(op).join("")}</optgroup>` : "");
+    $("ativo").value = RK.pref.ativo;
+  }
+  // abre uma moeda da Binance no gráfico (vem da aba Cripto): entra na lista de ativos e vira o ativo atual
+  RK.abrirCripto = (chave, nome) => {
+    if (!RK.ehCripto(chave)) return false;
+    RK.pref.criptos = [{ chave, nome: nome || RK.nomeCripto(chave), fracionado: true, cripto: true }]
+      .concat(RK.pref.criptos.filter((x) => x.chave !== chave)).slice(0, 12);
+    montarAtivos();
+    if (RK.pref.ativo !== chave) RK.escolherAtivo(chave); else RK.salvarPref();
+    return true;
+  };
   function ajustarContratos() {
-    const a = RK.cfg.ativos.find((x) => x.chave === RK.pref.ativo) || {};
+    const a = RK.infoAtivo(RK.pref.ativo) || {};
     const inp = $("contratos");
+    const peloRisco = RK.pref.tam === "risco";
     inp.step = a.fracionado ? "0.01" : "1"; inp.min = a.fracionado ? "0.01" : "1";
-    $("rotContratos").textContent = a.fracionado ? "Lotes" : "Contratos";
+    inp.disabled = peloRisco;
+    $("rotContratos").textContent = (a.fracionado ? "Lotes" : "Contratos") + (peloRisco ? " · risco" : "");
+    inp.parentElement.title = peloRisco ? "O tamanho de cada operação está sendo calculado pelo risco (aba Plano)" : "";
     if (!a.fracionado) RK.pref.contratos = Math.max(1, Math.round(RK.pref.contratos));
     inp.value = RK.pref.contratos;
   }
@@ -402,15 +494,13 @@
   }
   function ligarTopo() {
     const sa = $("ativo"), st = $("tf"), sg = $("gestao"), sc = $("contratos");
-    const curto = (n) => {                  // "Mini Índice (WIN) - proxy: ..." -> "Mini Índice (WIN)"; nome completo no title
-      let c = n.split(" - ")[0].replace(/\s*\(hor.*$/, "").trim();
-      if ((c.match(/\(/g) || []).length > (c.match(/\)/g) || []).length) c = c.split("(")[0].trim();
-      return c;
-    };
-    sa.innerHTML = RK.cfg.ativos.map((a) => `<option value="${RK.esc(a.chave)}" title="${RK.esc(a.nome)}">${RK.esc(curto(a.nome))}</option>`).join("");
+    RK.pref.criptos = RK.pref.criptos.filter((x) => x && RK.ehCripto(x.chave)).slice(0, 12);
+    if (RK.ehCripto(RK.pref.ativo) && !RK.pref.criptos.some((x) => x.chave === RK.pref.ativo))
+      RK.pref.criptos.unshift({ chave: RK.pref.ativo, nome: RK.nomeCripto(RK.pref.ativo), fracionado: true, cripto: true });
     st.innerHTML = RK.cfg.tempos.map((t) => `<option value="${t.tf}">${t.nome}</option>`).join("");
     sg.innerHTML = Object.entries(RK.cfg.gestoes).map(([k, v]) => `<option value="${k}">${RK.esc(v)}</option>`).join("");
-    if (!RK.cfg.ativos.some((a) => a.chave === RK.pref.ativo)) RK.pref.ativo = "WIN";
+    if (!RK.ativoValido(RK.pref.ativo)) RK.pref.ativo = "WIN";
+    montarAtivos();
     if (!RK.cfg.tempos.some((t) => +t.tf === +RK.pref.tf)) RK.pref.tf = 5;
     if (!(RK.pref.gestao in RK.cfg.gestoes)) RK.pref.gestao = "padrao";
     if (RK.pref.est !== "TODAS" && !RK.cfg.estMap[RK.pref.est]) RK.pref.est = "TODAS";
@@ -422,7 +512,7 @@
     $("est").onchange = () => RK.escolherEst($("est").value);
     $("btTodas").onclick = () => RK.escolherEst(RK.pref.est === "TODAS" ? RK.pref.ultEst : "TODAS");
     sc.onchange = () => {
-      const a = RK.cfg.ativos.find((x) => x.chave === RK.pref.ativo) || {};
+      const a = RK.infoAtivo(RK.pref.ativo) || {};
       let v = parseFloat(String(sc.value).replace(",", "."));
       if (!(v > 0)) v = a.fracionado ? 0.01 : 1;
       RK.pref.contratos = a.fracionado ? Math.max(0.01, Math.round(v * 100) / 100) : Math.max(1, Math.round(v));
@@ -450,12 +540,13 @@
     sg.onchange = () => { RK.pref.gestao = sg.value; RK.salvarPref(); RK.emit("mudou", "gestao"); };
     $("capital").onchange = () => {
       const v = parseFloat(String($("capital").value).replace(",", "."));
-      RK.pref.capital = v > 0 ? v : 10000; $("capital").value = RK.pref.capital; RK.salvarPref(); RK.emit("mudou", "capital");
+      RK.pref.capital = v > 0 ? v : 10000; $("capital").value = RK.pref.capital; RK.salvarPref(); RK.emit("mudou", "plano");
     };
     $("maxstops").onchange = () => {
       const v = parseInt($("maxstops").value, 10);
-      RK.pref.maxstops = v > 0 ? Math.min(20, v) : 2; $("maxstops").value = RK.pref.maxstops; RK.salvarPref(); RK.emit("mudou", "maxstops");
+      RK.pref.maxstops = v > 0 ? Math.min(20, v) : 2; $("maxstops").value = RK.pref.maxstops; RK.salvarPref(); RK.emit("mudou", "plano");
     };
+    RK.on("mudou", (o) => { if (o === "plano") { $("capital").value = RK.pref.capital; $("maxstops").value = RK.pref.maxstops; ajustarContratos(); } });
     $("autoVivo").onchange = (e) => { RK.pref.auto = e.target.checked; RK.salvarPref(); };
     $("somVivo").onchange = (e) => { RK.pref.som = e.target.checked; RK.salvarPref(); if (e.target.checked) RK.som("entrada"); };
     document.querySelectorAll("#ouvirSons button").forEach((b) => (b.onclick = () => RK.som(b.dataset.s, true)));
@@ -467,10 +558,11 @@
   }
 
   // ---------------------------------------------------------------- aba AO VIVO
-  const V = { D: null, seq: 0, velho: true };
+  const V = { D: null, seq: 0, velho: true, pedido: 0 };
   RK.vivo = V;
   async function carregarVivo(silencioso = false) {
     const seq = ++V.seq;
+    V.pedido = Date.now();
     if (!silencioso) $("carregando").classList.remove("oculto");
     try {
       const D = await RK.json("/api/sim?" + RK.parametros());
@@ -478,7 +570,7 @@
       const antes = V.D;
       V.D = D; V.velho = false;
       RK.erro("erroVivo", null);
-      if (RK.aba === "vivo" || RK.aba === "cal" || !RK.graficoMostra()) RK.mostrar(D, D.meta.iFim, { manterZoom: silencioso });
+      if (ABAS_VIVAS.includes(RK.aba) || !RK.graficoMostra()) RK.mostrar(D, D.meta.iFim, { manterZoom: silencioso });
       renderVivo(D);
       marcarPeriodo();
       RK.emit("dadosVivo", D);
@@ -526,7 +618,8 @@
   function avisarNovidade(antes, D) {
     const a = antes && antes.meta, m = D.meta;
     if (!a || !m.aoVivo || !a.aoVivo || a.ativo !== m.ativo || a.tf !== m.tf || a.est !== m.est || a.gestao !== m.gestao ||
-      a.contratos !== m.contratos || a.maxStops !== m.maxStops || a.iIni !== m.iIni) return;
+      a.contratos !== m.contratos || a.maxStops !== m.maxStops || a.iIni !== m.iIni || a.tam !== m.tam || a.riscoPct !== m.riscoPct ||
+      a.seletivo !== m.seletivo || a.lossDia !== m.lossDia || a.metaDia !== m.metaDia) return;
     const ev = RK.novidades(retrato(antes), retrato(D), antes.t[a.ultimo]);
     if (!ev.length) return;
     const card = $("cardVivo"); card.classList.remove("pulso"); void card.offsetWidth; card.classList.add("pulso");
@@ -541,31 +634,39 @@
     const dt = RK.quando(D, D.meta.ultimo, true);
     $("statusDados").innerHTML = m.aoVivo ? `<i class="luz vivo"></i><span>ao vivo · último candle ${dt}</span>` : `<i class="luz hist"></i><span>histórico · até ${RK.dataTxt(m.dataFim)}</span>`;
     $("statusDados").title = m.fonte;
+    if (!$("contratos").disabled) $("contratos").parentElement.title = m.lote && m.lote !== "contrato" ? "Tamanho de 1 lote: " + m.lote : "";
     // resumo do período
     const est = m.est, eInfo = RK.cfg.estMap[est];
     const regras = est === "TODAS" ? RK.cfg.estrategias.map((e) => `<li><b>${e.cod} ${RK.esc(e.nome)}</b> — ${RK.esc(e.regras[0])}</li>`).join("")
       : eInfo.regras.map((r) => `<li>${RK.esc(r)}</li>`).join("") + (eInfo.ideal ? `<li><b>Onde funciona melhor:</b> ${RK.esc(eInfo.ideal)}</li>` : "");
     const seta = (v) => (v === 1 ? '<span class="bom">▲ alta</span>' : v === -1 ? '<span class="ruim">▼ baixa</span>' : '<span class="neutro">■ indefinida</span>');
     const ctx = D.contexto ? `<span>Dow (só leitura): semanal ${seta(D.contexto.semanal)} · diário ${seta(D.contexto.diario)}</span>` : "";
-    const lote = m.fracionado ? "lote(s)" : "contrato(s)";
+    const tamanho = m.tam === "risco" ? `risco de ${RK.num(m.riscoPct, 1)}% do capital por operação` : RK.unidade(m, m.contratos);
+    const plano = [m.seletivo ? "modo seletivo" : "", m.lossDia > 0 ? `para o dia em −${RK.dinheiro(m.lossDia, D)}` : "", m.metaDia > 0 ? `para o dia em +${RK.dinheiro(m.metaDia, D)}` : ""].filter(Boolean).join(" · ");
     let html = `<div class="rot">NO PERÍODO · ${RK.esc(RK.nomeEst(est))}<span class="dir">${RK.dataTxt(m.dataIni)} a ${RK.dataTxt(m.dataFim)}</span></div>`;
     if (st.n) {
+      const cr = st.custoR || 0;
       html += `<div class="resumo-topo"><div><div class="grande ${RK.cls(st.total)}">${RK.dinheiro(st.total, D, true)}</div>
-          <div class="sub">${st.n} operações · acerto ${RK.pct(st.acerto, 0)} (empata com ${RK.pct(st.empate, 0)}) · ${RK.num(m.contratos, m.fracionado ? 2 : 0)} ${lote}</div></div>${RK.seloCurto(st)}</div>
+          <div class="sub">${st.n} operações · acerto ${RK.pct(st.acerto, 0)} (empata com ${RK.pct(st.empate, 0)}) · ${tamanho}</div></div>${RK.seloCurto(st)}</div>
         <canvas class="spark" id="sparkVivo"></canvas>
         <div class="kpis">
           <div><small>Média por operação</small><b class="${RK.cls(st.mediaDin)}">${RK.dinheiro(st.mediaDin, D, true)}</b><em>± ${RK.dinheiro(st.icDin, D)}</em></div>
           <div><small>Pior queda</small><b class="ruim">${RK.dinheiro(-st.ddMax, D)}</b><em>${RK.pct(st.ddPct, 0)} do pico</em></div>
-          <div><small>Ganho ÷ perda</small><b>${RK.num(st.payoff, 2)}</b><em>fator de lucro ${RK.num(st.fatorLucro, 2)}</em></div>
-        </div>`;
+          <div title="Taxas, corretagem e escorregamento somados. Sem eles o resultado seria ${RK.dinheiro(st.bruto, D, true)}"><small>Custos</small><b class="${cr >= 0.15 ? "ruim" : ""}">${RK.dinheiro(-st.custos, D)}</b><em>${RK.pct(100 * cr, 0)} do risco de cada operação</em></div>
+        </div>
+        ${st.n >= 10 && cr >= 0.15 ? `<div class="aviso-custo">⚠ Aqui os custos comem <b>${RK.pct(100 * cr, 0)}</b> do risco de cada operação (sem custos o resultado seria ${RK.dinheiro(st.bruto, D, true)}). Com custo tão alto é quase impossível ganhar: teste um tempo gráfico maior (60 min) ou um ativo de custo menor.</div>` : ""}`;
     } else {
       html += `<div class="resumo-topo"><div><div class="grande neutro">sem operações</div><div class="sub">nenhum setup desta estratégia no período escolhido</div></div>${RK.seloCurto(st)}</div>`;
     }
-    html += `<div class="linha-ctx">${ctx}</div>
+    const cx = st.ctx;
+    html += `${plano ? `<div class="linha-ctx"><span>Plano: ${plano}</span></div>` : ""}
+      ${m.foraDoPlano ? `<div class="linha-ctx"><span class="ruim">${m.foraDoPlano} ordem(ns) ficaram de fora: o lote mínimo arriscava mais que ${RK.num(m.riscoPct, 1)}% do capital.</span></div>` : ""}
+      <div class="linha-ctx">${ctx}</div>
       <details><summary>Como ler · regras · detalhes</summary>
-        <div class="nota">${RK.esc(st.explica || "")}${st.n ? ` Média na 1ª metade: ${RK.dinheiro(st.exp1, D, true)} · na 2ª: ${RK.dinheiro(st.exp2, D, true)}.` : ""}</div>
+        <div class="nota">${RK.esc(st.explica || "")}${st.n ? ` Média na 1ª metade: ${RK.dinheiro(st.exp1, D, true)} · na 2ª: ${RK.dinheiro(st.exp2, D, true)}. Ganho médio ÷ perda média: ${RK.num(st.payoff, 2)} · fator de lucro ${RK.num(st.fatorLucro, 2)}.` : ""}</div>
+        ${cx && (cx.favor.n || cx.contra.n) ? `<div class="nota">A favor da tendência do diário: ${cx.favor.n} operações, média ${RK.dinheiro(cx.favor.media, D, true)}. Contra: ${cx.contra.n} operações, média ${RK.dinheiro(cx.contra.media, D, true)}.</div>` : ""}
         <ul class="regras">${regras}</ul>
-        <div class="nota">Gestão: ${RK.esc(RK.cfg.gestoes[m.gestao])}. Custos: escorregamento de ${RK.fmt(m.slip)} por lado + ${RK.dinheiro(m.custo, D)} por ${m.fracionado ? "lote" : "contrato"} por lado. Fonte: ${RK.esc(m.fonte)}.</div>
+        <div class="nota">Gestão: ${RK.esc(RK.cfg.gestoes[m.gestao])}. Custos: escorregamento de ${RK.fmt(m.slip)} por lado${m.custo ? ` + ${RK.dinheiro(m.custo, D)} por ${m.fracionado ? "lote" : "contrato"} por lado` : ""}${m.custoPct ? ` + taxa de ${RK.num(100 * m.custoPct, 2)}% do valor por lado` : ""}. ${m.lote ? "Tamanho: " + RK.esc(m.lote) + ". " : ""}Fonte: ${RK.esc(m.fonte)}.</div>
       </details>`;
     $("resumoVivo").innerHTML = html;
     RK.sparkline($("sparkVivo"), D.trades.map((t) => t.dinheiro));
@@ -583,7 +684,7 @@
   // ---------------------------------------------------------------- abas
   RK.aba = "vivo";
   // largura do painel: arraste a divisória (cada tamanho de aba guarda a sua); duplo clique volta ao padrão
-  const classeLarg = () => (RK.aba === "cmp" ? "l" : RK.aba === "sim" || RK.aba === "cal" ? "m" : "n");
+  const classeLarg = () => (RK.aba === "cmp" ? "l" : RK.aba === "cripto" ? "c" : RK.aba === "sim" || RK.aba === "cal" ? "m" : "n");
   const limiteLarg = (w) => Math.round(Math.max(300, Math.min(window.innerWidth - 380, w)));
   function aplicarLargura() {
     const w = (RK.pref.larg || {})[classeLarg()];
@@ -618,8 +719,9 @@
     document.querySelectorAll(".aba").forEach((s) => s.classList.toggle("on", s.id === "aba-" + nome));
     $("painel").classList.toggle("largo", nome === "cmp");
     $("painel").classList.toggle("medio", nome === "sim" || nome === "cal");
+    $("painel").classList.toggle("cripto", nome === "cripto");
     aplicarLargura();
-    if (nome === "vivo" || nome === "cal") {
+    if (nome === "vivo" || nome === "cal" || nome === "plano" || nome === "cripto") {
       if (V.D && !V.velho) { if (RK.graficoMostra() !== V.D) RK.mostrar(V.D, V.D.meta.iFim); if (nome === "vivo") renderVivo(V.D); }
       else RK.carregarVivo();
     }
@@ -629,19 +731,21 @@
   document.querySelectorAll(".abas button").forEach((b) => (b.onclick = () => trocarAba(b.dataset.aba)));
   window.addEventListener("resize", () => { if (V.D && RK.aba === "vivo") RK.sparkline($("sparkVivo"), V.D.trades.map((t) => t.dinheiro)); });
 
+  const ABAS_VIVAS = ["vivo", "cal", "plano", "cripto"];       // abas em que o gráfico mostra o "agora"
   RK.on("mudou", () => {
     V.velho = true;
-    if (RK.aba === "vivo" || RK.aba === "cal") RK.carregarVivo();
+    if (ABAS_VIVAS.includes(RK.aba)) RK.carregarVivo();
   });
 
-  // atualização automática (período que chega até hoje, aba ao vivo, janela visível)
+  // atualização automática (período que chega até hoje, janela visível): 30 s; criptomoeda da Binance, 10 s
   setInterval(() => {
-    if (RK.cfg && RK.pref.auto && RK.aba === "vivo" && !document.hidden && V.D && V.D.meta.aoVivo) RK.carregarVivo(true);
-  }, 30000);
+    if (!(RK.cfg && RK.pref.auto && ABAS_VIVAS.includes(RK.aba) && RK.aba !== "cal" && !document.hidden && V.D && V.D.meta.aoVivo)) return;
+    if (Date.now() - V.pedido >= (V.D.meta.cripto ? 10000 : 30000) - 600) RK.carregarVivo(true);
+  }, 5000);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
       document.title = "Robô Keller";
-      if (RK.cfg && RK.aba === "vivo" && RK.pref.auto && V.D && V.D.meta.aoVivo) RK.carregarVivo(true);
+      if (RK.cfg && ABAS_VIVAS.includes(RK.aba) && RK.pref.auto && V.D && V.D.meta.aoVivo) RK.carregarVivo(true);
     }
   });
   document.addEventListener("keydown", (e) => {
@@ -668,7 +772,10 @@
       // link direto: ?ativo=WIN&tf=5&est=TODAS&per=5d&aba=sim&acao=simular|replay|robo&passos=40
       const u = new URLSearchParams(location.search);
       for (const k of ["ativo", "est", "gestao", "per"]) if (u.has(k)) RK.pref[k] = u.get(k);
-      for (const k of ["tf", "contratos"]) if (u.has(k) && +u.get(k) > 0) RK.pref[k] = +u.get(k);
+      for (const k of ["tf", "contratos", "risco", "lossDia", "metaDia", "metaMes", "quedaMax", "capital"]) if (u.has(k) && +u.get(k) > 0) RK.pref[k] = +u.get(k);
+      if (u.has("tam")) RK.pref.tam = u.get("tam") === "risco" ? "risco" : "fixo";
+      if (u.has("seletivo")) RK.pref.seletivo = u.get("seletivo") === "1";
+      if (u.has("seg")) RK.pref.criptoSeg = u.get("seg");
       if (u.has("de") && u.has("ate")) { RK.pref.per = "custom"; RK.pref.de = u.get("de"); RK.pref.ate = u.get("ate"); }
       if (!(RK.pref.per in PERIODOS)) RK.pref.per = "1m";
       ligarTopo();
@@ -692,7 +799,7 @@
       if (u.has("op") && RK.ops) RK.ops.abrir(+u.get("op") || 1);
       if (u.get("pop") === "ind") $("btInd").click();
       const aba = u.get("aba");
-      if (["sim", "cmp", "cal", "news"].includes(aba)) trocarAba(aba);
+      if (["sim", "cmp", "cal", "news", "plano", "cripto"].includes(aba)) trocarAba(aba);
       if (aba === "sim" && u.get("acao") && RK.simDemo) await RK.simDemo({ acao: u.get("acao"), passos: +u.get("passos") || 0 });
       if (aba === "cmp" && u.get("acao") === "comparar") $("btComparar").click();
       if (u.get("acao") === "robo") RK.emit("rodarRobo");

@@ -22,6 +22,8 @@ As regras de compra sao escritas uma unica vez. A venda e o espelho exato: o rob
                                 Fibonacci, medias simples alinhadas (estilo Andre Machado, "Ogro de Wall Street")
   E10 XTRADERS: Keltner lateral  setup do Adriano Mendes (XTraders) para dias sem direcao: canais de Keltner
                                 2,0/2,5 na MME20, IFR(9), alvo na media de 20
+  E11 Momentum do dia (faixa de ruido) ... Zarattini, Aziz & Barbon (2024), "Beat the Market": o preco sai da faixa
+                                de movimento normal desde a abertura -> segue a direcao, com a VWAP de stop movel
 """
 import math
 
@@ -121,6 +123,7 @@ class Grafico:
         else:
             self.o, self.h, self.l, self.c = B["o"], B["h"], B["l"], B["c"]
         self.d, self.hm = B["d"], B["hm"]
+        self.v = B["v"]                                                  # volume (igual nos dois lados)
         self.n = len(self.c)
         self.atr = atr(B["h"], B["l"], B["c"], 14)                       # igual nos dois lados
         neg = (lambda a: [None if x is None else -x for x in a]) if espelho else (lambda a: a)
@@ -148,6 +151,58 @@ class Grafico:
         return math.floor(x / t + 1e-7) * t
 
 
+# ------------------------------------------------------------------------------------------ contexto
+ER_PERIODO, ER_MIN, DIAS_TENDENCIA = 30, 0.35, 20
+
+
+def tendencia_diaria(B):
+    """+1 / -1 / 0 para cada candle: o fechamento de ONTEM esta acima / abaixo da media dos fechamentos dos 20 dias
+    anteriores (0 = menos de 10 dias de historico ou empate). So usa dias ja encerrados: nao olha o futuro."""
+    d, c = B["d"], B["c"]
+    fech = {}
+    for i in range(len(c)):
+        fech[d[i]] = c[i]
+    dias = sorted(fech)
+    td = {}
+    for q, x in enumerate(dias):
+        ant = [fech[y] for y in dias[max(0, q - DIAS_TENDENCIA):q]]
+        if len(ant) < 10:
+            td[x] = 0
+        else:
+            media = sum(ant) / len(ant)
+            td[x] = 1 if ant[-1] > media else (-1 if ant[-1] < media else 0)
+    return [td[x] for x in d]
+
+
+def eficiencia(c, p=ER_PERIODO):
+    """Eficiencia de Kaufman: |variacao em p candles| / soma das variacoes candle a candle (1 = linha reta, 0 = serrote)."""
+    n = len(c)
+    out = [0.0] * n
+    soma = 0.0
+    for i in range(1, n):
+        soma += abs(c[i] - c[i - 1])
+        if i > p:
+            soma -= abs(c[i - p] - c[i - p - 1])
+        if i >= p:
+            out[i] = abs(c[i] - c[i - p]) / soma if soma > 0 else 0.0
+    return out
+
+
+# Modo seletivo (opcional): menos operacoes, so no contexto que se saiu melhor nos testes com 41 mil operacoes em 12 ativos
+SELETIVO_TENDENCIA = ("E1", "E2", "E3", "E4", "E5", "E9")     # correcao/rompimento: a favor do diario E tendencia limpa
+SELETIVO_DIRECAO = ("E7", "E11")                              # momentum do dia: so a favor do diario
+
+
+def passa_seletivo(G, cod, i, direcao):
+    """G = grafico normal (compra). direcao = +1 compra, -1 venda."""
+    td = G.tend_d[i] * direcao
+    if cod in SELETIVO_TENDENCIA:
+        return td >= 0 and G.er[i] >= ER_MIN
+    if cod in SELETIVO_DIRECAO:
+        return td >= 0
+    return True
+
+
 def _topo(G, i, janela):
     """Indice do maior topo nos `janela` candles ANTES do candle i (o mais recente, se empatar)."""
     ini = max(0, i - janela)
@@ -161,6 +216,16 @@ def _topo(G, i, janela):
 def _risco_ok(G, i, ent, stop, rmin=0.3, rmax=2.5):
     r = ent - stop
     return r > 0 and rmin * G.atr[i] <= r <= rmax * G.atr[i]
+
+
+def _br(v, casas=1, sinal=False):
+    """Numero com virgula decimal para os textos mostrados na tela."""
+    return (("%+.*f" if sinal else "%.*f") % (casas, v)).replace(".", ",").replace("-", "−")
+
+
+def _lado(G, compra, venda):
+    """Texto conforme o lado real da operacao: nas vendas o grafico esta invertido, entao "acima" vira "abaixo"."""
+    return compra if G.sinal > 0 else venda
 
 
 def _ordem_stop(G, i, stop_preco, validade=2, info=""):
@@ -192,7 +257,7 @@ def e1_halt_mm20(G, i):
         return None                                            # candle de confirmacao
     if npb == 1 and G.c[i] <= G.h[i - 1]:
         return None                                            # pullback de 1 candle: so o Gift (apaga 100%)
-    return _ordem_stop(G, i, min(G.l[k] for k in pb), info="%d candles de correcao" % npb)
+    return _ordem_stop(G, i, min(G.l[k] for k in pb), info="%d candles de correção" % npb)
 
 
 def e1_atencao(G, i):
@@ -226,7 +291,7 @@ def e2_fibonacci(G, i):
     n618 = G.h[j] - 0.618 * perna
     if not (G.c[i] > G.o[i] and G.c[i] >= (G.h[i] + G.l[i]) / 2 and G.c[i] > G.c[i - 1] and G.c[i] > n618):
         return None                                            # candle de confirmacao dentro/acima da zona
-    return _ordem_stop(G, i, fundo_pb, info="retracao de %.1f%%" % (100 * ret))
+    return _ordem_stop(G, i, fundo_pb, info="retração de %s%%" % _br(100 * ret))
 
 
 def e2_atencao(G, i):
@@ -340,7 +405,7 @@ def e5_mm9_gift(G, i):
         return None                                            # sem fechar abaixo da MM20
     if not (G.c[i] > G.o[i] and G.c[i] > G.h[i - 1]):
         return None                                            # Gift: apaga 100% do candle anterior
-    return _ordem_stop(G, i, min(G.l[k] for k in pb), info="correcao de %d candle(s)" % npb)
+    return _ordem_stop(G, i, min(G.l[k] for k in pb), info="correção de %d candle(s)" % npb)
 
 
 def e5_atencao(G, i):
@@ -357,7 +422,7 @@ def e6_rsi2(G, i):
     if G.c[i] <= G.mm200[i] or G.rsi2[i] is None or G.rsi2[i] >= RSI_ENTRADA:
         return None
     return dict(tipo="abertura", gatilho=None, stop=G.abaixo(G.c[i] - RSI_STOP_ATR * G.atr[i]), validade=1,
-                info="RSI(2) = %.1f" % G.rsi2[i])
+                info="RSI(2) = %s" % _br(_lado(G, G.rsi2[i], 100.0 - G.rsi2[i])))
 
 
 def e6_saida(G, i, pos):
@@ -382,7 +447,7 @@ def e7_orb(G, i):
     stop = G.abaixo(G.l[i] - G.tick)
     if G.c[i] - stop < 0.1 * G.atr[i] or G.c[i] - stop > 4.0 * G.atr[i]:
         return None
-    return dict(tipo="abertura", gatilho=None, stop=stop, validade=1, info="1º candle do pregão de alta")
+    return dict(tipo="abertura", gatilho=None, stop=stop, validade=1, info="1º candle do pregão de " + _lado(G, "alta", "baixa"))
 
 
 def e7_atencao(G, i):
@@ -425,7 +490,7 @@ def e8_gap(G, i):
     if risco <= 0 or risco > 6.0 * G.atr[i] or premio < 0.2 * risco:
         return None
     return dict(tipo="abertura", gatilho=None, stop=stop, validade=1, alvos=(None, pc),
-                info="gap de %.2f%%" % (100 * gap))
+                info="gap de %s%%" % _br(100 * gap * G.sinal, 2, True))
 
 
 def e8_atencao(G, i):
@@ -529,11 +594,77 @@ def e10_keltner(G, i):
     if risco <= 0 or risco > 2.5 * a or premio < 0.6 * risco:
         return None
     return dict(tipo="abertura", gatilho=None, stop=stop, validade=1, alvos=(None, m),
-                info="banda de Keltner, IFR(9) %.0f" % ifr)
+                info="banda de Keltner, IFR(9) %.0f" % _lado(G, ifr, 100.0 - ifr))
 
 
 def e10_atencao(G, i):
     return _lateral(G, i) and G.l[i] <= G.me20[i] - (KELT_DENTRO - 0.5) * G.atr[i] and e10_keltner(G, i) is None
+
+
+# ------------------------------------------------------------------------------------------ E11
+RUIDO_DIAS, RUIDO_MIN_DIAS, RUIDO_PASSO, RUIDO_STOP_ATR = 14, 10, 30, 1.0
+
+
+def faixa_de_ruido(B):
+    """Para cada candle: a media, nos 14 pregoes anteriores, de |fechamento naquele mesmo horario / abertura do dia - 1|.
+    E o tamanho do movimento "normal" desde a abertura ate aquela hora (None enquanto nao ha 10 pregoes com aquele horario)."""
+    o, c, d, hm = B["o"], B["c"], B["d"], B["hm"]
+    n = len(c)
+    out = [None] * n
+    hist = {}
+    i = 0
+    while i < n:
+        j = i
+        while j < n and d[j] == d[i]:
+            j += 1
+        for q in range(i, j):
+            h = hist.get(hm[q])
+            if h and len(h) >= RUIDO_MIN_DIAS:
+                ult = h[-RUIDO_DIAS:]
+                out[q] = sum(ult) / len(ult)
+        ab = o[i]
+        if ab:
+            for q in range(i, j):
+                hist.setdefault(hm[q], []).append(abs(c[q] / ab - 1.0))
+        i = j
+    return out
+
+
+def _ruido_nivel(G, i, so_na_hora=True):
+    """Nivel que o fechamento precisa superar para a compra: o maior entre a faixa de cima e a VWAP.
+    Faixa de cima = max(abertura de hoje, fechamento de ontem) + o movimento normal ate aquele horario."""
+    if not G.intraday or G.ruido[i] is None:
+        return None
+    s = G.ini_dia[i]
+    if s == 0:
+        return None
+    if so_na_hora and G.tf < RUIDO_PASSO:
+        if ((G.hm[i] // 100) * 60 + G.hm[i] % 100 + G.tf) % RUIDO_PASSO:
+            return None                                        # so decide nas horas cheias e nas meias horas (como no estudo)
+    ref = max(G.o[s], G.c[s - 1])
+    return max(ref + abs(ref) * G.ruido[i], G.vw[i])
+
+
+def e11_momentum(G, i):
+    nivel = _ruido_nivel(G, i)
+    if nivel is None or G.c[i] <= nivel:
+        return None
+    stop = G.abaixo(nivel - RUIDO_STOP_ATR * G.atr[i])
+    if G.c[i] - stop <= 0:
+        return None
+    return dict(tipo="abertura", gatilho=None, stop=stop, validade=1, info="fechou %s da faixa de ruído e da VWAP" % _lado(G, "acima", "abaixo"))
+
+
+def e11_saida(G, i, pos):
+    nivel = _ruido_nivel(G, i)
+    if nivel is not None and G.c[i] < nivel:
+        return "fechou %s da faixa/VWAP" % _lado(G, "abaixo", "acima")
+    return None
+
+
+def e11_atencao(G, i):
+    nivel = _ruido_nivel(G, i, so_na_hora=False)
+    return nivel is not None and G.c[i] > nivel - 0.25 * G.atr[i] and e11_momentum(G, i) is None
 
 
 # ------------------------------------------------------------------------------------------ catalogo
@@ -565,7 +696,7 @@ ESTRATEGIAS = {
                        "Candle de confirmação a favor; entrada 1 tick além dele; stop além do teste"]),
     "E4": dict(nome="Rompimento de base", autor="Oliver Velez (power breakout)", fn=e4_rompimento, aten=e4_atencao,
                gestao="alvo2", saida=None, intraday=False,
-               aguardando="base estreita se formando no topo do movimento",
+               aguardando="base estreita se formando no extremo do movimento",
                ideal="5 min e diário, ativos em tendência forte",
                regras=["MM20 inclinada a favor e preço do lado certo da MM200",
                        "Base de 4 candles com amplitude até 1,2 ATR, no extremo do movimento e apoiada na MM20",
@@ -580,7 +711,7 @@ ESTRATEGIAS = {
                        "Entrada 1 tick além do Gift; stop 1 tick além do fundo/topo da correção"]),
     "E6": dict(nome="RSI(2) de Connors", autor="Larry Connors - a mais testada nos fóruns", fn=e6_rsi2, aten=e6_atencao,
                gestao="propria", saida=e6_saida, intraday=False,
-               aguardando="queda curta (RSI(2) abaixo de 25) acima da MM200",
+               aguardando="recuo curto contra a tendência (RSI(2) esticado), do lado certo da MM200",
                ideal="Diário (é uma estratégia de swing curto); índices",
                regras=["Compra só acima da MM200 (venda só abaixo) - opera a favor da tendência longa",
                        "Sinal quando o RSI de 2 períodos fecha abaixo de 10 (venda: acima de 90)",
@@ -609,7 +740,7 @@ ESTRATEGIAS = {
                        "Estudos no Nasdaq (2015-2025): gap pequeno aberto dentro da faixa de ontem fecha 78% das vezes"]),
     "E9": dict(nome="OGRO: pivô + Fibonacci", autor="Estilo André Machado (Ogro de Wall Street)", fn=e9_ogro, aten=e9_atencao,
                gestao="fibo", saida=None, intraday=False,
-               aguardando="pivô formado (correção até 50%), esperando o rompimento do topo",
+               aguardando="pivô formado (correção até 50%), esperando o rompimento do pivô",
                ideal="5 e 15 min, índices e ouro em tendência, com MM9 > MM20 > MM200",
                regras=["Médias simples alinhadas: MM9 > MM20 > MM200 e MM20 subindo (venda: o inverso)",
                        "Pernada A→B de pelo menos 2 ATR; correção até C que retrai de 23,6% a no máximo 50%",
@@ -624,6 +755,18 @@ ESTRATEGIAS = {
                         "Compra quando o candle toca a banda de baixo e fecha de volta para dentro, com IFR(9) abaixo de 35 (venda: o inverso)",
                         "Entra a mercado; stop atrás da banda de 2,5; alvo na média de 20 (a 'zona de segurança' dele)",
                         "Só entra se o alvo valer pelo menos 0,6R. Em dia de médias alinhadas não opera (lá valem E1-E9)"]),
+    "E11": dict(nome="Momentum do dia (faixa de ruído)", autor="Zarattini, Aziz & Barbon (2024) - estudo acadêmico", fn=e11_momentum,
+                aten=e11_atencao, gestao="propria", saida=e11_saida, intraday=True, sem_ntsl=True,
+                aguardando="preço perto de sair da faixa de movimento normal do dia",
+                ideal="60 min no WIN e no Nasdaq (no nosso teste foi onde ficou positiva). Acerta pouco (~40%) e ganha nos dias de tendência",
+                regras=["Faixa de ruído: o movimento normal desde a abertura até aquele horário (média dos 14 pregões anteriores)",
+                        "Compra quando o candle fecha acima de max(abertura de hoje, fechamento de ontem) + a faixa E acima da VWAP (venda: o inverso)",
+                        "Só decide nas horas cheias e nas meias horas; entra a mercado no candle seguinte",
+                        "Stop móvel: sai quando fecha de volta abaixo do maior entre a faixa e a VWAP; tudo zerado no fim do dia",
+                        "Stop de proteção 1 ATR além do nível (o estudo não usa stop fixo; aqui ele existe para o risco ser conhecido)",
+                        "Fonte: 'Beat the Market: An Effective Intraday Momentum Strategy for S&P500 ETF' (SSRN, 2024). No estudo: 37% de acerto, "
+                        "ganho pequeno por operação e anos fracos quando o mercado anda pouco (2025 ficou no zero)",
+                        "Só no aplicativo: não tem script do Profit"]),
 }
 
 GESTOES = {

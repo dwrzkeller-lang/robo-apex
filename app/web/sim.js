@@ -118,14 +118,14 @@
   function renderResultado(D, _k) {
     $("simResultado").classList.remove("vazio-bloco");
     const m = D.meta, st = D.stats, lote = m.fracionado ? "lote(s)" : "contrato(s)";
-    const cab = `${RK.esc(RK.nomeEst(m.est))} · ${RK.esc(m.ativo)} · ${m.nomeTf}`;
+    const cab = `${RK.esc(RK.nomeEst(m.est))} · ${RK.esc(RK.rotAtivo(m.ativo))} · ${m.nomeTf}`;
     const per = `${RK.dataTxt(m.dataIni)} a ${RK.dataTxt(m.dataFim)}`;
-    const premissas = `<div class="nota">Gestão: ${RK.esc(RK.cfg.gestoes[m.gestao])} · ${RK.num(m.contratos, m.fracionado ? 2 : 0)} ${lote} · para o dia após ${m.maxStops} stops${m.intraday ? ` · entradas até ${hora(m.horaFim)}, zeragem ${hora(m.horaZeragem)}` : " · swing (sem zeragem)"}.
+    const premissas = `<div class="nota">Gestão: ${RK.esc(RK.cfg.gestoes[m.gestao])} · ${m.tam === "risco" ? "tamanho pelo risco: " + RK.num(m.riscoPct, 1) + "% do capital por operação" : RK.num(m.contratos, m.fracionado ? 2 : 0) + " " + lote}${m.seletivo ? " · modo seletivo" : ""}${m.lossDia > 0 ? " · para o dia em −" + RK.dinheiro(m.lossDia, D) : ""}${m.metaDia > 0 ? " · para o dia em +" + RK.dinheiro(m.metaDia, D) : ""} · para o dia após ${m.maxStops} stops${m.intraday ? ` · entradas até ${hora(m.horaFim)}, zeragem ${hora(m.horaZeragem)}` : " · swing (sem zeragem)"}.
       ${(m.gestao === "parcial" || m.gestao === "conducao") && !m.fracionado && m.contratos < 2 ? "<b>Com 1 contrato não há parcial</b>: no 1:1 o stop só vai para o 0x0 (use 2 contratos ou mais). " : ""}Execução conservadora: ordem stop com escorregamento, alvo só conta se passar 1 tick, candle que toca stop e alvo conta como stop, custos descontados.</div>`;
     let html = `<div class="card"><div class="rot">RESULTADO · ${cab} <span class="dir">${per}</span></div>`;
     if (st.n) {
       html += `<div class="resumo-topo"><div><div class="grande ${RK.cls(st.total)}">${RK.dinheiro(st.total, D, true)}</div>
-          <div class="sub">${st.n} operações · acerto ${RK.pct(st.acerto, 0)} (empata com ${RK.pct(st.empate, 0)}) · ${RK.pct((100 * st.total) / m.capital)} do capital</div></div>${RK.seloCurto(st)}</div>
+          <div class="sub">${st.n} operações · acerto ${RK.pct(st.acerto, 0)} (empata com ${RK.pct(st.empate, 0)}) · ${RK.pct((100 * st.total) / m.capital)} do capital · custos ${RK.dinheiro(st.custos, D)} (${RK.pct(100 * (st.custoR || 0), 0)} do risco)</div></div>${RK.seloCurto(st)}</div>
         <canvas class="graf" id="cvCapital"></canvas>
         <div class="kpis">
           <div><small>Média por operação</small><b class="${RK.cls(st.mediaDin)}">${RK.dinheiro(st.mediaDin, D, true)}</b><em>± ${RK.dinheiro(st.icDin, D)}</em></div>
@@ -220,9 +220,10 @@
 
   function exportarCsv(D) {
     const f = (v, d = 4) => (v == null ? "" : Number(v).toFixed(d).replace(".", ","));
-    const linhas = [["entrada", "saida", "estrategia", "lado", "preco_entrada", "stop", "alvo", "preco_saida", "motivo", "R", "resultado_" + D.meta.moeda.replace("$", "S")].join(";")];
-    for (const t of D.trades) linhas.push([RK.quando(D, t.i_ent, true), RK.quando(D, t.i_sai, true), t.est, t.dir > 0 ? "compra" : "venda",
-      f(t.ent), f(t.stop), f(t.alvo), f(t.sai), t.motivo, f(t.R, 3), f(t.dinheiro, 2)].join(";"));
+    const moeda = D.meta.moeda.replace("$", "S");
+    const linhas = [["entrada", "saida", "estrategia", "lado", "quantidade", "preco_entrada", "stop", "alvo", "preco_saida", "motivo", "R", "custos_" + moeda, "resultado_" + moeda, "contexto_diario"].join(";")];
+    for (const t of D.trades) linhas.push([RK.quando(D, t.i_ent, true), RK.quando(D, t.i_sai, true), t.est, t.dir > 0 ? "compra" : "venda", f(t.q != null ? t.q : D.meta.contratos, 2),
+      f(t.ent), f(t.stop), f(t.alvo), f(t.sai), t.motivo, f(t.R, 3), f(t.custo, 2), f(t.dinheiro, 2), t.ctx > 0 ? "a favor" : t.ctx < 0 ? "contra" : "indefinido"].join(";"));
     const blob = new Blob(["﻿" + linhas.join("\r\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);

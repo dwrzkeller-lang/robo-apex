@@ -29,7 +29,7 @@
     if (!D) { $("calGrade").innerHTML = `<div class="vazio-bloco" style="grid-column:1/-1">Carregando os dados…</div>`; return; }
     montarFiltro(D);
     const m = D.meta;
-    $("calFonteTxt").textContent = `${m.ativo} · ${m.nomeTf} · ${RK.num(m.contratos, m.fracionado ? 2 : 0)} ${m.fracionado ? "lote(s)" : "contrato(s)"}`;
+    $("calFonteTxt").textContent = `${RK.rotAtivo(m.ativo)} · ${m.nomeTf} · ${m.tam === "risco" ? "risco de " + RK.num(m.riscoPct, 1) + "%" : RK.num(m.contratos, m.fracionado ? 2 : 0) + (m.fracionado ? " lote(s)" : " contrato(s)")}`;
     const ops = operacoes(D);
     // resultado por dia (dia da saída = dia em que o dinheiro entra/sai)
     const porDia = new Map();

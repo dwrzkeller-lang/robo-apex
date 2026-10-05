@@ -65,12 +65,14 @@ def _medir(trades, d, capital):
                 cor=st.get("cor"), explica=st.get("explica"), ddMax=st.get("ddMax"), dias=len(dias_todos),
                 rec=dict(n=nr, total=sum(t["dinheiro"] for t in rec), acerto=100.0 * sum(1 for t in rec if t["R"] > 0) / nr if nr else None,
                          desde=corte),
+                custoR=st.get("custoR"),
                 opsDia=ops_dia, encaixe=media_mista * ops_dia, valores=[t["dinheiro"] for t in trades])
 
 
-def rodar(carregar, cfg_de, chave, gestao, contratos, capital, max_stops):
-    """carregar(chave, tf) -> (B, fonte, cfg). Devolve o ranking e a projecao."""
+def rodar(carregar, cfg_de, chave, gestao, contratos, capital, max_stops, plano=None):
+    """carregar(chave, tf) -> (B, fonte, cfg). Devolve o ranking e a projecao. plano = regras do plano de trade."""
     linhas, fontes = [], {}
+    nome, moeda = chave, "R$"
     hoje = date.today()
     for tf in TEMPOS_RADAR:
         try:
@@ -79,6 +81,7 @@ def rodar(carregar, cfg_de, chave, gestao, contratos, capital, max_stops):
             fontes[tf] = "erro: %s" % e
             continue
         fontes[tf] = fonte
+        nome, moeda = cfg.get("nome", chave), cfg.get("moeda", "R$")
         sc = cfg_de(cfg)
         if not cfg.get("fracionado"):
             contratos_tf = max(1.0, round(contratos))
@@ -90,7 +93,8 @@ def rodar(carregar, cfg_de, chave, gestao, contratos, capital, max_stops):
             cods = list(ESTRATEGIAS) if cod == "TODAS" else [cod]
             if cod != "TODAS" and ESTRATEGIAS[cod]["intraday"] and tf >= 1440:
                 continue
-            r = simular(Gs, sc, cods, gestao=gestao, contratos=contratos_tf, max_stops=max_stops, juntas=cod == "TODAS")
+            r = simular(Gs, sc, cods, gestao=gestao, contratos=contratos_tf, max_stops=max_stops, juntas=cod == "TODAS",
+                        plano=plano)
             m = _medir(r["trades"], B["d"], capital)
             m.update(est=cod, tf=tf, pregoesAno=_pregoes_ate_fim_do_ano(hoje, todo_dia), pregoesMes=30 if todo_dia else 21)
             linhas.append(m)
@@ -114,6 +118,6 @@ def rodar(carregar, cfg_de, chave, gestao, contratos, capital, max_stops):
     else:
         txt = ("Nenhuma estratégia tem histórico positivo com pelo menos 20 operações e bom momento neste ativo. "
                "O robô recomenda ficar de fora (ou testar outro ativo).")
-    return dict(ativo=chave, gestao=gestao, contratos=contratos, capital=capital, fontes=fontes,
+    return dict(ativo=chave, nome=nome, moeda=moeda, gestao=gestao, contratos=contratos, capital=capital, fontes=fontes,
                 linhas=linhas, escolha=None if not escolha else dict(est=escolha["est"], tf=escolha["tf"]),
                 melhorTf={k: v["tf"] for k, v in melhor_tf.items()}, texto=txt, diasRecentes=DIAS_RECENTES)

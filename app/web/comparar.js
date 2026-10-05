@@ -5,10 +5,13 @@
   const RK = window.RK, $ = RK.$;
   let consultando = false;
 
-  RK.on("config", (cfg) => {
-    $("cmpAtivos").innerHTML = cfg.ativos.filter((a) => !a.chave.startsWith("CSV:"))
-      .map((a) => `<label class="chk"><input type="checkbox" value="${RK.esc(a.chave)}" checked> ${RK.esc(a.chave)}</label>`).join("");
-  });
+  function montarAtivos() {
+    const marcados = new Set([...$("cmpAtivos").querySelectorAll("input:checked")].map((x) => x.value)), primeira = !$("cmpAtivos").children.length;
+    const lista = RK.cfg.ativos.filter((a) => !a.chave.startsWith("CSV:")).concat(RK.pref.criptos || []);
+    $("cmpAtivos").innerHTML = lista.map((a) => `<label class="chk" title="${RK.esc(a.nome)}"><input type="checkbox" value="${RK.esc(a.chave)}" ${primeira ? (RK.ehCripto(a.chave) ? "" : "checked") : marcados.has(a.chave) ? "checked" : ""}> ${RK.esc(RK.ehCripto(a.chave) ? RK.nomeCripto(a.chave).replace("/USDT", "") : a.chave)}</label>`).join("");
+  }
+  RK.on("config", montarAtivos);
+  RK.on("aba", (nome) => { if (nome === "cmp") montarAtivos(); });
 
   async function comparar() {
     RK.erro("erroCmp", null);
@@ -16,7 +19,7 @@
     if (!ativos.length) return RK.erro("erroCmp", new Error("Marque pelo menos um ativo."));
     try {
       const r = await RK.json("/api/comparar", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ativos, tf: RK.pref.tf, gestao: RK.pref.gestao, maxstops: RK.pref.maxstops,
+        body: JSON.stringify({ ativos, tf: RK.pref.tf, gestao: RK.pref.gestao, maxstops: RK.pref.maxstops, seletivo: !!RK.pref.seletivo,
           per: RK.pref.per === "custom" ? "tudo" : RK.pref.per,
           de: RK.pref.per === "custom" ? RK.isoInt(RK.pref.de) : 0, ate: RK.pref.per === "custom" ? RK.isoInt(RK.pref.ate) : 0 }) });
       if (r.jaRodando) RK.toast("A comparação anterior ainda está rodando; mostrando o andamento.", "aviso");

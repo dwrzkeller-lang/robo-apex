@@ -25,9 +25,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import time
 
+import agenda
+import cripto
 import dados_fonte as df
 import historico
 import noticias
+import plano as plano_mod
 import radar
 from estrategias import AQUECIMENTO, ESTRATEGIAS, GESTOES, atencao
 from simulador import estatisticas, preparar, simular
@@ -53,6 +56,8 @@ def carregar(chave, tf):
     with TRAVA_DADOS:
         if chave.startswith("CSV:"):
             B, fonte, cfg = df.carregar_csv(BASE, chave[4:])
+        elif cripto.eh_cripto(chave):
+            B, fonte, cfg = cripto.candles(BASE, chave, tf)       # qualquer moeda da Binance, em tempo real
         else:
             if chave not in df.ATIVOS:
                 raise ValueError("ativo desconhecido: %s" % chave)
@@ -86,6 +91,8 @@ def formando(B, cfg, chave):
     agora = time.time()
     local = agora + 3600 * df.offset_horas(cfg.get("fuso", "BRT"), agora)
     tf = B.get("tf", 5)
+    if tf >= 1440 and cfg.get("cripto"):
+        return True                              # o candle diario da Binance de hoje esta sempre aberto (fecha 21h de Brasilia)
     if tf >= 1440:
         g = time.gmtime(local)
         fim = (cfg.get("sessao") or (0, 2359))[1]
@@ -120,7 +127,10 @@ def contexto(chave):
         return None
     try:
         with TRAVA_DADOS:
-            B, _ = df.carregar_yahoo(BASE, chave, 1440)
+            if cripto.eh_cripto(chave):
+                B = cripto.candles(BASE, chave, 1440)[0]
+            else:
+                B, _ = df.carregar_yahoo(BASE, chave, 1440)
     except Exception:
         return None
     h, l, c, d = B["h"], B["l"], B["c"], B["d"]
@@ -187,8 +197,33 @@ def _float(q, nome, padrao, lo, hi):
 
 def _resumo(st):
     chaves = ("n", "acerto", "empate", "payoff", "expR", "icR", "somaR", "total", "mediaDin", "icDin", "ddMax", "exp1", "exp2",
-              "veredito", "cor", "explica")
+              "veredito", "cor", "explica", "custos", "bruto", "custoR")
     return {k: st.get(k) for k in chaves}
+
+
+def _plano(q, capital):
+    """Regras do plano de trade que vem da tela (aba Plano): tamanho por risco, limite de perda e meta do dia, modo seletivo."""
+    return dict(tam="risco" if q.get("tam", ["fixo"])[0] == "risco" else "fixo", risco_pct=_float(q, "risco", 1.0, 0.05, 20.0),
+                capital=capital, loss_dia=_float(q, "lossDia", 0.0, 0.0, 1e9), meta_dia=_float(q, "metaDia", 0.0, 0.0, 1e9),
+                seletivo=q.get("seletivo", ["0"])[0] == "1")
+
+
+def _pedido(q):
+    """Le os parametros comuns de /api/sim, /api/teste e /api/metas."""
+    chave = q.get("ativo", ["WIN"])[0]
+    tf = _int(q, "tf", 5)
+    if tf not in df.TEMPOS:
+        tf = 5
+    est = q.get("est", ["E1"])[0]
+    if est != "TODAS" and est not in ESTRATEGIAS:
+        raise ValueError("estratégia desconhecida: %s" % est)
+    gestao = q.get("gestao", ["padrao"])[0]
+    if gestao not in GESTOES:
+        gestao = "padrao"
+    capital = _float(q, "capital", 10000.0, 1.0, 1e9)
+    return dict(chave=chave, tf=tf, est=est, todas=est == "TODAS", gestao=gestao, capital=capital,
+                contratos=_float(q, "contratos", 1.0, 0.01, 1e7), max_stops=int(_float(q, "maxstops", 2, 1, 50)),
+                plano=_plano(q, capital))
 
 
 # ------------------------------------------------------------------------------------------ /api/sim
@@ -208,6 +243,7 @@ def api_sim(q):
     capital = _float(q, "capital", 10000.0, 1.0, 1e9)
     max_stops = int(_float(q, "maxstops", 2, 1, 50))
     com_aten = q.get("aten", ["0"])[0] == "1"
+    pl = _plano(q, capital)
 
     B, fonte, cfg = carregar(chave, tf)
     tf = B.get("tf", tf)
@@ -223,14 +259,14 @@ def api_sim(q):
     aberto = formando(B, cfg, chave)
     i_form = n - 1 if aberto else None
     r = simular(Gs, sc, codigos, gestao=gestao, contratos=contratos, max_stops=max_stops, juntas=todas,
-                i_ini=i_ini, i_fim=i_fim, com_atencao=com_aten, i_formando=i_form)
+                i_ini=i_ini, i_fim=i_fim, com_atencao=com_aten, i_formando=i_form, plano=pl)
     dsai = lambda i: d[i]                                      # noqa: E731
     st = estatisticas(r["trades"], capital, dsai)
     por_est = {}
     if todas:
         for cod in r["codigos"]:
             ri = simular(Gs, sc, [cod], gestao=gestao, contratos=contratos, max_stops=max_stops, i_ini=i_ini, i_fim=i_fim,
-                         i_formando=i_form)
+                         i_formando=i_form, plano=pl)
             por_est[cod] = dict(isolada=_resumo(estatisticas(ri["trades"], capital, dsai)),
                                 naJunta=_resumo(estatisticas([t for t in r["trades"] if t["est"] == cod], capital, dsai)),
                                 # operacoes da estrategia sozinha (para o calendario): entrada, saida, lado, R, dinheiro, motivo, precos
@@ -259,10 +295,15 @@ def api_sim(q):
                   horaInicio=sc["hora_inicio"], horaFim=sc["hora_fim"], horaZeragem=sc["hora_zeragem"], intraday=tf < 1440,
                   est=est, gestao=gestao, contratos=contratos, capital=capital, maxStops=max_stops, per=per,
                   aoVivo=i_fim == n - 1, formando=aberto and i_fim == n - 1, temVolume=any(vol[-400:]),
+                  tam=pl["tam"], riscoPct=pl["risco_pct"], lossDia=pl["loss_dia"], metaDia=pl["meta_dia"], seletivo=pl["seletivo"],
+                  custoPct=sc.get("custo_pct", 0.0), cripto=bool(cfg.get("cripto")), curto=cfg.get("curto"),
+                  dia=r["dia"], ctx=dict(diario=G.tend_d[ult], er=round(G.er[ult], 2)),
+                  foraDoPlano=sum(1 for o in r["ordens"] if o["status"] == "cancelada" and o["motivo"].startswith("risco acima do plano")),
                   iIni=r["ini"], iFim=r["fim"], dataIni=d[r["ini"]], dataFim=d[r["fim"]],
                   dataMin=d[AQUECIMENTO], dataMax=d[-1], ultimo=n - 1, codigos=r["codigos"]),
         t=t, d=d, hm=B["hm"], o=rd(B["o"]), h=rd(B["h"]), l=rd(B["l"]), c=rd(B["c"]), v=[round(x or 0, 2) for x in vol],
         mm9=rd(G.mm9), mm20=rd(G.mm20), mm200=rd(G.mm200), vw=rd(G.vw) if G.vw else None,
+        ruido=[None if x is None else round(x, 6) for x in G.ruido] if (G.ruido and (todas or est == "E11")) else None,
         trades=r["trades"], ordens=r["ordens"], abertas=r["abertas"],
         aten={str(k): v for k, v in r["aten"].items()}, atenUlt=aten_ult,
         stats=st, porEst=por_est, contexto=contexto(chave))
@@ -288,6 +329,7 @@ def api_teste(q):
     max_stops = int(_float(q, "maxstops", 2, 1, 50))
     desde = _int(q, "desde", 0)
     ate = _int(q, "ate", 0)                     # teste parado: so conta ate este candle
+    pl = _plano(q, capital)
 
     B, fonte, cfg = carregar(chave, tf)
     tf = B.get("tf", tf)
@@ -303,13 +345,15 @@ def api_teste(q):
     meta = dict(ativo=chave, tf=tf, nomeTf=df.NOME_TEMPO.get(tf, "%d min" % tf), est=est, gestao=gestao, contratos=contratos,
                 moeda=cfg.get("moeda", "R$"), decimais=cfg["decimais"], valorPonto=sc["valor_ponto"], custo=sc["custo"],
                 fracionado=sc["fracionado"], intraday=tf < 1440, desde=desde, ultimoT=t[k], preco=B["c"][k],
-                candles=max(0, i_fim - i_ini + 1), formando=aberto, fonte=fonte)
+                candles=max(0, i_fim - i_ini + 1), formando=aberto, fonte=fonte, tam=pl["tam"], riscoPct=pl["risco_pct"],
+                lossDia=pl["loss_dia"], metaDia=pl["meta_dia"], seletivo=pl["seletivo"], capital=capital)
     if i_ini > i_fim:
         return dict(meta=meta, trades=[], abertas=[], pend=[], stats=estatisticas([], capital, lambda i: d[i]))
     Gs = graficos(chave, tf, B, sc)
     codigos = list(ESTRATEGIAS) if todas else [est]
     r = simular(Gs, sc, codigos, gestao=gestao, contratos=contratos, max_stops=max_stops, juntas=todas,
-                i_ini=i_ini, i_fim=i_fim, i_formando=n - 1 if aberto else None)
+                i_ini=i_ini, i_fim=i_fim, i_formando=n - 1 if aberto else None, plano=pl)
+    meta["dia"] = r["dia"]
     for tr in r["trades"]:
         tr.update(t_sinal=t[tr["i_sinal"]], t_ent=t[tr["i_ent"]], t_sai=t[tr["i_sai"]])
     for ab in r["abertas"]:
@@ -338,6 +382,54 @@ def sons_proprios():
     return out
 
 
+# ------------------------------------------------------------------------------------------ /api/metas
+def api_metas(q):
+    """Aba Plano: meta x realidade com as operacoes do periodo, e o efeito de cada regra do plano (com x sem)."""
+    P = _pedido(q)
+    B, fonte, cfg = carregar(P["chave"], P["tf"])
+    tf = B.get("tf", P["tf"])
+    sc = df.sessao_cfg(cfg)
+    contratos = P["contratos"] if cfg.get("fracionado") else max(1.0, round(P["contratos"]))
+    Gs = graficos(P["chave"], tf, B, sc)
+    d = B["d"]
+    n = len(d)
+    per = q.get("per", ["tudo"])[0]
+    i_ini, i_fim = janela(d, per if per in PERIODOS else "tudo", _int(q, "de", 0), _int(q, "ate", 0))
+    codigos = list(ESTRATEGIAS) if P["todas"] else [P["est"]]
+    i_form = n - 1 if formando(B, cfg, P["chave"]) else None
+    capital = P["capital"]
+
+    def rodar(pl):
+        return simular(Gs, sc, codigos, gestao=P["gestao"], contratos=contratos, max_stops=P["max_stops"], juntas=P["todas"],
+                       i_ini=i_ini, i_fim=i_fim, i_formando=i_form, plano=pl)
+
+    def medir(pl):
+        st = estatisticas(rodar(pl)["trades"], capital, lambda i: d[i])
+        return dict(n=st["n"], total=st.get("total", 0.0), media=st.get("mediaDin"), ddMax=st.get("ddMax", 0.0), acerto=st.get("acerto"))
+    pl = P["plano"]
+    r = rodar(pl)
+    st = estatisticas(r["trades"], capital, lambda i: d[i])
+    atual = dict(n=st["n"], total=st.get("total", 0.0), media=st.get("mediaDin"), ddMax=st.get("ddMax", 0.0), acerto=st.get("acerto"))
+    proj = plano_mod.projetar(r["trades"], d[r["ini"]:r["fim"] + 1], lambda i: d[i], capital,
+                              meta_mes=_float(q, "metaMes", 0.0, 0.0, 1e12), queda_max=_float(q, "quedaMax", 0.0, 0.0, 1e12),
+                              dias_mes=30 if cfg.get("fim_de_semana") else 21)
+    efeitos = [dict(regra="seletivo", ligado=pl["seletivo"], com=atual if pl["seletivo"] else medir(dict(pl, seletivo=True)),
+                    sem=medir(dict(pl, seletivo=False)) if pl["seletivo"] else atual)]
+    if pl["tam"] == "risco":
+        efeitos.append(dict(regra="tam", ligado=True, com=atual, sem=medir(dict(pl, tam="fixo"))))
+    if pl["loss_dia"] > 0 and tf < 1440:
+        efeitos.append(dict(regra="lossDia", ligado=True, com=atual, sem=medir(dict(pl, loss_dia=0.0))))
+    if pl["meta_dia"] > 0 and tf < 1440:
+        efeitos.append(dict(regra="metaDia", ligado=True, com=atual, sem=medir(dict(pl, meta_dia=0.0))))
+    return dict(meta=dict(ativo=P["chave"], nome=cfg["nome"], tf=tf, nomeTf=df.NOME_TEMPO.get(tf, "%d min" % tf), est=P["est"],
+                          moeda=cfg.get("moeda", "R$"), decimais=cfg["decimais"], contratos=contratos, capital=capital,
+                          fracionado=sc["fracionado"], valorPonto=sc["valor_ponto"], custo=sc["custo"], custoPct=sc.get("custo_pct", 0.0),
+                          slip=sc["slip"], intraday=tf < 1440, dataIni=d[r["ini"]], dataFim=d[r["fim"]], lote=cfg.get("lote", "contrato"),
+                          tam=pl["tam"], riscoPct=pl["risco_pct"], lossDia=pl["loss_dia"], metaDia=pl["meta_dia"], seletivo=pl["seletivo"],
+                          aoVivo=i_fim == n - 1),
+                proj=proj, efeitos=efeitos, dia=r["dia"], stats=_resumo(st))
+
+
 # ------------------------------------------------------------------------------------------ /api/radar
 RADAR_CACHE = {}
 RADAR_LOCK = threading.Lock()
@@ -351,14 +443,16 @@ def api_radar(q):
     contratos = _float(q, "contratos", 1.0, 0.01, 10000)
     capital = _float(q, "capital", 10000.0, 1.0, 1e9)
     max_stops = int(_float(q, "maxstops", 2, 1, 50))
-    ck = (chave, gestao, contratos, capital, max_stops)
+    pl = _plano(q, capital)
+    ck = (chave, gestao, contratos, capital, max_stops, pl["tam"], pl["risco_pct"], pl["loss_dia"], pl["meta_dia"], pl["seletivo"])
     with RADAR_LOCK:
         if q.get("forcar", ["0"])[0] != "1" and ck in RADAR_CACHE and time.time() - RADAR_CACHE[ck][0] < 600:
             return RADAR_CACHE[ck][1]
-    res = radar.rodar(carregar, df.sessao_cfg, chave, gestao, contratos, capital, max_stops)
-    cfg = df.ATIVOS.get(chave, {})
-    res.update(moeda=cfg.get("moeda", "R$"), nome=cfg.get("nome", chave), calculado=time.time())
+    res = radar.rodar(carregar, df.sessao_cfg, chave, gestao, contratos, capital, max_stops, plano=pl)
+    res.update(calculado=time.time(), seletivo=pl["seletivo"], tam=pl["tam"], riscoPct=pl["risco_pct"])
     with RADAR_LOCK:
+        if len(RADAR_CACHE) > 40:
+            RADAR_CACHE.clear()
         RADAR_CACHE[ck] = (time.time(), res)
     return res
 
@@ -390,7 +484,7 @@ def _comparar(pedido):
                         res[cod] = None
                         continue
                     r = simular(Gs, sc, cods, gestao=pedido["gestao"], contratos=1.0, max_stops=pedido["maxstops"],
-                                juntas=cod == "TODAS", i_ini=i_ini, i_fim=i_fim)
+                                juntas=cod == "TODAS", i_ini=i_ini, i_fim=i_fim, plano=dict(seletivo=pedido.get("seletivo")))
                     res[cod] = _resumo(estatisticas(r["trades"], 10000.0, lambda i: d[i]))
                 linha["res"] = res
             except Exception as e:
@@ -412,7 +506,8 @@ def config():
               for k, v in df.ATIVOS.items()]
     ativos += [dict(chave="CSV:" + n, nome="Arquivo: " + n, moeda="R$", lote="contrato", fracionado=False) for n in df.listar_csv(BASE)]
     ests = [dict(cod=k, nome=v["nome"], autor=v["autor"], regras=v["regras"], aguardando=v["aguardando"],
-                 intraday=v["intraday"], gestao=v["gestao"], ideal=v.get("ideal", "")) for k, v in ESTRATEGIAS.items()]
+                 intraday=v["intraday"], gestao=v["gestao"], ideal=v.get("ideal", ""), semNtsl=bool(v.get("sem_ntsl")))
+            for k, v in ESTRATEGIAS.items()]
     tempos = [dict(tf=k, nome=df.NOME_TEMPO[k], periodo="10 anos" if k >= 1440 else "") for k in df.TEMPOS]
     return dict(ativos=ativos, estrategias=ests, gestoes=GESTOES, tempos=tempos, pastaDados=df.pasta_dados(BASE))
 
@@ -444,7 +539,8 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/comparar":
                 p = self._corpo(100000)
                 tf = int(p.get("tf", 5))
-                pedido = dict(ativos=[a for a in p.get("ativos", []) if a in df.ATIVOS or a.startswith("CSV:")][:30],
+                pedido = dict(ativos=[a for a in p.get("ativos", []) if a in df.ATIVOS or a.startswith("CSV:") or cripto.eh_cripto(a)][:30],
+                              seletivo=bool(p.get("seletivo")),
                               tf=tf if tf in df.TEMPOS else 5, gestao=p.get("gestao") if p.get("gestao") in GESTOES else "padrao",
                               maxstops=max(1, min(50, int(p.get("maxstops", 2)))), de=int(p.get("de") or 0),
                               ate=int(p.get("ate") or 0), per=p.get("per") if p.get("per") in PERIODOS else "tudo")
@@ -484,6 +580,23 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(api_sim(q))
             if url.path == "/api/teste":
                 return self._json(api_teste(q))
+            if url.path == "/api/metas":
+                return self._json(api_metas(q))
+            if url.path == "/api/agenda":
+                return self._json(agenda.buscar())
+            if url.path == "/api/cripto/painel":
+                return self._json(cripto.painel(BASE))
+            if url.path == "/api/cripto/dex":
+                return self._json(cripto.dex(BASE))
+            if url.path == "/api/cripto/info":
+                mercado, sym = cripto.separar(q.get("chave", [""])[0])
+                inf = cripto.info(mercado, sym)
+                if not inf.get("ativo"):
+                    raise ValueError("moeda fora de negociação na Binance")
+                return self._json(dict(chave="%s:%s" % (mercado, sym),
+                                       nome="%s/%s%s" % (inf["moeda"], inf["cotacao"], " (futuro)" if mercado == "BF" else "")))
+            if url.path == "/api/cripto/seguranca":
+                return self._json(cripto.seguranca(q.get("rede", [""])[0], q.get("token", [""])[0]))
             if url.path == "/api/sons":
                 return self._json(dict(sons=sons_proprios(), pasta=os.path.join(df.pasta_dados(BASE), "sons")))
             if url.path == "/api/radar":
