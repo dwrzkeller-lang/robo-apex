@@ -1,27 +1,31 @@
-/* ROBÔ KELLER — indicadores do gráfico (botão "Indicadores"): médias móveis à escolha, VWAP, Bandas de Bollinger,
+/* ROBÔ APEX — indicadores do gráfico (botão "Indicadores"): médias móveis à escolha, VWAP, Bandas de Bollinger,
    Canal de Keltner, volume, IFR e estocástico, e os NÍVEIS que o robô traça sozinho: máxima, mínima e fechamento de
    ontem, abertura de hoje e os suportes e resistências (topos e fundos tocados mais de uma vez).
    São só para LER o gráfico: as estratégias usam os indicadores calculados no servidor e não mudam com o que for
    ligado ou desligado aqui. */
 (() => {
   "use strict";
-  const RK = window.RK, $ = RK.$, chart = RK.chart;
-  const CORES = ["#ff5b6e", "#3b9cff", "#b35cff", "#22e39a", "#ffa53a", "#22d3ee", "#e056fd", "#d9e0ea"];
+  const AX = window.AX, $ = AX.$, chart = AX.chart;
+  // As cores das três médias e da VWAP foram conferidas para quem não distingue bem verde e vermelho (o azul e o roxo de
+  // antes ficavam quase iguais): vermelho, azul, roxo escuro e dourado se separam em todos os tipos de daltonismo.
+  const COR_VWAP = "#b48c14";
+  const CORES = ["#ee5a67", "#4795f1", "#8448d2", "#22e39a", "#ffa53a", "#22d3ee", "#e056fd", "#d9e0ea"];
+  const ANTIGAS = { "#ff5b6e": "#ee5a67", "#3b9cff": "#4795f1", "#b35cff": "#8448d2" };      // padrão das versões anteriores
   const padrao = () => ({
-    medias: [{ tipo: "MMS", n: 9, cor: "#ff5b6e", on: true }, { tipo: "MMS", n: 20, cor: "#3b9cff", on: true }, { tipo: "MMS", n: 200, cor: "#b35cff", on: true }],
+    medias: [{ tipo: "MMS", n: 9, cor: "#ee5a67", on: true }, { tipo: "MMS", n: 20, cor: "#4795f1", on: true }, { tipo: "MMS", n: 200, cor: "#8448d2", on: true }],
     vwap: true, boll: false, kelt: false, vol: false, ifr: false, ifrN: 14, estoc: false, ops: "detalhe", niveis: true, sr: true,
   });
   function validar(c) {
     const p = padrao();
     if (!c || typeof c !== "object" || !Array.isArray(c.medias)) return p;
     const medias = c.medias.filter((m) => m && (m.tipo === "MMS" || m.tipo === "MME") && m.n >= 2 && m.n <= 600).slice(0, 8)
-      .map((m) => ({ tipo: m.tipo, n: Math.round(m.n), cor: /^#[0-9a-f]{6}$/i.test(m.cor) ? m.cor : "#d9e0ea", on: !!m.on }));
+      .map((m) => ({ tipo: m.tipo, n: Math.round(m.n), cor: /^#[0-9a-f]{6}$/i.test(m.cor) ? ANTIGAS[m.cor.toLowerCase()] || m.cor : "#d9e0ea", on: !!m.on }));
     return { medias, vwap: !!c.vwap, boll: !!c.boll, kelt: !!c.kelt, vol: !!c.vol, ifr: !!c.ifr,
       ifrN: c.ifrN >= 2 && c.ifrN <= 100 ? Math.round(c.ifrN) : 14, estoc: !!c.estoc, ops: ["detalhe", "simples", "nada"].includes(c.ops) ? c.ops : "detalhe",
       niveis: c.niveis !== false, sr: c.sr !== false };
   }
-  let cfg = validar(RK.pref.ind);
-  const salvar = () => { RK.pref.ind = cfg; RK.salvarPref(); };
+  let cfg = validar(AX.pref.ind);
+  const salvar = () => { AX.pref.ind = cfg; AX.salvarPref(); };
 
   // ---------------------------------------------------------------- contas (as mesmas fórmulas do servidor)
   const vazio = (n) => new Array(n).fill(null);
@@ -87,7 +91,7 @@
     const add = (s, calc, rot, cor, extra) => itens.push(Object.assign({ s, calc, rot, cor, val: null }, extra));
     cfg.medias.filter((m) => m.on).forEach((m) =>
       add(linha(m.cor, m.n >= 20 ? 2 : 1), (D) => (m.tipo === "MME" ? ema : sma)(D.c, m.n), (m.tipo === "MME" ? "MME" : "MM") + m.n, m.cor));
-    if (cfg.vwap) add(linha("#ffd23f", 2), (D) => D.vw, "VWAP", "#ffd23f");
+    if (cfg.vwap) add(linha(COR_VWAP, 2), (D) => D.vw, "VWAP", COR_VWAP);
     if (cfg.boll) {
       const memo = (D) => (D._boll = D._boll || (() => { const m = sma(D.c, 20), d = desvio(D.c, 20, m); return [m.map((v, i) => (v == null ? null : v + 2 * d[i])), m.map((v, i) => (v == null ? null : v - 2 * d[i]))]; })());
       add(linha("#8fa3bf", 1), (D) => memo(D)[0], "Bollinger ↑", "#8fa3bf");
@@ -128,9 +132,9 @@
     }
     if (cfg.estoc) {
       const memo = (D) => (D._est = D._est || estocastico(D));
-      const sk = oscilador("#3b9cff", "est"), sd = oscilador("#ff5b6e", "est", 1); guia(sk, 80); guia(sk, 20);
-      add(sk, (D) => memo(D)[0], "Estoc %K", "#3b9cff", { casas: 1 });
-      add(sd, (D) => memo(D)[1], "%D", "#ff5b6e", { casas: 1 });
+      const sk = oscilador("#4795f1", "est"), sd = oscilador("#ee5a67", "est", 1); guia(sk, 80); guia(sk, 20);
+      add(sk, (D) => memo(D)[0], "Estoc %K", "#4795f1", { casas: 1 });
+      add(sd, (D) => memo(D)[1], "%D", "#ee5a67", { casas: 1 });
       paineis.push({ id: "est", nome: "Estocástico 14, 3, 3 (80 / 20)" });
     }
     arrumar();
@@ -149,7 +153,7 @@
     if (cfg.vol) chart.priceScale("vol").applyOptions({ scaleMargins: { top: 1 - pe - 0.13, bottom: pe } });
   }
   // faixas dos osciladores: uma linha separando e o nome
-  RK.camadas.push((ctx, u) => {
+  AX.camadas.push((ctx, u) => {
     for (const p of paineis) {
       const y = Math.round(u.H * (p.topo - VAO / 2)) + 0.5;
       ctx.strokeStyle = "#232c3b"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(u.W, y); ctx.stroke();
@@ -197,8 +201,8 @@
     return grupos.filter((g) => g.n >= 2).sort((x, y) => y.n - x.n || y.ult - x.ult).slice(0, 4)
       .map((g) => ({ p: g.soma / g.n, n: g.n, pri: g.pri, res: g.soma / g.n >= agora }));
   }
-  RK.camadas.push((ctx, u) => {
-    const D = RK.graficoMostra(), k = RK.i;
+  AX.camadas.push((ctx, u) => {
+    const D = AX.graficoMostra(), k = AX.i;
     if (!D || (!cfg.niveis && !cfg.sr) || k < 30) return;
     if (memoN.D !== D || memoN.k !== k) { memoN.D = D; memoN.k = k; memoN.dia = niveisDoDia(D, k); memoN.sr = suportesResistencias(D, k); }
     const ocupados = [];
@@ -227,27 +231,39 @@
     if (v == null) return { time: D.t[i] };
     return x.hist ? { time: D.t[i], value: v, color: corVol(D, i) } : { time: D.t[i], value: v };
   };
-  const api = (RK.ind = {
+  function pintarItem(x, D, k) {
+    x.pintado = !!x.val;
+    if (!x.val) { x.s.setData([]); return; }
+    const out = new Array(k + 1);
+    for (let i = 0; i <= k; i++) out[i] = ponto(x, D, i);
+    x.s.setData(out);
+  }
+  const api = (AX.ind = {
     pintar(D, k) {
       if (estMontada !== D.meta.est) montar(D.meta.est);      // indicador próprio da estratégia entra ou sai junto com os dados dela
       if (calcD !== D) calcular(D);
-      for (const x of itens) {
-        if (!x.val) { x.s.setData([]); continue; }
-        const out = new Array(k + 1);
-        for (let i = 0; i <= k; i++) out[i] = ponto(x, D, i);
-        x.s.setData(out);
-      }
+      for (const x of itens) pintarItem(x, D, k);
     },
     avancar(D, i) {
       if (calcD !== D) return api.pintar(D, i);
       for (const x of itens) if (x.val) x.s.update(ponto(x, D, i));
+    },
+    // Ao vivo: D é o conjunto novo, com os mesmos candles do anterior até i0 − 1. As contas são refeitas (são rápidas),
+    // mas no gráfico só entram os pontos de i0 em diante, sem redesenhar cada linha inteira a cada 5 segundos.
+    atualizar(D, i0, k) {
+      if (estMontada !== D.meta.est) return api.pintar(D, k);
+      calcular(D);
+      for (const x of itens) {
+        if (!!x.val !== x.pintado) { pintarItem(x, D, k); continue; }      // passou a ter (ou deixou de ter) dados: refaz a linha
+        if (x.val) for (let i = i0; i <= k; i++) x.s.update(ponto(x, D, i));
+      }
     },
     legenda(D, k) {
       if (calcD !== D) return "";
       let h = "";
       for (const x of itens) {
         if (!x.rot || !x.val || x.val[k] == null) continue;
-        h += `<span><i style="background:${x.cor}"></i>${x.rot} ${x.casas === 0 ? RK.num(x.val[k], 0) : RK.fmt(x.val[k], x.casas ?? undefined)}</span>`;
+        h += `<span><i style="background:${x.cor}"></i>${x.rot} ${x.casas === 0 ? AX.num(x.val[k], 0) : AX.fmt(x.val[k], x.casas ?? undefined)}</span>`;
       }
       return h;
     },
@@ -255,14 +271,14 @@
     ligar(nomes) {                 // link direto: ?ind=vol,ifr,estoc,boll,kelt (não muda o que está salvo); "semniveis" esconde os níveis
       cfg = validar(Object.assign({}, cfg, Object.fromEntries(nomes.filter((n) => ["vwap", "boll", "kelt", "vol", "ifr", "estoc"].includes(n)).map((n) => [n, true])),
         nomes.includes("semniveis") ? { niveis: false, sr: false } : {}));
-      montar(); RK.repintar();
+      montar(); AX.repintar();
     },
   });
 
   // ---------------------------------------------------------------- janela de escolha
   const pop = $("popInd");
   function desenharJanela() {
-    const D = RK.D, semVol = D && !D.meta.temVolume, semVwap = D && !D.vw;
+    const D = AX.D, semVol = D && !D.meta.temVolume, semVwap = D && !D.vw;
     const chk = (id, txt, on, extra = "", desab = false) => `<label class="chk"><input type="checkbox" data-k="${id}" ${on ? "checked" : ""} ${desab ? "disabled" : ""}> ${txt}${extra}</label>`;
     pop.innerHTML = `<div class="rot">INDICADORES</div>
       <div class="ind-titulo">Médias móveis</div>
@@ -292,10 +308,10 @@
       </select>
       <div class="nota">Os indicadores são só para leitura do gráfico: as estratégias não mudam.</div>
       <div class="botoes"><button id="indPadrao">Voltar ao padrão</button><button id="indFechar" class="primario">Fechar</button></div>`;
-    const aplicar = (redesenha = false) => { salvar(); montar(); RK.repintar(); if (redesenha) desenharJanela(); };
+    const aplicar = (redesenha = false) => { salvar(); montar(); AX.repintar(); if (redesenha) desenharJanela(); };
     pop.querySelectorAll("input[data-k]").forEach((el) => (el.onchange = () => {
       cfg[el.dataset.k] = el.checked;
-      if (el.dataset.k === "niveis" || el.dataset.k === "sr") { salvar(); RK.redesenhar(); } else aplicar();
+      if (el.dataset.k === "niveis" || el.dataset.k === "sr") { salvar(); AX.redesenhar(); } else aplicar();
     }));
     pop.querySelectorAll(".ind-media").forEach((row) => {
       const m = cfg.medias[+row.dataset.j];
@@ -310,13 +326,13 @@
       cfg.medias.push({ tipo: "MMS", n, cor: CORES[cfg.medias.length % CORES.length], on: true }); aplicar(true);
     };
     $("indIfrN").onchange = (e) => { const v = Math.round(+e.target.value); cfg.ifrN = v >= 2 && v <= 100 ? v : 14; e.target.value = cfg.ifrN; aplicar(); };
-    $("indOps").onchange = (e) => { cfg.ops = e.target.value; salvar(); RK.redesenhar(); };
+    $("indOps").onchange = (e) => { cfg.ops = e.target.value; salvar(); AX.redesenhar(); };
     $("indPadrao").onclick = () => { cfg = padrao(); aplicar(true); };
-    $("indFechar").onclick = RK.fecharPopovers;
+    $("indFechar").onclick = AX.fecharPopovers;
   }
   $("btInd").onclick = () => {
     const aberto = !pop.classList.contains("oculto");
-    RK.fecharPopovers();
+    AX.fecharPopovers();
     if (!aberto) { desenharJanela(); pop.classList.remove("oculto"); }
   };
 

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Relatorio do ROBO KELLER no terminal: as 6 estrategias + TODAS juntas, com o mesmo simulador do programa.
+Relatorio do ROBO APEX no terminal: as 6 estrategias + TODAS juntas, com o mesmo simulador do programa.
 
 Uso:
   python ferramentas/backtest.py                       (WIN e WDO, 5 min)

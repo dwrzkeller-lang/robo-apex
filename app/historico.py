@@ -142,10 +142,28 @@ def ler_minutos(base, chave):
     return out
 
 
-def minutos_recentes_binance(chave, dias=3):
-    """Candles de 1 min do BTC desde o fim da base local (no maximo 3 dias) ate agora."""
+def minutos_recentes_binance(chave, dias=3, anteriores=None):
+    """Candles de 1 min do BTC dos ultimos 3 dias ate agora. Com `anteriores` (o resultado da chamada passada) baixa so
+    do ultimo minuto em diante; se a Binance nao responder, devolve os anteriores (o grafico nao perde os candles de hoje)."""
     sym = BINANCE[chave]
-    ini = int((time.time() - dias * 86400) // 60 * 60) * 1000
+    corte = int((time.time() - dias * 86400) // 60 * 60)
+    ant = [x for x in (anteriores or []) if x[0] >= corte]
+    ini = (ant[-1][0] if ant else corte) * 1000              # refaz o ultimo minuto, que estava aberto
+    try:
+        novos = _minutos_binance(sym, ini)
+    except Exception:
+        if ant:
+            return ant
+        raise
+    if ant and novos:
+        k = len(ant)
+        while k and ant[k - 1][0] >= novos[0][0]:
+            k -= 1
+        return ant[:k] + novos
+    return ant + novos
+
+
+def _minutos_binance(sym, ini):
     out = []
     for _ in range(6):
         url = "https://api.binance.com/api/v3/klines?symbol=%s&interval=1m&startTime=%d&limit=1000" % (sym, ini)
@@ -168,7 +186,8 @@ def trabalho(base, chaves=None):
         ESTADO.update(rodando=True, feitos=0, falhas=0, erro=None, inicio=time.time())
     try:
         filas = {c: faltando_dukas(base, c) for c in chaves if c in DUKAS}
-        n_bin = sum(len(_dias()) for c in chaves if c in BINANCE)
+        n_bin = sum(1 for c in chaves if c in BINANCE for d in _dias()
+                    if not os.path.exists(os.path.join(_pasta(base, BINANCE[c]), d.strftime("%Y%m%d") + ".json")))
         with _TRAVA:
             ESTADO["total"] = sum(len(v) for v in filas.values()) + n_bin
         for c in chaves:
@@ -204,14 +223,21 @@ def trabalho(base, chaves=None):
             ESTADO["atual"] = ""
 
 
+_dias_mem = {}
+
+
 def dias_na_base(base, chave):
-    if chave in DUKAS:
-        pasta = _pasta(base, DUKAS[chave][0])
-        return len([n for n in os.listdir(pasta) if n.endswith(".bi5")])
-    if chave in BINANCE:
-        pasta = _pasta(base, BINANCE[chave])
-        return len([n for n in os.listdir(pasta) if n.endswith(".json")])
-    return 0
+    """Quantos dias ja estao na base local (contar os arquivos custa alguns ms: vale por 5 segundos)."""
+    if chave not in DUKAS and chave not in BINANCE:
+        return 0
+    ck = (base, chave)
+    v = _dias_mem.get(ck)
+    if v and time.time() - v[0] < 5.0:
+        return v[1]
+    sym, ext = (DUKAS[chave][0], ".bi5") if chave in DUKAS else (BINANCE[chave], ".json")
+    n = len([x for x in os.listdir(_pasta(base, sym)) if x.endswith(ext)])
+    _dias_mem[ck] = (time.time(), n)
+    return n
 
 
 if __name__ == "__main__":

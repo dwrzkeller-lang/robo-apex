@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-ROBO KELLER - simulador unico. Executa as ordens das estrategias candle a candle, sem olhar o futuro:
+ROBO APEX - simulador unico. Executa as ordens das estrategias candle a candle, sem olhar o futuro:
 
   * ordem stop: executa quando o preco passa do gatilho, pelo gatilho (ou pela abertura, se abrir alem dele)
     MAIS o escorregamento do ativo; ordem "a mercado na abertura": abertura + escorregamento;
@@ -10,15 +10,22 @@ ROBO KELLER - simulador unico. Executa as ordens das estrategias candle a candle
   * candle que toca stop e alvo ao mesmo tempo -> conta o STOP (sempre a hipotese pior);
   * saidas por fechamento (conducao pela MM9, saida do RSI-2) executam na abertura do candle seguinte;
   * intraday: sem entradas fora do horario, zeragem no horario do ativo, e o dia para apos N stops;
-  * custo por contrato (corretagem/emolumentos) descontado; R e sempre LIQUIDO de custos.
+  * custo por contrato (corretagem/emolumentos) descontado; R e sempre LIQUIDO de custos;
+  * ordem limitada (compra abaixo do preco): so executa se o preco passar 1 tick ALEM do limite, sem escorregamento;
+  * trailing stop: o stop so anda no FECHAMENTO de cada candle (nunca no meio dele) e nunca volta;
+  * ajustes feitos na mao num teste ao vivo valem do momento em que foram feitos em diante, nunca para tras.
 
 Modo "TODAS juntas": uma operacao por vez; a primeira ordem de qualquer estrategia que executar vale e
 as outras ordens pendentes sao canceladas.
 """
+import bisect
 import math
 
-from estrategias import (AQUECIMENTO, ESTRATEGIAS, Grafico, atencao, avaliar, eficiencia, faixa_de_ruido,
+from estrategias import (AQUECIMENTO, ESTRATEGIAS, Grafico, atencao, avaliar, eficiencia, eficiencia_em, faixa_de_ruido,
                          passa_seletivo, tendencia_diaria)
+from ia import caracteristicas
+
+TRAIL_ATR = 2.0            # trailing stop: distancia do stop ate o melhor preco, em ATR
 
 
 def preparar(B, cfg):
@@ -28,6 +35,14 @@ def preparar(B, cfg):
     for g in Gs.values():
         g.tend_d, g.er, g.ruido = td, er, ruido
     return Gs
+
+
+def atualizar_ultimo(Gs, B):
+    """O candle aberto mudou (mesmos candles fechados): atualiza so ele nos dois lados, sem refazer os indicadores.
+    So pode ser chamado por quem tem a trava de calculo: altera os graficos no lugar."""
+    for g in Gs.values():
+        g.atualizar_ultimo(B)
+    Gs[1].er[len(B["c"]) - 1] = eficiencia_em(B["c"], len(B["c"]) - 1)        # a lista e a mesma nos dois lados
 
 
 def gestao_de(cod, gestao):
@@ -40,26 +55,32 @@ def gestao_de(cod, gestao):
 
 
 def alvos_da_gestao(g, ent, risco, alvos_ordem):
-    """(alvo parcial, alvo final, rotulo) no espaco da compra. alvos_ordem = alvos da propria estrategia."""
+    """(alvo parcial, alvo final, rotulo, alvo do meio) no espaco da compra. alvos_ordem = alvos da propria estrategia.
+    O alvo do meio so existe na gestao de 3 alvos (fibo3). Trailing e saida propria nao tem alvo."""
     if g == "alvo2":
-        return None, ent + 2 * risco, "alvo 2:1"
+        return None, ent + 2 * risco, "alvo 2:1", None
     if g == "alvo3":
-        return None, ent + 3 * risco, "alvo 3:1"
+        return None, ent + 3 * risco, "alvo 3:1", None
+    if g == "alvo4":
+        return None, ent + 4 * risco, "alvo 4:1", None
     if g == "alvo10":
-        return None, ent + 10 * risco, "alvo 10:1"
+        return None, ent + 10 * risco, "alvo 10:1", None
     if g == "parcial":
-        return ent + risco, ent + 2 * risco, "alvo 2:1"
+        return ent + risco, ent + 2 * risco, "alvo 2:1", None
     if g == "conducao":
-        return ent + risco, None, ""
+        return ent + risco, None, "", None
     if g == "fixo" and alvos_ordem:
-        return None, alvos_ordem[1], "alvo da estratégia"
+        return None, alvos_ordem[1], "alvo da estratégia", None
     if g == "fibo" and alvos_ordem:
-        return alvos_ordem[0], alvos_ordem[1], "alvo Fibonacci 161,8%"
-    return None, None, ""
+        return alvos_ordem[0], alvos_ordem[1], "alvo Fibonacci 161,8%", None
+    if g == "fibo3" and alvos_ordem and len(alvos_ordem) >= 3:
+        return alvos_ordem[0], alvos_ordem[2], "alvo 3", alvos_ordem[1]
+    return None, None, "", None
 
 
 def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, juntas=False,
-            i_ini=None, i_fim=None, com_atencao=False, i_formando=None, plano=None):
+            i_ini=None, i_fim=None, com_atencao=False, i_formando=None, plano=None,
+            tempos=None, ajustes=None, retomar=None, ponto=None):
     """i_formando = indice do candle que ainda nao fechou (ao vivo). Nele o preco ja negociado vale para executar
     ordem, stop e alvo, mas nenhuma decisao que depende do FECHAMENTO e tomada (sinal novo, saida por fechamento).
 
@@ -69,7 +90,15 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                                          cabe no risco, a ordem e cancelada
       loss_dia, meta_dia (dinheiro)   -> intraday: para de abrir operacoes no dia depois de perder / ganhar esse valor
       seletivo=True                   -> filtro de contexto (estrategias.passa_seletivo): so a favor da tendencia do
-                                         diario e, nas estrategias de correcao, so com tendencia limpa"""
+                                         diario e, nas estrategias de correcao, so com tendencia limpa
+
+    tempos + ajustes (teste ao vivo) = o que o usuario mudou na mao. Cada ajuste: dict(t=horario do candle em que foi
+      feito, tipo, chave="EST|t_sinal|dir", ...). "stop"/"alvo" (valor) valem a partir do candle SEGUINTE; "sair" e
+      "entrar" (preco, h, l = retrato do candle na hora do clique) e "cancelar" valem na hora.
+
+    retomar / ponto = retomada: `ponto` pede um retrato do estado logo depois do candle `ponto` (vem em r["ponto"]);
+      `retomar` continua de um retrato desses em vez de refazer o periodo inteiro. Quem chama garante que os candles
+      ate ali nao mudaram."""
     G = Gs[1]
     n = G.n if i_fim is None else min(G.n, i_fim + 1)
     ini = max(AQUECIMENTO, i_ini or 0)
@@ -86,17 +115,73 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
     h_ini, h_fim, h_zer = cfg["hora_inicio"], cfg["hora_fim"], cfg["hora_zeragem"]
     d, hm = G.d, G.hm
     codigos = [c for c in codigos if not (ESTRATEGIAS[c]["intraday"] and not G.intraday)]
-    slots = [dict(nome="TODAS", cods=list(codigos))] if juntas else [dict(nome=c, cods=[c]) for c in codigos]
-    for s in slots:
-        s.update(pos=None, pend=[], stops=0, pnl=0.0, pnl_dia=0.0, trava=None)
-    trades, ordens = [], []
-    aten = {}
+    if retomar:
+        # continua de onde parou: copia o retrato (ele nao pode ser alterado) e religa as ordens pendentes na lista
+        trades, ordens, aten = list(retomar["trades"]), list(retomar["ordens"]), dict(retomar["aten"])
+        slots = []
+        for c in retomar["slots"]:
+            s = dict(c)
+            if c["pos"]:
+                s["pos"] = dict(c["pos"], G=Gs[c["pos"]["dir"]])
+            s["pend"] = []
+            for oc in c["pend"]:
+                od = dict(oc)
+                ordens[od["k"]] = od
+                s["pend"].append(od)
+            slots.append(s)
+        i_loop = retomar["m"] + 1
+    else:
+        slots = [dict(nome="TODAS", cods=list(codigos))] if juntas else [dict(nome=c, cods=[c]) for c in codigos]
+        for s in slots:
+            s.update(pos=None, pend=[], stops=0, pnl=0.0, pnl_dia=0.0, trava=None)
+        trades, ordens = [], []
+        aten = {}
+        i_loop = ini
+    retrato = None
+    # ajustes manuais por candle em que foram feitos
+    aj_no = {}
+    if ajustes and tempos:
+        for a in ajustes:
+            i0 = bisect.bisect_right(tempos, a["t"]) - 1
+            if i0 >= ini:
+                aj_no.setdefault(i0, []).append(a)
+
+    def chave_de(x):                                 # mesma chave que a tela usa: estrategia | horario do sinal | lado
+        return "%s|%d|%d" % (x["est"], tempos[x["i_sinal"]], x["dir"])
+
+    def capturar(m):
+        """Retrato do estado depois do candle m (para a proxima chamada continuar daqui)."""
+        cs, novas = [], {}
+        for s in slots:
+            c = dict(s)
+            if s["pos"]:
+                c["pos"] = dict(s["pos"], G=None)
+            c["pend"] = []
+            for od in s["pend"]:
+                oc = dict(od)
+                novas[od["k"]] = oc
+                c["pend"].append(oc)
+            cs.append(c)
+        oo = list(ordens)
+        for k, oc in novas.items():
+            oo[k] = oc
+        return dict(m=m, slots=cs, trades=list(trades), ordens=oo, aten=dict(aten))
 
     # ------------------------------------------------------------------ helpers
     def frac_parcial(q):                             # metade no 1:1 (contrato inteiro: so com 2 ou mais)
         if fracionado:
             return 0.5
         return math.floor(q / 2) / q if q >= 2 else 0.0
+
+    def fracs_3alvos(q):
+        """(fatia no alvo 1, fatia no alvo 2) da gestao de 3 alvos; o resto vai ate o alvo 3. Contrato inteiro: um terco
+        em cada alvo com 3 ou mais; com 2, um no alvo 1 e um ate o alvo 3; com 1 nao ha parcial (so o stop sobe)."""
+        if fracionado:
+            return 1.0 / 3.0, 1.0 / 3.0
+        if q >= 3:
+            t = math.floor(q / 3) / q
+            return t, t
+        return (0.5, 0.0) if q >= 2 else (0.0, 0.0)
 
     def tamanho(s, preco, risco, custo_p):
         """Quantidade da operacao. Por risco: quanto cabe em risco_pct% do capital atual, arredondado para baixo."""
@@ -128,6 +213,12 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                  sai=sg * (p["ent"] + p["pts"]), motivo=motivo, gestao=p["gest"], parcial=p["parcial"],
                  risco=p["risco"], pts=pts_liq, R=R, maxR=(p["maxfav"] - p["ent"]) / p["risco"],
                  dinheiro=din, info=p["info"], q=q, custo=(p["custo_pts"] + p["esc"]) * vp * q, ctx=p["ctx"])
+        if p["alvo1"] is not None or p["alvo2"] is not None:
+            t.update(alvo1=None if p["alvo1"] is None else sg * p["alvo1"], alvo2=None if p["alvo2"] is None else sg * p["alvo2"])
+        if p["f"] is not None:
+            t["f"] = p["f"]
+        if p["manual"]:
+            t["manual"] = p["manual"]
         trades.append(t)
         s["pos"] = None
         s["pnl"] += din
@@ -150,23 +241,35 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
         s["pend"] = []
 
     def motivo_stop(p):
+        if p["stop_manual"] is not None and abs(p["stop"] - p["stop_manual"]) < tick / 2:
+            return "stop ajustado na mão"
         if p["stop"] > p["stop_ini"] + 1e-9:
-            return "stop no 0x0" if abs(p["stop"] - p["ent"]) < tick / 2 else "stop móvel"
+            if abs(p["stop"] - p["ent"]) < tick / 2:
+                return "stop no 0x0"
+            if p["parcial2"] and p["alvo1"] is not None and abs(p["stop"] - p["alvo1"]) < tick / 2:
+                return "stop no alvo 1"
+            return "stop móvel"
         return "stop"
 
-    def abrir(s, od, preco, i):
+    def abrir(s, od, preco, i, esc_ent=None, manual=None):
         Gd = Gs[od["dir"]]
         stop_g = od["dir"] * od["stop"]
         risco = preco - stop_g
         g = gestao_de(od["est"], gestao)
         alvos_g = None if not od.get("alvos") else tuple(None if x is None else od["dir"] * x for x in od["alvos"])
-        alvo1, alvo, rot = alvos_da_gestao(g, preco, risco, alvos_g)
-        if g in ("fixo", "fibo") and (alvo is None or alvo <= preco + tick):
+        alvo1, alvo, rot, alvo2 = alvos_da_gestao(g, preco, risco, alvos_g)
+        if od.get("alvo_manual") is not None:               # alvo movido na mao antes da entrada: vira o alvo unico
+            alvo, rot, alvo2 = od["dir"] * od["alvo_manual"], "alvo ajustado na mão", None
+            if alvo1 is not None and alvo1 >= alvo:
+                alvo1 = None
+        if (g in ("fixo", "fibo", "fibo3") or od.get("alvo_manual") is not None) and (alvo is None or alvo <= preco + tick):
             od.update(status="cancelada", motivo="o preço já passou do alvo", i_fim=i)
             s["pend"].remove(od)
             return False
         if alvo1 is not None and alvo1 <= preco + tick:
             alvo1 = None                                    # abriu alem do alvo parcial: fica so o alvo final
+        if alvo2 is not None and alvo2 <= preco + tick:
+            alvo2 = None
         custo_p = custo_pts + 2.0 * custo_pct * abs(preco)
         q = tamanho(s, preco, risco, custo_p)
         if q <= 0:
@@ -174,10 +277,16 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                       % ("%g" % pl["risco_pct"]).replace(".", ","), i_fim=i)
             s["pend"].remove(od)
             return False
+        if alvo2 is not None:                               # gestao de 3 alvos: um terco em cada um
+            fp1, fp2 = fracs_3alvos(q)
+        else:
+            fp1, fp2 = frac_parcial(q), 0.0
         p = dict(est=od["est"], dir=od["dir"], G=Gd, ent=preco, stop=stop_g, stop_ini=stop_g, risco=risco,
                  alvo=alvo, alvo1=alvo1, rot=rot, gest=g, frac=1.0, pts=0.0,
                  parcial=False, i_sinal=od["i_sinal"], i_ent=i, sair=None, maxfav=preco, motivo="", info=od["info"],
-                 q=q, custo_pts=custo_p, esc=slip, frac_parc=frac_parcial(q), ctx=od.get("ctx", 0))
+                 q=q, custo_pts=custo_p, esc=slip if esc_ent is None else esc_ent, frac_parc=fp1, ctx=od.get("ctx", 0),
+                 alvo2=alvo2, parcial2=False, frac_parc2=fp2, f=od.get("f"), manual=manual,
+                 stop_manual=stop_g if od.get("stop_manual") else None)
         s["pos"] = p
         od.update(status="executada", i_fim=i, preco=od["dir"] * preco, q=q)
         for outra in s["pend"]:
@@ -194,8 +303,16 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                 continue
             Gd, sg = Gs[od["dir"]], od["dir"]
             stop_g = sg * od["stop"]
+            esc_ent = None
             if od["tipo"] == "abertura":
                 preco = Gd.o[i] + slip
+            elif od["tipo"] == "limite":
+                # compra limitada (abaixo do preco): so executa se o preco passar 1 tick ALEM do limite; sai pelo limite,
+                # ou pela abertura se o candle ja abriu abaixo dele. Ordem limitada nao tem escorregamento.
+                lim = sg * od["gatilho"]
+                if Gd.l[i] > lim - tick:
+                    continue
+                preco, esc_ent = min(Gd.o[i], lim), 0.0
             else:
                 gat = sg * od["gatilho"]
                 if Gd.h[i] >= gat:
@@ -210,12 +327,13 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                 od.update(status="cancelada", motivo="abriu além do stop", i_fim=i)
                 s["pend"].remove(od)
                 continue
-            if abrir(s, od, preco, i):
+            if abrir(s, od, preco, i, esc_ent):
                 return
 
-    def gerir(s, p, i):
+    def gerir(s, p, i, ohlc=None, so_preco=False):
+        """ohlc = pedaco do candle a considerar (ajuste manual no meio do candle); so_preco = sem as regras de fechamento."""
         Gp = p["G"]
-        o, h, l, c = Gp.o[i], Gp.h[i], Gp.l[i], Gp.c[i]
+        o, h, l, c = ohlc or (Gp.o[i], Gp.h[i], Gp.l[i], Gp.c[i])
         ent, R = p["ent"], p["risco"]
         na_entrada = p["i_ent"] == i
         if not na_entrada and o <= p["stop"]:
@@ -231,14 +349,32 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
             p["stop"] = max(p["stop"], ent)
             if l <= ent:            # voltou ao 0x0 no mesmo candle: a ordem dos eventos e desconhecida -> pior caso
                 return fechar(s, p, p["frac"], ent - slip, i, "stop no 0x0", slip)
+        if p["alvo2"] is not None and not p["parcial2"] and h >= p["alvo2"] + tick:
+            p["parcial2"] = True                            # alvo 2 de 3: mais um terco sai e o stop sobe para o alvo 1
+            if p["frac_parc2"] > 0:
+                fechar(s, p, p["frac_parc2"], p["alvo2"], i, "parcial no alvo 2")
+            degrau = p["alvo1"] if p["alvo1"] is not None else ent
+            p["stop"] = max(p["stop"], degrau)
+            if l <= degrau:         # voltou ao alvo 1 no mesmo candle: a ordem dos eventos e desconhecida -> pior caso
+                return fechar(s, p, p["frac"], degrau - slip, i, motivo_stop(p), slip)
         if p["alvo"] is not None:
             if not na_entrada and o >= p["alvo"]:
                 return fechar(s, p, p["frac"], o, i, "alvo (abriu além)")
             if h >= p["alvo"] + tick:
                 return fechar(s, p, p["frac"], p["alvo"], i, p["rot"] or "alvo")
-        if i == i_formando:
+        if i == i_formando or so_preco:
             return
-        if g == "conducao" and p["parcial"]:
+        if g == "trail_atr":                                # o stop acompanha o melhor preco a TRAIL_ATR x ATR, so sobe
+            novo = Gp.abaixo(p["maxfav"] - TRAIL_ATR * Gp.atr[i])
+            if novo > p["stop"]:
+                p["stop"] = novo
+        elif g == "trail_r":                                # degraus: a cada 1R a favor o stop sobe 1R (1R -> 0x0, 2R -> +1R...)
+            k = math.floor((p["maxfav"] - ent) / R + 1e-9)
+            if k >= 1:
+                novo = Gp.abaixo(ent + (k - 1) * R)
+                if novo > p["stop"]:
+                    p["stop"] = novo
+        elif g == "conducao" and p["parcial"]:
             if c < Gp.mm9[i] and Gp.mm9[i] > ent:
                 p["sair"] = "fechou além da MM9 (condução)"
             elif p["maxfav"] - ent >= 3 * R:
@@ -248,6 +384,49 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
             if m:
                 p["sair"] = m
 
+    def no_espaco(sg, o, h, l, c):                    # precos reais -> espaco da compra (na venda o grafico e invertido)
+        return (o, h, l, c) if sg > 0 else (-o, -l, -h, -c)
+
+    def movidos(s, lista):
+        """Stop/alvo movidos na mao no candle anterior: valem a partir deste candle."""
+        for a in lista:
+            if a["tipo"] not in ("stop", "alvo"):
+                continue
+            p = s["pos"]
+            if p and chave_de(p) == a["chave"]:
+                sg = p["G"].sinal
+                if a["tipo"] == "stop":
+                    p["stop"] = p["stop_manual"] = sg * a["valor"]
+                else:
+                    p["alvo"], p["rot"] = sg * a["valor"], "alvo ajustado na mão"
+                    if p["alvo1"] is not None and p["alvo1"] >= p["alvo"]:
+                        p["alvo1"] = None
+                    if p["alvo2"] is not None and p["alvo2"] >= p["alvo"]:
+                        p["alvo2"] = None
+                p["manual"] = "ajuste"
+                continue
+            for od in s["pend"]:
+                if chave_de(od) == a["chave"]:
+                    if a["tipo"] == "stop":
+                        od.update(stop=a["valor"], stop_manual=True)
+                    else:
+                        od.update(alvo=a["valor"], alvo_manual=a["valor"])
+
+    def na_hora(s, lista, i):
+        """Cancelar e entrar na mao: valem no instante do clique (dentro do candle i). Devolve o ajuste de entrada usado."""
+        for a in lista:
+            if a["tipo"] not in ("cancelar", "entrar") or s["pos"] is not None:
+                continue
+            for od in list(s["pend"]):
+                if chave_de(od) != a["chave"]:
+                    continue
+                if a["tipo"] == "cancelar":
+                    od.update(status="cancelada", motivo="cancelada na mão", i_fim=i)
+                    s["pend"].remove(od)
+                elif abrir(s, od, od["dir"] * a["preco"] + slip, i, manual="entrada"):
+                    return a
+        return None
+
     def pode_entrar(i, cod):
         if not G.intraday:
             return True
@@ -256,7 +435,7 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
         return h_ini <= hm[i] < h_fim
 
     # ------------------------------------------------------------------ laco principal
-    for i in range(ini, n):
+    for i in range(i_loop, n):
         novo_dia = d[i] != d[i - 1]
         fim_dia = G.intraday and (hm[i] >= h_zer or (i + 1 < G.n and d[i + 1] != d[i]))
         for s in slots:
@@ -267,10 +446,33 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
             p = s["pos"]
             if p and p["sair"]:
                 fechar(s, p, p["frac"], p["G"].o[i] - slip, i, p["sair"], slip)
+            entrou = None
+            if aj_no:
+                if i - 1 in aj_no:
+                    movidos(s, aj_no[i - 1])
+                if i in aj_no:
+                    entrou = na_hora(s, aj_no[i], i)
             if s["pos"] is None and s["pend"]:
                 processar_ordens(s, i)
             if s["pos"]:
-                gerir(s, s["pos"], i)
+                p = s["pos"]
+                Gp = p["G"]
+                sai = None
+                if aj_no and i in aj_no:
+                    sai = next((a for a in aj_no[i] if a["tipo"] == "sair" and a["chave"] == chave_de(p)), None)
+                if sai:
+                    # saida na mao: ate o clique vale o que o candle tinha feito ate ali; depois sai pelo preco da hora
+                    o_, h_, l_, c_ = no_espaco(Gp.sinal, sai["preco"], sai["h"], sai["l"], sai["preco"])
+                    gerir(s, p, i, (Gp.o[i], max(h_, c_), min(l_, c_), c_), True)
+                    if s["pos"] is p:
+                        p["manual"] = "saida"
+                        fechar(s, p, p["frac"], c_ - slip, i, "saída na mão", slip)
+                elif entrou:
+                    # entrou na mao no meio do candle: so conta o que o preco fez DEPOIS do clique (o que da para saber)
+                    o_, h_, l_, c_ = no_espaco(Gp.sinal, entrou["preco"], entrou["h"], entrou["l"], entrou["preco"])
+                    gerir(s, p, i, (c_, Gp.h[i] if Gp.h[i] > h_ else c_, Gp.l[i] if Gp.l[i] < l_ else c_, Gp.c[i]))
+                else:
+                    gerir(s, p, i)
             if fim_dia:
                 if s["pos"]:
                     p = s["pos"]
@@ -290,7 +492,13 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                         continue
                     repetida = False
                     for velha in list(s["pend"]):
-                        if velha["est"] == cod:
+                        if (velha["est"] == cod and od["tipo"] == "limite" and velha["tipo"] == "limite" and velha["dir"] == od["dir"]
+                                and velha["gatilho"] == od["gatilho"] and velha.get("alvos") == od.get("alvos")
+                                and (velha.get("stop_manual") or velha["stop"] == od["stop"])):
+                            # ordem limitada que continua valendo (mesma pernada): fica a mesma, so renova a validade
+                            velha["validade"] = i - velha["i_sinal"] + od["validade"]
+                            repetida = True
+                        elif velha["est"] == cod:
                             velha.update(status="substituída", motivo="novo candle de sinal", i_fim=i)
                             s["pend"].remove(velha)
                         elif velha["dir"] == od["dir"] and velha["gatilho"] == od["gatilho"] and velha["stop"] == od["stop"]:
@@ -300,18 +508,24 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                     g = gestao_de(cod, gestao)
                     ref = od["gatilho"] if od["gatilho"] is not None else G.c[i]
                     sg = od["dir"]
-                    a1, a2, _ = alvos_da_gestao(g, sg * ref, sg * (ref - od["stop"]),
-                                                None if not od.get("alvos") else tuple(None if x is None else sg * x for x in od["alvos"]))
+                    a1, a2, _, am = alvos_da_gestao(g, sg * ref, sg * (ref - od["stop"]),
+                                                    None if not od.get("alvos") else tuple(None if x is None else sg * x for x in od["alvos"]))
                     risco_prev = abs(ref - od["stop"])
                     od.update(status="pendente", motivo="", i_fim=None, gestao=g, slot=s["nome"],
                               alvo=None if a2 is None else sg * a2, alvo1=None if a1 is None else sg * a1,
                               q=tamanho(s, abs(ref), risco_prev, custo_pts + 2.0 * custo_pct * abs(ref)) if risco_prev > 0 else contratos)
+                    if am is not None:
+                        od["alvo2"] = sg * am
+                    od["f"] = caracteristicas(Gs[sg], G, i, od, ref, cfg)    # retrato do momento do sinal (para a IA)
+                    od["k"] = len(ordens)                                    # posicao na lista (usada na retomada)
                     ordens.append(od)
                     s["pend"].append(od)
         if com_atencao:
             lst = [[c, a] for c in codigos for a in [atencao(Gs, c, i)] if a]
             if lst:
                 aten[i] = lst
+        if i == ponto:
+            retrato = capturar(i)
 
     abertas = []
     for s in slots:
@@ -324,14 +538,20 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                                 stop=sg * p["stop"], stop_ini=sg * p["stop_ini"],
                                 alvo=None if p["alvo"] is None else sg * p["alvo"], gestao=p["gest"], parcial=p["parcial"],
                                 risco=p["risco"], R=(p["pts"] + p["frac"] * (Gp.c[ult] - p["ent"]) - p["custo_pts"]) / p["risco"],
-                                sair=p["sair"], info=p["info"], q=p["q"], ctx=p["ctx"]))
+                                sair=p["sair"], info=p["info"], q=p["q"], ctx=p["ctx"],
+                                alvo1=None if p["alvo1"] is None else sg * p["alvo1"],
+                                alvo2=None if p["alvo2"] is None else sg * p["alvo2"], parcial2=p["parcial2"],
+                                maxR=(p["maxfav"] - p["ent"]) / p["risco"], f=p["f"], manual=p["manual"]))
     # situacao do ultimo dia simulado (para a tela dizer "pode operar" / "pare por hoje")
     s0 = slots[0] if slots else None
     dia = None
     if s0 is not None and n > ini:
         trava = s0["trava"] or ("limite de %d stops no dia" % max_stops if G.intraday and s0["stops"] >= max_stops else None)
         dia = dict(data=d[n - 1], resultado=s0["pnl_dia"], stops=s0["stops"], trava=trava, capital=capital0 + s0["pnl"])
-    return dict(trades=trades, ordens=ordens, abertas=abertas, aten=aten, ini=ini, fim=n - 1, codigos=codigos, dia=dia)
+    if retrato is None and retomar and ponto == retomar["m"]:
+        retrato = retomar                                      # nada novo depois do retrato: ele continua valendo
+    return dict(trades=trades, ordens=ordens, abertas=abertas, aten=aten, ini=ini, fim=n - 1, codigos=codigos, dia=dia,
+                ponto=retrato)
 
 
 # ------------------------------------------------------------------------------------------ estatistica

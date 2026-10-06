@@ -1,37 +1,37 @@
-/* ROBÔ KELLER — aba SIMULAÇÃO: roda a estratégia escolhida (ou TODAS) num período passado com dados reais,
+/* ROBÔ APEX — aba SIMULAÇÃO: roda a estratégia escolhida (ou TODAS) num período passado com dados reais,
    mostra quanto teria ganhado/perdido e permite assistir candle a candle como se fosse ao vivo. */
 (() => {
   "use strict";
-  const RK = window.RK, $ = RK.$;
+  const AX = window.AX, $ = AX.$;
   const SIM = { D: null, seq: 0, k: null, timer: null, rodando: false, emReplay: false, velho: true, ultRender: 0 };
-  RK.sim = SIM;
+  AX.sim = SIM;
 
   // período mostrado no cartão (vem do topo)
-  function textoPeriodo(D) { $("simPeriodo").textContent = D ? `${RK.dataTxt(D.meta.dataIni)} a ${RK.dataTxt(D.meta.dataFim)}` : ""; }
-  RK.on("dadosVivo", (D) => { if (!SIM.D || SIM.velho) textoPeriodo(D); });
+  function textoPeriodo(D) { $("simPeriodo").textContent = D ? `${AX.dataTxt(D.meta.dataIni)} a ${AX.dataTxt(D.meta.dataFim)}` : ""; }
+  AX.on("dadosVivo", (D) => { if (!SIM.D || SIM.velho) textoPeriodo(D); });
 
   // ---------------------------------------------------------------- calcular
   async function simular({ assistir = false } = {}) {
     pararReplay(false);
     const seq = ++SIM.seq;
-    RK.erro("erroSim", null);
+    AX.erro("erroSim", null);
     $("btSimular").disabled = $("btAssistir").disabled = true;
     $("carregando").classList.remove("oculto");
     try {
-      const D = await RK.json("/api/sim?" + RK.parametros({ aten: 1 }));
+      const D = await AX.json("/api/sim?" + AX.parametros({ aten: 1 }));
       if (seq !== SIM.seq) return;
       SIM.D = D; SIM.velho = false;
       textoPeriodo(D);
-      if (RK.aba !== "sim") return;
+      if (AX.aba !== "sim") return;
       if (assistir) iniciarReplay();
       else {
         SIM.k = D.meta.iFim;
         $("cardReplay").classList.add("oculto");
-        RK.mostrar(D, D.meta.iFim);
+        AX.mostrar(D, D.meta.iFim);
         renderResultado(D, null);
       }
     } catch (e) {
-      if (seq === SIM.seq) { RK.erro("erroSim", e); $("simResultado").innerHTML = ""; }
+      if (seq === SIM.seq) { AX.erro("erroSim", e); $("simResultado").innerHTML = ""; }
     } finally {
       if (seq === SIM.seq) { $("btSimular").disabled = $("btAssistir").disabled = false; $("carregando").classList.add("oculto"); }
     }
@@ -42,7 +42,7 @@
     const D = SIM.D, m = D.meta;
     SIM.k = Math.max(0, m.iIni - 1);
     SIM.emReplay = true;
-    RK.mostrar(D, SIM.k);
+    AX.mostrar(D, SIM.k);
     $("replayCtl").classList.remove("oculto"); $("cardReplay").classList.remove("oculto");
     $("simResultado").innerHTML = "";
     atualizarReplay(true);
@@ -63,21 +63,21 @@
     if (alvo > SIM.k) {
       const antes = SIM.k;
       SIM.k = alvo;
-      if (RK.graficoMostra() !== D) RK.mostrar(D, alvo, { manterZoom: true }); else RK.avancar(alvo);
-      const ts = RK.chart.timeScale(), r = ts.getVisibleLogicalRange();
+      if (AX.graficoMostra() !== D) AX.mostrar(D, alvo, { manterZoom: true }); else AX.avancar(alvo);
+      const ts = AX.chart.timeScale(), r = ts.getVisibleLogicalRange();
       if (r && alvo > r.to - 4) ts.setVisibleLogicalRange({ from: r.from + (alvo - (r.to - 8)), to: alvo + 8 });
-      if (RK.pref.som && +$("rpVel").value <= 5 && D.ordens.some((o) => o.i_sinal > antes && o.i_sinal <= alvo)) RK.som("ordem");
+      if (AX.pref.som && +$("rpVel").value <= 5 && D.ordens.some((o) => o.i_sinal > antes && o.i_sinal <= alvo)) AX.som("ordem");
       atualizarReplay(false);
     }
-    if (SIM.k >= D.meta.iFim) { pararReplay(true); RK.toast("Replay terminou: resultado completo abaixo.", "ok"); }
+    if (SIM.k >= D.meta.iFim) { pararReplay(true); AX.toast("Replay terminou: resultado completo abaixo.", "ok"); }
   }
   function atualizarReplay(forcar) {
     const D = SIM.D, m = D.meta, k = SIM.k;
-    RK.cartaoMomento($("cardReplay"), D, k);
+    AX.cartaoMomento($("cardReplay"), D, k);
     const tot = Math.max(1, m.iFim - (m.iIni - 1));
     $("rpBarra").style.width = (100 * Math.max(0, k - (m.iIni - 1))) / tot + "%";
     const p = parcial(D, k);
-    $("rpTxt").innerHTML = `${RK.quando(D, k, true)} · ${p.n} operações fechadas · acerto ${RK.pct(p.acerto)} · resultado <b class="${RK.cls(p.total)}">${RK.dinheiro(p.total, D, true)}</b>`;
+    $("rpTxt").innerHTML = `${AX.quando(D, k, true)} · ${p.n} operações fechadas · acerto ${AX.pct(p.acerto)} · resultado <b class="${AX.cls(p.total)}">${AX.dinheiro(p.total, D, true)}</b>`;
     const agora = performance.now();
     if (forcar || agora - SIM.ultRender > 300) { SIM.ultRender = agora; renderParcial(D, k, p); }
   }
@@ -89,7 +89,7 @@
     if (estava && mostrarTudo && SIM.D) {
       SIM.k = SIM.D.meta.iFim;
       $("cardReplay").classList.add("oculto");
-      RK.mostrar(SIM.D, SIM.k);
+      AX.mostrar(SIM.D, SIM.k);
       renderResultado(SIM.D, null);
     }
   }
@@ -104,11 +104,11 @@
   }
   function renderParcial(D, k, p) {
     $("simResultado").classList.remove("vazio-bloco");
-    $("simResultado").innerHTML = `<div class="card"><div class="rot">ATÉ ${RK.quando(D, k, true)}</div>
-      <div class="kpis"><div><small>Resultado</small><b class="${RK.cls(p.total)}">${RK.dinheiro(p.total, D, true)}</b><em>${RK.R(p.somaR, 1)} somados</em></div>
-      <div><small>Operações</small><b>${p.n}</b></div><div><small>Acerto</small><b>${RK.pct(p.acerto)}</b></div>
-      <div><small>Pior queda</small><b class="ruim">${RK.dinheiro(-p.dd, D)}</b></div>
-      <div><small>Capital</small><b>${RK.dinheiro(D.meta.capital + p.total, D)}</b></div>
+    $("simResultado").innerHTML = `<div class="card"><div class="rot">ATÉ ${AX.quando(D, k, true)}</div>
+      <div class="kpis"><div><small>Resultado</small><b class="${AX.cls(p.total)}">${AX.dinheiro(p.total, D, true)}</b><em>${AX.R(p.somaR, 1)} somados</em></div>
+      <div><small>Operações</small><b>${p.n}</b></div><div><small>Acerto</small><b>${AX.pct(p.acerto)}</b></div>
+      <div><small>Pior queda</small><b class="ruim">${AX.dinheiro(-p.dd, D)}</b></div>
+      <div><small>Capital</small><b>${AX.dinheiro(D.meta.capital + p.total, D)}</b></div>
       <div><small>Candle</small><b>${k - D.meta.iIni + 1}</b><em>de ${D.meta.iFim - D.meta.iIni + 1}</em></div></div>
       <canvas class="graf" id="cvCapital"></canvas></div>`;
     curvaCapital($("cvCapital"), p.curva, D.meta.capital);
@@ -118,51 +118,51 @@
   function renderResultado(D, _k) {
     $("simResultado").classList.remove("vazio-bloco");
     const m = D.meta, st = D.stats, lote = m.fracionado ? "lote(s)" : "contrato(s)";
-    const cab = `${RK.esc(RK.nomeEst(m.est))} · ${RK.esc(RK.rotAtivo(m.ativo))} · ${m.nomeTf}`;
-    const per = `${RK.dataTxt(m.dataIni)} a ${RK.dataTxt(m.dataFim)}`;
-    const premissas = `<div class="nota">Gestão: ${RK.esc(RK.cfg.gestoes[m.gestao])} · ${m.tam === "risco" ? "tamanho pelo risco: " + RK.num(m.riscoPct, 1) + "% do capital por operação" : RK.num(m.contratos, m.fracionado ? 2 : 0) + " " + lote}${m.seletivo ? " · modo seletivo" : ""}${m.lossDia > 0 ? " · para o dia em −" + RK.dinheiro(m.lossDia, D) : ""}${m.metaDia > 0 ? " · para o dia em +" + RK.dinheiro(m.metaDia, D) : ""} · para o dia após ${m.maxStops} stops${m.intraday ? ` · entradas até ${hora(m.horaFim)}, zeragem ${hora(m.horaZeragem)}` : " · swing (sem zeragem)"}.
+    const cab = `${AX.esc(AX.nomeEst(m.est))} · ${AX.esc(AX.rotAtivo(m.ativo))} · ${m.nomeTf}`;
+    const per = `${AX.dataTxt(m.dataIni)} a ${AX.dataTxt(m.dataFim)}`;
+    const premissas = `<div class="nota">Gestão: ${AX.esc(AX.cfg.gestoes[m.gestao])} · ${m.tam === "risco" ? "tamanho pelo risco: " + AX.num(m.riscoPct, 1) + "% do capital por operação" : AX.num(m.contratos, m.fracionado ? 2 : 0) + " " + lote}${m.seletivo ? " · modo seletivo" : ""}${m.lossDia > 0 ? " · para o dia em −" + AX.dinheiro(m.lossDia, D) : ""}${m.metaDia > 0 ? " · para o dia em +" + AX.dinheiro(m.metaDia, D) : ""} · para o dia após ${m.maxStops} stops${m.intraday ? ` · entradas até ${hora(m.horaFim)}, zeragem ${hora(m.horaZeragem)}` : " · swing (sem zeragem)"}.
       ${(m.gestao === "parcial" || m.gestao === "conducao") && !m.fracionado && m.contratos < 2 ? "<b>Com 1 contrato não há parcial</b>: no 1:1 o stop só vai para o 0x0 (use 2 contratos ou mais). " : ""}Execução conservadora: ordem stop com escorregamento, alvo só conta se passar 1 tick, candle que toca stop e alvo conta como stop, custos descontados.</div>`;
     let html = `<div class="card"><div class="rot">RESULTADO · ${cab} <span class="dir">${per}</span></div>`;
     if (st.n) {
-      html += `<div class="resumo-topo"><div><div class="grande ${RK.cls(st.total)}">${RK.dinheiro(st.total, D, true)}</div>
-          <div class="sub">${st.n} operações · acerto ${RK.pct(st.acerto, 0)} (empata com ${RK.pct(st.empate, 0)}) · ${RK.pct((100 * st.total) / m.capital)} do capital · custos ${RK.dinheiro(st.custos, D)} (${RK.pct(100 * (st.custoR || 0), 0)} do risco)</div></div>${RK.seloCurto(st)}</div>
+      html += `<div class="resumo-topo"><div><div class="grande ${AX.cls(st.total)}">${AX.dinheiro(st.total, D, true)}</div>
+          <div class="sub">${st.n} operações · acerto ${AX.pct(st.acerto, 0)} (empata com ${AX.pct(st.empate, 0)}) · ${AX.pct((100 * st.total) / m.capital)} do capital · custos ${AX.dinheiro(st.custos, D)} (${AX.pct(100 * (st.custoR || 0), 0)} do risco)</div></div>${AX.seloCurto(st)}</div>
         <canvas class="graf" id="cvCapital"></canvas>
         <div class="kpis">
-          <div><small>Média por operação</small><b class="${RK.cls(st.mediaDin)}">${RK.dinheiro(st.mediaDin, D, true)}</b><em>± ${RK.dinheiro(st.icDin, D)}</em></div>
-          <div><small>Pior queda</small><b class="ruim">${RK.dinheiro(-st.ddMax, D)}</b><em>${RK.pct(st.ddPct, 0)} do pico</em></div>
-          <div><small>Capital final</small><b>${RK.dinheiro(st.capitalFinal, D)}</b><em>começou com ${RK.dinheiro(m.capital, D)}</em></div>
-          <div><small>Ganho ÷ perda</small><b>${RK.num(st.payoff, 2)}</b><em>fator de lucro ${RK.num(st.fatorLucro, 2)}</em></div>
+          <div><small>Média por operação</small><b class="${AX.cls(st.mediaDin)}">${AX.dinheiro(st.mediaDin, D, true)}</b><em>± ${AX.dinheiro(st.icDin, D)}</em></div>
+          <div><small>Pior queda</small><b class="ruim">${AX.dinheiro(-st.ddMax, D)}</b><em>${AX.pct(st.ddPct, 0)} do pico</em></div>
+          <div><small>Capital final</small><b>${AX.dinheiro(st.capitalFinal, D)}</b><em>começou com ${AX.dinheiro(m.capital, D)}</em></div>
+          <div><small>Ganho ÷ perda</small><b>${AX.num(st.payoff, 2)}</b><em>fator de lucro ${AX.num(st.fatorLucro, 2)}</em></div>
           <div><small>Perdas seguidas</small><b>${st.perdasSeguidas}</b><em>maior sequência</em></div>
-          <div><small>1ª / 2ª metade</small><b class="${RK.cls(st.exp1)}">${RK.dinheiro(st.exp1, D, true)}</b><em class="${RK.cls(st.exp2)}">${RK.dinheiro(st.exp2, D, true)} por operação</em></div>
+          <div><small>1ª / 2ª metade</small><b class="${AX.cls(st.exp1)}">${AX.dinheiro(st.exp1, D, true)}</b><em class="${AX.cls(st.exp2)}">${AX.dinheiro(st.exp2, D, true)} por operação</em></div>
         </div>
-        <details><summary>Como ler · premissas</summary><div class="nota">${RK.esc(st.explica || "")} Capital recomendado para aguentar a pior queda com folga: <b>${RK.dinheiro(3 * st.ddMax, D)}</b> (3× a pior queda).</div>${premissas}</details>`;
+        <details><summary>Como ler · premissas</summary><div class="nota">${AX.esc(st.explica || "")} Capital recomendado para aguentar a pior queda com folga: <b>${AX.dinheiro(3 * st.ddMax, D)}</b> (3× a pior queda).</div>${premissas}</details>`;
     } else {
-      html += `<div class="resumo-topo"><div><div class="grande neutro">sem operações</div><div class="sub">${RK.esc(st.explica || "")}</div></div>${RK.seloCurto(st)}</div>${premissas}`;
+      html += `<div class="resumo-topo"><div><div class="grande neutro">sem operações</div><div class="sub">${AX.esc(st.explica || "")}</div></div>${AX.seloCurto(st)}</div>${premissas}`;
     }
     html += `</div>`;
     if (st.n) {
       html += `<div class="card"><div class="rot">RESULTADO POR MÊS</div><canvas class="graf baixo" id="cvMeses"></canvas>
         <table class="tab"><tr><th>Mês</th><th class="n">Ops</th><th class="n">Acerto</th><th class="n">Em R</th><th class="n">Resultado</th></tr>` +
-        st.meses.map((x) => `<tr><td>${String(x.mes).slice(4)}/${String(x.mes).slice(0, 4)}</td><td class="n">${x.n}</td><td class="n">${RK.pct((100 * x.ganhos) / x.n, 0)}</td><td class="n ${RK.cls(x.R)}">${RK.R(x.R, 1)}</td><td class="n ${RK.cls(x.dinheiro)}">${RK.dinheiro(x.dinheiro, D, true)}</td></tr>`).join("") + `</table></div>`;
+        st.meses.map((x) => `<tr><td>${String(x.mes).slice(4)}/${String(x.mes).slice(0, 4)}</td><td class="n">${x.n}</td><td class="n">${AX.pct((100 * x.ganhos) / x.n, 0)}</td><td class="n ${AX.cls(x.R)}">${AX.R(x.R, 1)}</td><td class="n ${AX.cls(x.dinheiro)}">${AX.dinheiro(x.dinheiro, D, true)}</td></tr>`).join("") + `</table></div>`;
     }
     if (m.est === "TODAS" && D.porEst) {
       html += `<div class="card"><details><summary style="margin-top:0">Cada estratégia: sozinha × dentro do "TODAS"</summary><div class="rolagem" style="margin-top:6px"><table class="tab">
         <tr><th>Estratégia</th><th class="n">Sozinha: ops</th><th class="n">acerto</th><th class="n">média</th><th class="n">resultado</th><th class="n">No TODAS: ops</th><th class="n">resultado</th></tr>` +
-        Object.entries(D.porEst).map(([c, r]) => { const s = r.isolada, j = r.naJunta; return `<tr><td title="${RK.esc(s.veredito)}">${c} ${RK.esc(RK.nomeEst(c))}</td><td class="n">${s.n}</td><td class="n">${RK.pct(s.acerto)}</td><td class="n ${RK.cls(s.expR)}">${RK.R(s.expR)}</td><td class="n ${RK.cls(s.total)}">${RK.dinheiro(s.total, D, true)}</td><td class="n">${j.n}</td><td class="n ${RK.cls(j.total)}">${RK.dinheiro(j.total, D, true)}</td></tr>`; }).join("") +
+        Object.entries(D.porEst).map(([c, r]) => { const s = r.isolada, j = r.naJunta; return `<tr><td title="${AX.esc(s.veredito)}">${c} ${AX.esc(AX.nomeEst(c))}</td><td class="n">${s.n}</td><td class="n">${AX.pct(s.acerto)}</td><td class="n ${AX.cls(s.expR)}">${AX.R(s.expR)}</td><td class="n ${AX.cls(s.total)}">${AX.dinheiro(s.total, D, true)}</td><td class="n">${j.n}</td><td class="n ${AX.cls(j.total)}">${AX.dinheiro(j.total, D, true)}</td></tr>`; }).join("") +
         `</table></div><div class="nota">No "TODAS" só existe uma operação por vez: quando uma estratégia está posicionada, os sinais das outras são ignorados.</div></details></div>`;
     }
     if (st.n) {
       html += `<div class="card"><div class="rot">OPERAÇÕES (${st.n}) <button class="mini-btn" id="btCsv">Exportar CSV</button></div><div class="rolagem"><table class="tab">
         <tr><th>Entrada</th><th>Est.</th><th></th><th class="n">Preço</th><th class="n">Stop</th><th class="n">Saída</th><th>Motivo</th><th class="n">R</th><th class="n">Resultado</th></tr>` +
-        D.trades.map((t, j) => `<tr class="clic" data-j="${j}"><td>${RK.quando(D, t.i_ent)}</td><td>${t.est}</td><td class="${t.dir > 0 ? "bom" : "ruim"}">${t.dir > 0 ? "C" : "V"}</td><td class="n">${RK.fmt(t.ent)}</td><td class="n">${RK.fmt(t.stop)}</td><td class="n">${RK.fmt(t.sai)}</td><td>${RK.esc(t.motivo)}</td><td class="n ${RK.cls(t.R)}">${RK.R(t.R)}</td><td class="n ${RK.cls(t.dinheiro)}">${RK.dinheiro(t.dinheiro, D, true)}</td></tr>`).join("") +
+        D.trades.map((t, j) => `<tr class="clic" data-j="${j}"><td>${AX.quando(D, t.i_ent)}</td><td>${t.est}</td><td class="${t.dir > 0 ? "bom" : "ruim"}">${t.dir > 0 ? "C" : "V"}</td><td class="n">${AX.fmt(t.ent)}</td><td class="n">${AX.fmt(t.stop)}</td><td class="n">${AX.fmt(t.sai)}</td><td>${AX.esc(t.motivo)}</td><td class="n ${AX.cls(t.R)}">${AX.R(t.R)}</td><td class="n ${AX.cls(t.dinheiro)}">${AX.dinheiro(t.dinheiro, D, true)}</td></tr>`).join("") +
         `</table></div><div class="nota">Clique numa operação para vê-la no gráfico.</div></div>`;
     }
     $("simResultado").innerHTML = html;
     desenharGraficos();
     $("simResultado").querySelectorAll("tr.clic").forEach((tr) => (tr.onclick = () => {
       const t = D.trades[+tr.dataset.j];
-      if (RK.graficoMostra() !== D) RK.mostrar(D, SIM.k ?? D.meta.iFim, { manterZoom: true });
-      if (RK.ops) RK.ops.selecionar(t, D.meta); else RK.focar(t.i_ent);
+      if (AX.graficoMostra() !== D) AX.mostrar(D, SIM.k ?? D.meta.iFim, { manterZoom: true });
+      if (AX.ops) AX.ops.selecionar(t, D.meta); else AX.focar(t.i_ent);
       $("simResultado").querySelectorAll("tr.sel").forEach((x) => x.classList.remove("sel")); tr.classList.add("sel");
     }));
     const b = $("btCsv"); if (b) b.onclick = () => exportarCsv(D);
@@ -191,8 +191,8 @@
     c.strokeStyle = cor; c.lineWidth = 2; c.stroke();
     c.lineTo(X(curva.length - 1), Y(base)); c.lineTo(X(0), Y(base)); c.closePath();
     c.fillStyle = fim >= base ? "rgba(0,230,118,.08)" : "rgba(255,77,94,.08)"; c.fill();
-    c.fillStyle = "#8a96a8"; c.textAlign = "left"; c.fillText(RK.dinheiro(max), pad.l, 10); c.fillText(RK.dinheiro(min), pad.l, h - 3);
-    c.textAlign = "right"; c.fillStyle = cor; c.fillText(RK.dinheiro(fim), w - pad.r, Math.max(12, Math.min(h - 18, Y(fim) - 4)));
+    c.fillStyle = "#8a96a8"; c.textAlign = "left"; c.fillText(AX.dinheiro(max), pad.l, 10); c.fillText(AX.dinheiro(min), pad.l, h - 3);
+    c.textAlign = "right"; c.fillStyle = cor; c.fillText(AX.dinheiro(fim), w - pad.r, Math.max(12, Math.min(h - 18, Y(fim) - 4)));
   }
   function barrasMes(cv, meses) {
     const P = cv && preparar(cv); if (!P) return;
@@ -216,26 +216,26 @@
     curvaCapital($("cvCapital"), curva, cap);
     barrasMes($("cvMeses"), D.stats.meses);
   }
-  window.addEventListener("resize", () => { if (RK.aba === "sim") desenharGraficos(); });
+  window.addEventListener("resize", () => { if (AX.aba === "sim") desenharGraficos(); });
 
   function exportarCsv(D) {
     const f = (v, d = 4) => (v == null ? "" : Number(v).toFixed(d).replace(".", ","));
     const moeda = D.meta.moeda.replace("$", "S");
     const linhas = [["entrada", "saida", "estrategia", "lado", "quantidade", "preco_entrada", "stop", "alvo", "preco_saida", "motivo", "R", "custos_" + moeda, "resultado_" + moeda, "contexto_diario"].join(";")];
-    for (const t of D.trades) linhas.push([RK.quando(D, t.i_ent, true), RK.quando(D, t.i_sai, true), t.est, t.dir > 0 ? "compra" : "venda", f(t.q != null ? t.q : D.meta.contratos, 2),
+    for (const t of D.trades) linhas.push([AX.quando(D, t.i_ent, true), AX.quando(D, t.i_sai, true), t.est, t.dir > 0 ? "compra" : "venda", f(t.q != null ? t.q : D.meta.contratos, 2),
       f(t.ent), f(t.stop), f(t.alvo), f(t.sai), t.motivo, f(t.R, 3), f(t.custo, 2), f(t.dinheiro, 2), t.ctx > 0 ? "a favor" : t.ctx < 0 ? "contra" : "indefinido"].join(";"));
     const blob = new Blob(["﻿" + linhas.join("\r\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `robo_keller_${D.meta.ativo}_${D.meta.nomeTf.replace(/\s/g, "")}_${D.meta.est}.csv`.replace(/[^A-Za-z0-9_.\-]/g, "_");
+    a.download = `robo_apex_${D.meta.ativo}_${D.meta.nomeTf.replace(/\s/g, "")}_${D.meta.est}.csv`.replace(/[^A-Za-z0-9_.\-]/g, "_");
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }
 
   // link direto (abre a simulação já calculada, ou o replay parado em um candle)
-  RK.simDemo = async ({ acao, passos }) => {
+  AX.simDemo = async ({ acao, passos }) => {
     await simular({ assistir: acao === "replay" });
-    if (acao === "replay" && SIM.emReplay) { tocar(false); if (passos) avancar(passos); RK.mostrar(SIM.D, SIM.k); }
+    if (acao === "replay" && SIM.emReplay) { tocar(false); if (passos) avancar(passos); AX.mostrar(SIM.D, SIM.k); }
     await new Promise((ok) => setTimeout(ok, 800));       // deixa o gráfico redesenhar
   };
 
@@ -247,25 +247,25 @@
   $("rpVel").onchange = () => { if (SIM.rodando) tocar(true); };
   $("rpFim").onclick = () => { tocar(false); if (SIM.D) avancar(SIM.D.meta.iFim - SIM.k); };
   $("rpSair").onclick = () => pararReplay(true);
-  RK.on("tecla", (e) => {
-    if (RK.aba !== "sim" || !SIM.emReplay) return;
+  AX.on("tecla", (e) => {
+    if (AX.aba !== "sim" || !SIM.emReplay) return;
     if (e.key === " ") { e.preventDefault(); $("rpPlay").click(); }
     if (e.key === "ArrowRight") { e.preventDefault(); $("rpPasso").click(); }
   });
-  RK.on("mudou", (o) => {
+  AX.on("mudou", (o) => {
     SIM.velho = true;
     if (SIM.emReplay) pararReplay(false);
-    if (RK.aba === "sim" && SIM.D) simular();
+    if (AX.aba === "sim" && SIM.D) simular();
   });
-  RK.on("aba", (nome) => {
+  AX.on("aba", (nome) => {
     if (nome !== "sim") { if (SIM.rodando) tocar(false); return; }       // saiu da aba: pausa o replay
     if (SIM.D && SIM.velho) { simular(); return; }
     if (SIM.D) {
-      RK.mostrar(SIM.D, SIM.k ?? SIM.D.meta.iFim, { manterZoom: RK.graficoMostra() === SIM.D });
+      AX.mostrar(SIM.D, SIM.k ?? SIM.D.meta.iFim, { manterZoom: AX.graficoMostra() === SIM.D });
       desenharGraficos();
-    } else if (RK.vivo.D) {
-      textoPeriodo(RK.vivo.D);
-      $("simResultado").innerHTML = `<div class="card nota">Clique em <b>Calcular resultado</b> para ver quanto ${RK.esc(RK.nomeEst(RK.pref.est))} teria feito no período, ou em <b>Assistir</b> para ver candle a candle.</div>`;
+    } else if (AX.vivo.D) {
+      textoPeriodo(AX.vivo.D);
+      $("simResultado").innerHTML = `<div class="card nota">Clique em <b>Calcular resultado</b> para ver quanto ${AX.esc(AX.nomeEst(AX.pref.est))} teria feito no período, ou em <b>Assistir</b> para ver candle a candle.</div>`;
     }
   });
 })();

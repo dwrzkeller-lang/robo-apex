@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-ROBO KELLER - indicadores e as 6 estrategias.
+ROBO APEX - indicadores e as estrategias.
 
 Regra de ouro: cada estrategia olha SO candles ja fechados (ate o candle i) e, se o setup estiver pronto,
 devolve uma ORDEM para os candles seguintes (compra/venda stop acima/abaixo do candle de sinal, ou a
@@ -24,6 +24,10 @@ As regras de compra sao escritas uma unica vez. A venda e o espelho exato: o rob
                                 2,0/2,5 na MME20, IFR(9), alvo na media de 20
   E11 Momentum do dia (faixa de ruido) ... Zarattini, Aziz & Barbon (2024), "Beat the Market": o preco sai da faixa
                                 de movimento normal desde a abertura -> segue a direcao, com a VWAP de stop movel
+  E12 Fibo ABC: 3 alvos ....... pernada A-B, correcao ate C entre 38,2% e 50%, candle de reversao; stop abaixo de A e
+                                tres alvos nas projecoes de Fibonacci da pernada medidas a partir de C (61,8/100/161,8%)
+  E13 Fibo 50: ordem limitada . compra limitada nos 50% da pernada (sem esperar confirmacao), stop abaixo de A e alvos
+                                ancorados na pernada: o topo B, 127,2% e 161,8% (familia Golden Pocket / OTE)
 """
 import math
 
@@ -121,9 +125,9 @@ class Grafico:
             self.l = [-x for x in B["h"]]
             self.c = [-x for x in B["c"]]
         else:
-            self.o, self.h, self.l, self.c = B["o"], B["h"], B["l"], B["c"]
+            self.o, self.h, self.l, self.c = list(B["o"]), list(B["h"]), list(B["l"]), list(B["c"])
         self.d, self.hm = B["d"], B["hm"]
-        self.v = B["v"]                                                  # volume (igual nos dois lados)
+        self.v = list(B["v"])                                            # volume (igual nos dois lados)
         self.n = len(self.c)
         self.atr = atr(B["h"], B["l"], B["c"], 14)                       # igual nos dois lados
         neg = (lambda a: [None if x is None else -x for x in a]) if espelho else (lambda a: a)
@@ -141,6 +145,36 @@ class Grafico:
         self.vw = neg(vwap_dia(B["h"], B["l"], B["c"], B["v"], B["d"])) if self.intraday else None
         self.ini_dia = inicio_do_dia(B["d"])
         self.gap_real = bool(B.get("gap_real"))    # a fonte tem gap de abertura de verdade (futuro/CFD, nao indice a vista)
+
+    def atualizar_ultimo(self, B):
+        """So o ULTIMO candle mudou (ele ainda esta aberto): refaz os valores dele sem recalcular a serie inteira.
+        Nenhuma decisao de estrategia usa o candle aberto (sinal so sai no fechamento); estes valores servem para a tela e
+        para o aviso de "atencao". Quando o candle fecha, a serie inteira e recalculada do jeito normal."""
+        i, s = self.n - 1, self.sinal
+        o, h, l, c = B["o"][i], B["h"][i], B["l"][i], B["c"][i]
+        if s > 0:
+            self.o[i], self.h[i], self.l[i], self.c[i] = o, h, l, c
+        else:
+            self.o[i], self.h[i], self.l[i], self.c[i] = -o, -l, -h, -c
+        self.v[i] = B["v"][i]
+        cs, hs, ls = B["c"], B["h"], B["l"]
+        for nome, per in (("mm5", 5), ("mm9", 9), ("mm20", 20), ("mm200", 200)):
+            getattr(self, nome)[i] = s * (sum(cs[i - per + 1:i + 1]) / per) if i >= per - 1 else None
+        for nome, per in (("me20", 20), ("me200", 200), ("me500", 500)):
+            arr = getattr(self, nome)
+            ant = s * arr[i - 1]
+            arr[i] = s * (ant + (c - ant) * (2.0 / (per + 1)))
+        if i >= 14:
+            self.atr[i] = sum(max(hs[k] - ls[k], abs(hs[k] - cs[k - 1]), abs(ls[k] - cs[k - 1])) for k in range(i - 13, i + 1)) / 14.0
+        j = max(0, i - 400)                                    # o RSI de Wilder esquece o passado: 400 candles bastam
+        for nome, per in (("rsi2", 2), ("rsi9", 9)):
+            v = rsi(cs[j:i + 1], per)[-1]
+            getattr(self, nome)[i] = None if v is None else (v if s > 0 else 100.0 - v)
+        if self.vw is not None:
+            j = self.ini_dia[i]
+            vd = vwap_dia(hs[j:i + 1], ls[j:i + 1], cs[j:i + 1], B["v"][j:i + 1], B["d"][j:i + 1])
+            for k, x in enumerate(vd):
+                self.vw[j + k] = None if x is None else s * x
 
     def acima(self, x):      # arredonda para cima no tick (gatilho de compra)
         t = self.tick
@@ -174,6 +208,14 @@ def tendencia_diaria(B):
     return [td[x] for x in d]
 
 
+def eficiencia_em(c, i, p=ER_PERIODO):
+    """A eficiencia de Kaufman so no candle i (para atualizar o candle aberto)."""
+    if i < p:
+        return 0.0
+    soma = sum(abs(c[k] - c[k - 1]) for k in range(i - p + 1, i + 1))
+    return abs(c[i] - c[i - p]) / soma if soma > 0 else 0.0
+
+
 def eficiencia(c, p=ER_PERIODO):
     """Eficiencia de Kaufman: |variacao em p candles| / soma das variacoes candle a candle (1 = linha reta, 0 = serrote)."""
     n = len(c)
@@ -189,7 +231,7 @@ def eficiencia(c, p=ER_PERIODO):
 
 
 # Modo seletivo (opcional): menos operacoes, so no contexto que se saiu melhor nos testes com 41 mil operacoes em 12 ativos
-SELETIVO_TENDENCIA = ("E1", "E2", "E3", "E4", "E5", "E9")     # correcao/rompimento: a favor do diario E tendencia limpa
+SELETIVO_TENDENCIA = ("E1", "E2", "E3", "E4", "E5", "E9", "E12", "E13")   # correcao/rompimento: a favor do diario E tendencia limpa
 SELETIVO_DIRECAO = ("E7", "E11")                              # momentum do dia: so a favor do diario
 
 
@@ -291,7 +333,10 @@ def e2_fibonacci(G, i):
     n618 = G.h[j] - 0.618 * perna
     if not (G.c[i] > G.o[i] and G.c[i] >= (G.h[i] + G.l[i]) / 2 and G.c[i] > G.c[i - 1] and G.c[i] > n618):
         return None                                            # candle de confirmacao dentro/acima da zona
-    return _ordem_stop(G, i, fundo_pb, info="retração de %s%%" % _br(100 * ret))
+    od = _ordem_stop(G, i, fundo_pb, info="retração de %s%%" % _br(100 * ret))
+    if od:
+        od["ret"] = round(ret, 4)                              # profundidade da correcao (a IA usa)
+    return od
 
 
 def e2_atencao(G, i):
@@ -546,7 +591,7 @@ def e9_ogro(G, i):
         return None
     return dict(tipo="stop", gatilho=ent, stop=stop, validade=1,
                 alvos=(G.l[m] + ab, G.l[m] + 1.618 * ab),      # projecao de Fibonacci 100% e 161,8% a partir de C
-                info="retração de %.0f%% da pernada" % (100 * ret))
+                ret=round(ret, 4), info="retração de %.0f%% da pernada" % (100 * ret))
 
 
 def e9_atencao(G, i):
@@ -667,6 +712,108 @@ def e11_atencao(G, i):
     return nivel is not None and G.c[i] > nivel - 0.25 * G.atr[i] and e11_momentum(G, i) is None
 
 
+# ------------------------------------------------------------------------------------------ E12 / E13 (Fibonacci)
+F12_ZONA = (0.382, 0.50)            # a correcao precisa buscar 38,2% e nao passar de 50% da pernada
+F12_ALVOS = (0.618, 1.0, 1.618)     # projecoes de Fibonacci da pernada, medidas a partir do fundo da correcao (C)
+F13_NIVEL = 0.50                    # ordem limitada na retracao de 50% da pernada
+F13_ALVOS = (0.0, 0.272, 0.618)     # alvos ancorados na pernada: o topo B, 127,2% e 161,8%
+F13_ESPERA = 20                     # candles depois do topo: correcao lenta demais deixa de valer
+
+
+def _pernada(G, i):
+    """Pernada de alta A->B antes do candle i. B = maior topo dos 30 candles anteriores, ja confirmado como pivo (pelo
+    menos 2 candles depois dele, nenhum com topo maior); A = menor fundo dos 40 candles antes de B.
+    Devolve (indice de A, indice de B, tamanho AB) ou None."""
+    j = _topo(G, i, 30)
+    if j > i - 2 or G.h[i] >= G.h[j] or j < 4:
+        return None
+    a0 = j - 1
+    for k in range(max(0, j - 40), j):
+        if G.l[k] <= G.l[a0]:
+            a0 = k
+    if j - a0 < 3:
+        return None
+    return a0, j, G.h[j] - G.l[a0]
+
+
+def _fundo_c(G, j, i):
+    m = j + 1
+    for k in range(j + 1, i + 1):
+        if G.l[k] <= G.l[m]:
+            m = k
+    return m
+
+
+def e12_abc(G, i):
+    """Projecao de Fibonacci A-B-C com 3 alvos (a ferramenta "Trend-Based Fib Extension" do TradingView virada regra)."""
+    a = G.atr[i]
+    if not (G.mm9[i] > G.mm20[i] > G.mm200[i]) or G.mm20[i] <= G.mm20[i - 5]:
+        return None                                            # medias simples alinhadas e MM20 subindo
+    p = _pernada(G, i)
+    if not p:
+        return None
+    a0, j, ab = p
+    if ab < 2.0 * a:
+        return None
+    m = _fundo_c(G, j, i)                                      # C = fundo da correcao
+    ret = (G.h[j] - G.l[m]) / ab
+    if not F12_ZONA[0] <= ret <= F12_ZONA[1]:
+        return None                                            # buscou 38,2% e nao passou de 50%
+    if i - m > 2:
+        return None                                            # a reversao tem de vir colada no fundo C
+    if not (G.c[i] > G.o[i] and G.c[i] >= (G.h[i] + G.l[i]) / 2 and G.c[i] > G.c[i - 1]):
+        return None                                            # candle de reversao
+    ent = G.acima(G.h[i] + G.tick)
+    if ent >= G.h[j]:
+        return None                                            # acima do topo B ja seria o rompimento do pivo (E9)
+    stop = G.abaixo(G.l[a0] - G.tick)                          # stop abaixo do inicio da pernada (A)
+    if not _risco_ok(G, i, ent, stop, 0.5, 4.0):
+        return None
+    alvos = tuple(G.abaixo(G.l[m] + r * ab) for r in F12_ALVOS)
+    if alvos[0] <= ent + G.tick:
+        return None
+    return dict(tipo="stop", gatilho=ent, stop=stop, validade=2, alvos=alvos, ret=round(ret, 4),
+                info="A-B-C: correção de %s%% da pernada" % _br(100 * ret))
+
+
+def e12_atencao(G, i):
+    if not (G.mm9[i] > G.mm20[i] > G.mm200[i]):
+        return False
+    p = _pernada(G, i)
+    if not p or p[2] < 2.0 * G.atr[i]:
+        return False
+    ret = (G.h[p[1]] - G.l[_fundo_c(G, p[1], i)]) / p[2]
+    return 0.25 <= ret <= F12_ZONA[1] and e12_abc(G, i) is None
+
+
+def e13_limite(G, i):
+    """Ordem limitada na retracao de 50% da pernada (familia Golden Pocket / OTE, com o nivel nos 50%)."""
+    a = G.atr[i]
+    if not (G.mm20[i] > G.mm200[i] and G.c[i] > G.mm200[i]):
+        return None                                            # estrutura de alta: MM20 e preco acima da MM200
+    p = _pernada(G, i)
+    if not p:
+        return None
+    a0, j, ab = p
+    if ab < 2.5 * a or i - j > F13_ESPERA:
+        return None                                            # pernada forte e correcao que nao demora
+    if not (G.mm9[j] > G.mm20[j] > G.mm200[j]):
+        return None                                            # no topo da pernada as medias estavam alinhadas
+    lim = G.abaixo(G.h[j] - F13_NIVEL * ab)
+    if min(G.l[k] for k in range(j + 1, i + 1)) <= lim:
+        return None                                            # o preco ja buscou o nivel: a ordem ja teria executado
+    stop = G.abaixo(G.l[a0] - G.tick)                          # stop abaixo do inicio da pernada (A)
+    if not _risco_ok(G, i, lim, stop, 0.5, 4.0):
+        return None
+    alvos = tuple(G.abaixo(G.h[j] + r * ab) for r in F13_ALVOS)
+    return dict(tipo="limite", gatilho=lim, stop=stop, validade=1, alvos=alvos, ret=F13_NIVEL,
+                info="limite nos %s%% da pernada" % _br(100 * F13_NIVEL, 0))
+
+
+def e13_atencao(G, i):
+    return False                                               # a propria ordem limitada ja aparece armada na tela
+
+
 # ------------------------------------------------------------------------------------------ catalogo
 ESTRATEGIAS = {
     "E1": dict(nome="Halt na MM20", autor="Mario Pisani + Oliver Velez", fn=e1_halt_mm20, aten=e1_atencao,
@@ -767,15 +914,47 @@ ESTRATEGIAS = {
                         "Fonte: 'Beat the Market: An Effective Intraday Momentum Strategy for S&P500 ETF' (SSRN, 2024). No estudo: 37% de acerto, "
                         "ganho pequeno por operação e anos fracos quando o mercado anda pouco (2025 ficou no zero)",
                         "Só no aplicativo: não tem script do Profit"]),
+    "E12": dict(nome="Fibo ABC: 3 alvos projetados", autor="Projeção de Fibonacci A-B-C (Trend-Based Fib Extension do TradingView)",
+                fn=e12_abc, aten=e12_atencao, gestao="fibo3", saida=None, intraday=False, sem_ntsl=True,
+                aguardando="correção entre 38,2% e 50% da pernada, esperando o candle de reversão",
+                ideal="60 min em ativos em tendência. No nosso teste (421 operações em 12 ativos) perdeu na média depois dos custos em "
+                      "5 e 15 min e ficou perto do zero em 60 min. O stop é largo (abaixo da pernada): confira o % do capital",
+                regras=["Médias simples alinhadas: MM9 > MM20 > MM200 e MM20 subindo (venda: o inverso)",
+                        "Pernada A→B de pelo menos 2 ATR, com o topo B confirmado como pivô",
+                        "Correção até C que busca 38,2% e não passa de 50% da pernada",
+                        "Candle de reversão colado no fundo C: compra 1 tick acima dele (vale 2 candles), ainda abaixo do topo B",
+                        "Stop 1 tick abaixo do início da pernada (A)",
+                        "Três alvos na projeção de Fibonacci da pernada a partir de C: 61,8%, 100% e 161,8%",
+                        "Um terço da posição em cada alvo; no alvo 1 o stop vai para a entrada, no alvo 2 vai para o alvo 1 "
+                        "(com 1 contrato não há parcial: só o stop sobe e a saída é no alvo 3)"]),
+    "E13": dict(nome="Fibo 50: ordem limitada na pernada", autor="Entrada na zona de retração (família Golden Pocket / OTE, com o nível nos 50%)",
+                fn=e13_limite, aten=e13_atencao, gestao="fibo3", saida=None, intraday=False, sem_ntsl=True,
+                aguardando="pernada pronta: a ordem limitada fica esperando o preço recuar até os 50%",
+                ideal="60 min em ativos de custo baixo. No nosso teste (1.755 operações em 12 ativos) ficou perto do zero em 60 min e "
+                      "negativa em 5 e 15 min; entre os níveis 38,2%, 50%, 61,8% e 70,5%, o de 50% foi o menos ruim",
+                regras=["MM20 e preço acima da MM200; no topo da pernada as médias estavam alinhadas (MM9 > MM20 > MM200)",
+                        "Pernada A→B forte: pelo menos 2,5 ATR, com o topo B confirmado como pivô",
+                        "Compra LIMITADA nos 50% da pernada: a ordem fica parada esperando o preço recuar (sem candle de confirmação)",
+                        "A ordem vale enquanto o preço não fizer topo novo e por até 20 candles depois do topo",
+                        "Stop 1 tick abaixo do início da pernada (A)",
+                        "Três alvos ancorados na pernada: o topo B, 127,2% e 161,8% da pernada",
+                        "Um terço em cada alvo; no alvo 1 o stop vai para a entrada, no alvo 2 vai para o alvo 1",
+                        "As versões publicadas usam 61,8% (Golden Pocket) ou 70,5% (OTE); aqui o nível é 50%"]),
 }
 
 GESTOES = {
     "padrao": "Padrão de cada estratégia (a gestão que cada uma usa - ver regras)",
     "alvo2": "Alvo 2:1 (tudo no alvo)",
     "alvo3": "Alvo 3:1 (tudo no alvo)",
+    "alvo4": "Alvo 4:1 (tudo no alvo)",
     "parcial": "Parcial: metade no 1:1, stop no 0x0, resto no 2:1",
     "conducao": "Condução: metade no 1:1, stop no 0x0, resto carregado pela MM9",
+    "trail_atr": "Trailing stop: sem alvo, o stop sobe 2 ATR atrás do melhor preço",
+    "trail_r": "Trailing em degraus: sem alvo, a cada 1R a favor o stop sobe 1R",
 }
+# nome curto (botoes da tela) e o que cada gestao faz, em uma frase
+GESTOES_CURTO = {"padrao": "Padrão", "alvo2": "2:1", "alvo3": "3:1", "alvo4": "4:1", "parcial": "Parcial", "conducao": "Condução",
+                 "trail_atr": "Trailing ATR", "trail_r": "Trailing degraus"}
 
 
 def avaliar(Gs, cod, i):

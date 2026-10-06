@@ -1,5 +1,5 @@
 @echo off
-rem Alternativa ao RoboKeller.exe para quem tem Python instalado
+rem Alternativa ao RoboApex.exe para quem tem Python instalado
 cd /d "%~dp0app"
-python robo_keller.py
+python robo_apex.py
 pause

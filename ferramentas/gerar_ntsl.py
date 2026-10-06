@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Gera os indicadores NTSL (Profit) das 6 estrategias do ROBO KELLER, com as MESMAS regras de
+Gera os indicadores NTSL (Profit) das 6 estrategias do ROBO APEX, com as MESMAS regras de
 app/estrategias.py e a mesma execucao de app/simulador.py (ordem stop com escorregamento, validade,
 cancelamento no stop, alvo so passando 1 tick, stop antes do alvo, zeragem, N stops no dia).
 
@@ -398,11 +398,11 @@ REGRAS["E6"]["modo"] = "propria"
 
 # ------------------------------------------------------------------------------------------ esqueleto
 CAB = """// =====================================================================
-//  ROBO KELLER - {TITULO}
+//  ROBO APEX - {TITULO}
 //  Tipo no Profit: Indicador (no grafico de preco). NAO envia ordens.
 //  Linhas: BRANCA = entrada | VERMELHA = stop | VERDE = alvo
 //  (aparecem enquanto a ordem esta armada ou a operacao esta aberta).
-//  Mesmas regras e mesma execucao do programa ROBO KELLER.
+//  Mesmas regras e mesma execucao do programa ROBO APEX.
 //  Parametros por ativo (Tick, Slip, CustoPts, horarios): veja o LEIA-ME.
 //  Gerado por ferramentas/gerar_ntsl.py - edite la, nao aqui.
 // =====================================================================

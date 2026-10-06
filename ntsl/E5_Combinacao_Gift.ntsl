@@ -1,9 +1,9 @@
 // =====================================================================
-//  ROBO KELLER - E5 - Combinacao perfeita + Gift na MM9 (Oliver Velez + Mario Pisani)
+//  ROBO APEX - E5 - Combinacao perfeita + Gift na MM9 (Oliver Velez + Mario Pisani)
 //  Tipo no Profit: Indicador (no grafico de preco). NAO envia ordens.
 //  Linhas: BRANCA = entrada | VERMELHA = stop | VERDE = alvo
 //  (aparecem enquanto a ordem esta armada ou a operacao esta aberta).
-//  Mesmas regras e mesma execucao do programa ROBO KELLER.
+//  Mesmas regras e mesma execucao do programa ROBO APEX.
 //  Parametros por ativo (Tick, Slip, CustoPts, horarios): veja o LEIA-ME.
 //  Gerado por ferramentas/gerar_ntsl.py - edite la, nao aqui.
 // =====================================================================

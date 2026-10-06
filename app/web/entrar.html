@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entrar · Robô Apex</title>
+<link rel="icon" type="image/png" href="icone.png">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="entrar.css">
+</head>
+<body>
+
+<!-- ROBÔ APEX — tela de entrada. O servidor entrega esta página em "/" enquanto não há sessão válida (ou enquanto a
+     senha ainda é a provisória). O entrar.js pergunta a situação em /api/acesso/estado e mostra só um dos blocos
+     marcados com data-tela; os outros ficam com a classe "oculto". -->
+<main class="en-tela">
+  <div class="en-janela">
+    <header class="en-topo">
+      <img src="icone.png" alt="" width="64" height="64">
+      <div><h1>ROBÔ APEX</h1><p>day trade informativo · não envia ordens</p></div>
+    </header>
+
+    <noscript><div class="erro">Esta tela precisa do JavaScript ligado no navegador.</div></noscript>
+
+    <!-- ============================== esperando o robô responder ============================== -->
+    <p class="en-espera" data-tela="espera" role="status">Conectando ao robô…</p>
+
+    <!-- ============================== o robô não respondeu ============================== -->
+    <section class="oculto" data-tela="falha">
+      <div class="erro" id="enFalha" role="alert"></div>
+      <div class="botoes"><button type="button" class="primario" id="enDeNovo">Tentar de novo</button></div>
+    </section>
+
+    <!-- ============================== entrar ============================== -->
+    <section class="oculto" data-tela="entrar">
+      <form class="en-form" id="enEntrar" novalidate aria-labelledby="enTitEntrar">
+        <h2 class="en-titulo" id="enTitEntrar">Entrar</h2>
+        <label class="campo" for="enEmail"><span>E-mail</span>
+          <input type="email" id="enEmail" name="email" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="200" required autofocus></label>
+        <label class="campo" for="enSenha"><span>Senha</span>
+          <input type="password" id="enSenha" name="senha" autocomplete="current-password" maxlength="200" required data-senha></label>
+        <label class="chk"><input type="checkbox" data-mostrar> mostrar senha</label>
+        <label class="chk"><input type="checkbox" name="manter"> manter conectado neste computador (30 dias)</label>
+        <div class="erro oculto" role="alert" data-erro></div>
+        <div class="botoes"><button type="submit" class="primario" data-ocupado="Entrando…">Entrar</button></div>
+      </form>
+      <details class="en-esqueci">
+        <summary>Esqueci a senha</summary>
+        <p><b>Usuário:</b> peça ao administrador para redefinir (ele gera uma senha provisória).</p>
+        <p><b>Administrador:</b> feche o robô e abra-o uma vez com <code>RoboApex.exe --redefinir-admin</code>
+          (ou <code>python app/robo_apex.py --redefinir-admin</code>): o robô volta para o primeiro acesso, sem apagar seus dados.</p>
+      </details>
+    </section>
+
+    <!-- ============================== primeiro acesso: o administrador ainda não tem senha ============================== -->
+    <section class="oculto" data-tela="primeiro">
+      <form class="en-form" id="enPrimeiro" novalidate aria-labelledby="enTitPrimeiro">
+        <h2 class="en-titulo" id="enTitPrimeiro">Primeiro acesso</h2>
+        <p class="nota">Esta é a conta do administrador: é ela que cria os outros usuários e vê o registro de acessos.</p>
+        <label class="campo" for="enAdmEmail"><span>E-mail do administrador</span>
+          <input type="email" id="enAdmEmail" name="email" autocomplete="username" readonly></label>
+        <label class="campo" for="enPriNova"><span>Crie a senha do administrador</span>
+          <input type="password" id="enPriNova" name="nova" autocomplete="new-password" maxlength="200" required aria-describedby="enPriRegras" data-senha></label>
+        <label class="campo" for="enPriRepetir"><span>Repita a senha</span>
+          <input type="password" id="enPriRepetir" name="repetir" autocomplete="new-password" maxlength="200" required data-senha></label>
+        <ul class="en-regras" id="enPriRegras">
+          <li data-regra="tamanho">pelo menos 8 caracteres</li>
+          <li data-regra="iguais">as duas iguais</li>
+        </ul>
+        <label class="chk"><input type="checkbox" data-mostrar> mostrar senha</label>
+        <div class="erro oculto" role="alert" data-erro></div>
+        <div class="botoes"><button type="submit" class="primario" data-ocupado="Criando…">Criar a senha e entrar</button></div>
+      </form>
+    </section>
+
+    <!-- ============================== senha provisória: é obrigatório criar a própria ============================== -->
+    <section class="oculto" data-tela="criar">
+      <form class="en-form" id="enCriar" novalidate aria-labelledby="enTitCriar">
+        <h2 class="en-titulo" id="enTitCriar">Crie a sua senha</h2>
+        <p class="nota">A senha que você recebeu é provisória e só vale para este primeiro acesso. Crie a sua para continuar.</p>
+        <label class="campo" for="enCriEmail"><span>Usuário</span>
+          <input type="email" id="enCriEmail" name="email" autocomplete="username" readonly></label>
+        <!-- só aparece quando a página foi recarregada no meio do caminho e a provisória não está mais na memória -->
+        <label class="campo oculto" for="enCriAtual" id="enCriAtualBox"><span>Senha provisória (a que você recebeu)</span>
+          <input type="password" id="enCriAtual" name="atual" autocomplete="current-password" maxlength="200" data-senha></label>
+        <label class="campo" for="enCriNova"><span>Senha nova</span>
+          <input type="password" id="enCriNova" name="nova" autocomplete="new-password" maxlength="200" required aria-describedby="enCriRegras" data-senha></label>
+        <label class="campo" for="enCriRepetir"><span>Repita a senha nova</span>
+          <input type="password" id="enCriRepetir" name="repetir" autocomplete="new-password" maxlength="200" required data-senha></label>
+        <ul class="en-regras" id="enCriRegras">
+          <li data-regra="tamanho">pelo menos 8 caracteres</li>
+          <li data-regra="iguais">as duas iguais</li>
+        </ul>
+        <label class="chk"><input type="checkbox" data-mostrar> mostrar senha</label>
+        <div class="erro oculto" role="alert" data-erro></div>
+        <div class="botoes"><button type="submit" class="primario" data-ocupado="Salvando…">Salvar a senha e entrar</button></div>
+        <button type="button" class="en-link" id="enOutro">Entrar com outro usuário</button>
+      </form>
+    </section>
+
+    <footer class="en-rodape">Seus dados e senhas ficam só neste computador. <span id="enVersao"></span></footer>
+  </div>
+</main>
+
+<script src="entrar.js"></script>
+</body>
+</html>

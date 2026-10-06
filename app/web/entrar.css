@@ -1,0 +1,68 @@
+/* ROBÔ APEX — tela de entrada (entrar.html), no estilo da tela de abertura (.splash). Cores, campos, botões, .campo,
+   .chk, .botoes, .primario, .nota e .erro vêm do style.css; aqui fica só o que é desta página, com o prefixo en-
+   para não esbarrar em nada da tela principal. */
+
+/* A tela ocupa a janela toda e rola por dentro: o style.css trava a rolagem do body (a tela principal não rola).
+   A direção vai escrita aqui porque o style.css tem regras para <main> (uma delas muda a direção em janela estreita). */
+.en-tela { position: fixed; inset: 0; display: flex; flex-direction: column; overflow-y: auto; padding: 24px 16px;
+  background: radial-gradient(ellipse at center, #111a2a 0%, #05070b 70%); }
+/* margin:auto centraliza o cartão quando sobra espaço e, quando ele é mais alto que a janela, mantém o topo
+   alcançável (com place-items:center o começo ficaria cortado, sem como rolar até ele). */
+.en-janela { margin: auto; width: 440px; max-width: 100%; background: #0e131c; border: 1px solid #263246;
+  border-radius: 12px; padding: 22px 24px 16px; box-shadow: 0 30px 80px #000, 0 0 60px #00d4a012; }
+
+.en-topo { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+.en-topo img { flex: none; width: 64px; height: 64px; border-radius: 14px; }
+.en-topo h1 { margin: 0; font-size: 24px; line-height: 1.25; letter-spacing: 1.5px; }
+.en-topo p { margin: 0; font-size: 12px; color: var(--txt2); }
+
+/* O robô responde em milésimos: o "Conectando…" só aparece se a resposta demorar, para a tela não piscar. */
+.en-espera { margin: 0; padding: 18px 0; text-align: center; color: var(--txt2); animation: en-surge .3s .4s both; }
+@keyframes en-surge { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---------------- formulários ---------------- */
+.en-form { display: flex; flex-direction: column; gap: 10px; }
+.en-titulo { margin: 0; font-size: 15px; font-weight: 700; }
+.en-form .nota { margin: 0; }
+.en-form input:not([type=checkbox]) { padding: 9px 11px; font-size: 14px; }
+.en-form input[readonly] { color: var(--txt2); background: var(--bg2); cursor: default; }
+/* o preenchimento automático do navegador pinta o campo de claro: aqui ele continua escuro como os outros */
+.en-form input:-webkit-autofill { -webkit-text-fill-color: var(--txt); caret-color: var(--txt);
+  box-shadow: 0 0 0 100px var(--bg3) inset; }
+.en-form .chk { align-self: flex-start; }
+.en-form .botoes { margin-top: 2px; }
+.en-form .botoes button { padding: 10px; font-size: 14px; }
+.en-form button[type=submit]:disabled { opacity: .7; cursor: progress; }       /* "Entrando…": ocupado, não proibido */
+
+/* lista conferida enquanto a senha é digitada */
+.en-regras { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 18px;
+  font-size: 12px; color: var(--txt2); }
+.en-regras li::before { content: "○"; display: inline-block; width: 16px; }
+.en-regras li.en-ok { color: var(--verde2); }
+.en-regras li.en-ok::before { content: "✓"; }
+
+.en-link { align-self: center; padding: 4px 6px; border: 0; background: none; color: #9cc4ff; font-size: 12px;
+  text-decoration: underline; }
+
+/* ---------------- esqueci a senha / rodapé ---------------- */
+.en-esqueci { margin-top: 12px; }
+.en-esqueci summary { margin-top: 0; }
+.en-esqueci p { margin: 8px 0 0; font-size: 12px; color: var(--txt2); }
+.en-esqueci b { color: var(--txt); }
+.en-esqueci code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 11.5px; color: var(--txt);
+  background: var(--bg3); border: 1px solid var(--linha); border-radius: 4px; padding: 0 4px; overflow-wrap: anywhere; }
+.en-rodape { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--linha); text-align: center;
+  font-size: 11.5px; color: var(--txt2); }
+
+/* foco bem visível para quem usa o teclado (o style.css usa 1px) */
+.en-janela input:focus, .en-janela button:focus-visible, .en-janela summary:focus-visible { outline: 2px solid var(--azul);
+  outline-offset: 1px; }
+
+@media (max-width: 420px) {
+  .en-tela { padding: 12px 10px; }
+  .en-janela { padding: 16px 14px 12px; }
+  .en-topo { gap: 10px; }
+  .en-topo img { width: 52px; height: 52px; }
+  .en-topo h1 { font-size: 21px; }
+}
+@media (prefers-reduced-motion: reduce) { .en-espera { animation: none; } }

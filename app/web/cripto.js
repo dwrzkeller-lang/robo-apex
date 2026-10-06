@@ -1,11 +1,11 @@
-/* ROBÔ KELLER — aba CRIPTO: radar de moedas em tempo real.
+/* ROBÔ APEX — aba CRIPTO: radar de moedas em tempo real.
    Memes e Maiores: Binance. O servidor mede cada moeda (variação, volume da última hora contra o normal, pressão de
    compra, se está na máxima de 24 h) e o navegador recebe os preços direto da Binance, uma vez por segundo.
    Novas (DEX): tokens em alta nas corretoras descentralizadas (GeckoTerminal), com os sinais de risco e a checagem
    de golpe. Clicar numa moeda da Binance abre ela no gráfico, com as estratégias e a taxa da corretora nas contas. */
 (() => {
   "use strict";
-  const RK = window.RK, $ = RK.$;
+  const AX = window.AX, $ = AX.$;
   const C = { seg: "memes", painel: null, dex: null, ordem: "onda", desc: true, aberto: null, seguranca: {}, buscando: false,
     ws: {}, wsOk: {}, precos: {}, tentativas: {}, vistosRompendo: {}, ultPainel: 0, ultDex: 0 };
   const WS_URL = { BN: ["wss://stream.binance.com:9443/ws/!miniTicker@arr", "wss://data-stream.binance.vision/ws/!miniTicker@arr"],
@@ -16,9 +16,9 @@
     : v.toLocaleString("pt-BR", { minimumSignificantDigits: 3, maximumSignificantDigits: 5 }));
   const pct = (v, d = 1) => (v == null ? '<span class="neutro">—</span>'
     : `<span class="${v > 0 ? "bom" : v < 0 ? "ruim" : "neutro"}">${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(100 * v).toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d })}%</span>`);
-  const abrev = (v) => (v == null ? "—" : "US$ " + (v >= 1e9 ? RK.num(v / 1e9, 1) + " bi" : v >= 1e6 ? RK.num(v / 1e6, 1) + " mi" : v >= 1e3 ? RK.num(v / 1e3, 0) + " mil" : RK.num(v, 0)));
+  const abrev = (v) => (v == null ? "—" : "US$ " + (v >= 1e9 ? AX.num(v / 1e9, 1) + " bi" : v >= 1e6 ? AX.num(v / 1e6, 1) + " mi" : v >= 1e3 ? AX.num(v / 1e3, 0) + " mil" : AX.num(v, 0)));
   const idade = (h) => (h == null ? "—" : h < 1 ? `${Math.max(1, Math.round(h * 60))} min` : h < 48 ? `${Math.round(h)} h` : `${Math.round(h / 24)} dias`);
-  const hora = (t) => RK.horaBR(t, true);
+  const hora = (t) => AX.horaBR(t, true);
   function spark(pts) {
     if (!pts || pts.length < 3) return "";
     const mn = Math.min(...pts), mx = Math.max(...pts), amp = mx - mn || 1, W = 62, H = 18;
@@ -38,11 +38,11 @@
     if (!forcar && agora - (dex ? C.ultDex : C.ultPainel) < (dex ? 60000 : 4500)) return;
     C.buscando = true;
     try {
-      if (dex) { C.dex = await RK.json("/api/cripto/dex"); C.ultDex = Date.now(); }
-      else { C.painel = await RK.json("/api/cripto/painel"); C.ultPainel = Date.now(); avisarRompimentos(); }
-      if (RK.aba === "cripto") { RK.erro("erroCripto", null); render(); }
+      if (dex) { C.dex = await AX.json("/api/cripto/dex"); C.ultDex = Date.now(); }
+      else { C.painel = await AX.json("/api/cripto/painel"); C.ultPainel = Date.now(); avisarRompimentos(); }
+      if (AX.aba === "cripto") { AX.erro("erroCripto", null); render(); }
     } catch (e) {
-      if (RK.aba === "cripto") RK.erro("erroCripto", e);
+      if (AX.aba === "cripto") AX.erro("erroCripto", e);
     } finally { C.buscando = false; }
   }
 
@@ -53,18 +53,18 @@
     const bd = $("badgeCripto"); bd.textContent = romp.length; bd.classList.toggle("oculto", !romp.length);
     const novas = romp.filter((r) => !(agora - (C.vistosRompendo[r.chave] || 0) < 2 * 3600 * 1000));
     romp.forEach((r) => (C.vistosRompendo[r.chave] = agora));
-    if (C.primeiraPassou && novas.length && RK.pref.criptoAviso) {
+    if (C.primeiraPassou && novas.length && AX.pref.criptoAviso) {
       const r = novas[0];
-      RK.som("aviso");
-      RK.toast(`${r.moeda} rompendo com volume: ${(100 * r.r60).toFixed(1).replace(".", ",")}% em 1 h, volume ${RK.num(r.volRel, 1)}× o normal${novas.length > 1 ? ` (+${novas.length - 1})` : ""}`, "aviso");
+      AX.som("aviso");
+      AX.toast(`${r.moeda} rompendo com volume: ${(100 * r.r60).toFixed(1).replace(".", ",")}% em 1 h, volume ${AX.num(r.volRel, 1)}× o normal${novas.length > 1 ? ` (+${novas.length - 1})` : ""}`, "aviso");
     }
     C.primeiraPassou = true;
   }
 
   // ---------------------------------------------------------------- preços em tempo real (direto da Binance)
   function precisa(mercado) {
-    const noGrafico = RK.ehCripto(RK.pref.ativo) && RK.pref.ativo.startsWith(mercado + ":") && RK.vivo.D && RK.vivo.D.meta.aoVivo;
-    const naLista = RK.aba === "cripto" && C.seg !== "dex" && !document.hidden && (mercado === "BN" || (C.painel && C.seg === "memes"));
+    const noGrafico = AX.ehCripto(AX.pref.ativo) && AX.pref.ativo.startsWith(mercado + ":") && AX.vivo.D && AX.vivo.D.meta.aoVivo;
+    const naLista = AX.aba === "cripto" && C.seg !== "dex" && !document.hidden && (mercado === "BN" || (C.painel && C.seg === "memes"));
     return !!(noGrafico || naLista);
   }
   function ligar(mercado) {
@@ -79,13 +79,13 @@
     ws.onmessage = (ev) => {
       let arr; try { arr = JSON.parse(ev.data); } catch (e) { return; }
       if (!Array.isArray(arr)) return;
-      const noGrafico = RK.pref.ativo.startsWith(mercado + ":") ? RK.pref.ativo.slice(3) : null;
+      const noGrafico = AX.pref.ativo.startsWith(mercado + ":") ? AX.pref.ativo.slice(3) : null;
       for (const t of arr) {
         const c = +t.c;
         C.precos[mercado + ":" + t.s] = [c, +t.o];
-        if (t.s === noGrafico) RK.tick(RK.pref.ativo, c);
+        if (t.s === noGrafico) AX.tick(AX.pref.ativo, c);
       }
-      if (RK.aba === "cripto" && C.seg !== "dex") pintarPrecos();
+      if (AX.aba === "cripto" && C.seg !== "dex") pintarPrecos();
     };
     ws.onclose = ws.onerror = () => {
       if (C.ws[mercado] !== ws) return;
@@ -111,7 +111,7 @@
     });
   }
   function status() {
-    if (RK.aba !== "cripto") return;
+    if (AX.aba !== "cripto") return;
     const el = $("crStatus");
     if (C.seg === "dex") el.innerHTML = C.dex ? `GeckoTerminal · atualizado ${hora(C.dex.t)}` : "buscando…";
     else el.innerHTML = (C.wsOk.BN ? '<i class="luz vivo"></i> preços em tempo real' : '<i class="luz hist"></i> preços a cada 12 s') + (C.painel ? ` · medidas de ${hora(C.painel.t)}` : "");
@@ -132,11 +132,11 @@
     const linhas = lista.map((r) => {
       const pr = C.precos[r.chave] ? C.precos[r.chave][0] : r.preco;
       const fin = r.funding != null && Math.abs(r.funding) >= 0.0005 ? `<span class="chip fin" title="Taxa de financiamento do futuro a cada 8 h. Alta = muita gente comprada com alavancagem: não é sinal de virada, mas as quedas costumam ser mais bruscas">fin. ${(100 * r.funding).toFixed(2).replace(".", ",")}%</span>` : "";
-      return `<tr class="clic ${RK.pref.ativo === r.chave ? "sel" : ""}" data-c="${r.chave}" title="${RK.esc(r.nome)} · volume 24 h ${abrev(r.v24)} · clique para abrir no gráfico">
-        <td><b>${RK.esc(r.moeda)}</b>${r.mercado === "futuro" ? ' <small class="neutro">fut.</small>' : ""}<br>${spark(r.spark)}</td>
+      return `<tr class="clic ${AX.pref.ativo === r.chave ? "sel" : ""}" data-c="${r.chave}" title="${AX.esc(r.nome)} · volume 24 h ${abrev(r.v24)} · clique para abrir no gráfico">
+        <td><b>${AX.esc(r.moeda)}</b>${r.mercado === "futuro" ? ' <small class="neutro">fut.</small>' : ""}<br>${spark(r.spark)}</td>
         <td class="n cr-preco" data-v="${pr}">${preco(pr)}</td><td class="n">${pct(r.r5)}</td><td class="n">${pct(r.r60)}</td><td class="n cr-24">${pct(r.r24)}</td>
-        <td class="n ${r.volRel >= 3 ? "vol3" : r.volRel >= 2 ? "vol2" : ""}">${r.volRel == null ? "—" : RK.num(r.volRel, 1) + "×"}</td>
-        <td class="n ${r.compra >= 0.55 ? "bom" : r.compra != null && r.compra <= 0.45 ? "ruim" : ""}">${r.compra == null ? "—" : RK.pct(100 * r.compra, 0)}</td>
+        <td class="n ${r.volRel >= 3 ? "vol3" : r.volRel >= 2 ? "vol2" : ""}">${r.volRel == null ? "—" : AX.num(r.volRel, 1) + "×"}</td>
+        <td class="n ${r.compra >= 0.55 ? "bom" : r.compra != null && r.compra <= 0.45 ? "ruim" : ""}">${r.compra == null ? "—" : AX.pct(100 * r.compra, 0)}</td>
         <td>${chip(r.estado)}${chip(r.alerta)}${fin}</td></tr>`;
     }).join("");
     $("crLista").innerHTML = `<div class="card sem-borda"><table class="tab cr"><tr>${th}</tr>${linhas}</table></div>`;
@@ -146,9 +146,9 @@
     }));
     $("crLista").querySelectorAll("tr.clic").forEach((tr) => (tr.onclick = () => {
       const r = lista.find((x) => x.chave === tr.dataset.c); if (!r) return;
-      RK.abrirCripto(r.chave, `${r.moeda}/USDT${r.mercado === "futuro" ? " (futuro)" : ""}`);
+      AX.abrirCripto(r.chave, `${r.moeda}/USDT${r.mercado === "futuro" ? " (futuro)" : ""}`);
       $("crLista").querySelectorAll("tr.sel").forEach((x) => x.classList.remove("sel")); tr.classList.add("sel");
-      RK.toast(`${r.moeda} no gráfico. As estratégias e a simulação dela estão nas abas Ao vivo e Simulação.`, "ok");
+      AX.toast(`${r.moeda} no gráfico. As estratégias e a simulação dela estão nas abas Ao vivo e Simulação.`, "ok");
     }));
   }
   function renderEstudo() {
@@ -158,40 +158,40 @@
         e mais de 60% das carteiras que operaram lá perderam dinheiro; quem lança costuma comprar no mesmo instante e vender em minutos. A lista mostra o que está em alta <b>agora</b> nas corretoras descentralizadas, com os sinais de risco à vista. O robô não traça gráfico nem estratégia para elas.</div>`;
       return;
     }
-    const lig = `<label class="chk" style="margin-top:8px"><input type="checkbox" id="crAviso" ${RK.pref.criptoAviso ? "checked" : ""}> avisar com som quando uma meme começar a romper com volume (mesmo com outra aba aberta)</label>`;
+    const lig = `<label class="chk" style="margin-top:8px"><input type="checkbox" id="crAviso" ${AX.pref.criptoAviso ? "checked" : ""}> avisar com som quando uma meme começar a romper com volume (mesmo com outra aba aberta)</label>`;
     if (C.seg !== "memes") { el.innerHTML = `<div class="nota">As ${p ? p.maiores.length : 15} moedas de maior volume na Binance (sem as de preço fixo). Clique numa para abrir no gráfico.</div>`; return; }
     const e = p && p.estudo;
     if (!e || !e.estados || !e.estados.rompendo || !e.estados.rompendo.subiu) { el.innerHTML = `<div class="nota">Calculando o estudo "o que veio depois" com os últimos ~125 dias de todas as memes (leva 1 a 2 minutos na primeira vez)…</div>${lig}`; ligarAviso(); return; }
-    const b = e.estados.base, r = e.estados.rompendo, n0 = (v) => RK.pct(v, 0);
+    const b = e.estados.base, r = e.estados.rompendo, n0 = (v) => AX.pct(v, 0);
     const NOME = { base: "Num momento qualquer", rompendo: "ROMPENDO", esquentando: "ESQUENTANDO", esticada: "ESTICADA", despencando: "DESPENCANDO" };
     el.innerHTML = `<div class="nota"><b>O que veio depois</b> (${e.dias} dias, ${e.moedas} memes): depois de <b>ROMPENDO</b>, em 24 h a moeda fechou em alta em <b>${n0(r.subiu)}</b> das vezes; passou de +20% em <b>${n0(r.alta20)}</b> e caiu mais de 10% em <b>${n0(r.queda10)}</b>.
         Num momento qualquer: ${n0(b.subiu)}, ${n0(b.alta20)} e ${n0(b.queda10)}. O rompimento aumenta a chance de movimento grande <b>para os dois lados</b>; na maioria das vezes a moeda devolve.</div>
       <details><summary>ver o estudo completo</summary><table class="tab" style="margin-top:6px"><tr><th>Estado</th><th class="n">Vezes</th><th class="n" title="fechou acima do preço 24 h depois">Alta 24 h</th><th class="n" title="resultado do meio (mediana) 24 h depois">Meio</th><th class="n" title="chegou a subir 20% ou mais em algum momento das 24 h">+20%</th><th class="n">+50%</th><th class="n" title="chegou a cair 10% ou mais em algum momento das 24 h">−10%</th><th class="n">−20%</th></tr>` +
-      Object.entries(e.estados).filter(([, x]) => x.subiu != null).map(([k, x]) => `<tr><td>${chip(k === "base" ? null : k) || NOME[k]}</td><td class="n">${x.n.toLocaleString("pt-BR")}</td><td class="n">${n0(x.subiu)}</td><td class="n ${RK.cls(x.mediana)}">${RK.num(x.mediana, 1)}%</td><td class="n">${n0(x.alta20)}</td><td class="n">${n0(x.alta50)}</td><td class="n">${n0(x.queda10)}</td><td class="n">${n0(x.queda20)}</td></tr>`).join("") +
+      Object.entries(e.estados).filter(([, x]) => x.subiu != null).map(([k, x]) => `<tr><td>${chip(k === "base" ? null : k) || NOME[k]}</td><td class="n">${x.n.toLocaleString("pt-BR")}</td><td class="n">${n0(x.subiu)}</td><td class="n ${AX.cls(x.mediana)}">${AX.num(x.mediana, 1)}%</td><td class="n">${n0(x.alta20)}</td><td class="n">${n0(x.alta50)}</td><td class="n">${n0(x.queda10)}</td><td class="n">${n0(x.queda20)}</td></tr>`).join("") +
       `</table><div class="nota">Medido de hora em hora nos candles de 1 h da Binance. Só entram as moedas que existem hoje (as que sumiram ficam de fora, então a realidade é um pouco pior). Passado não garante futuro.</div></details>${lig}`;
     ligarAviso();
   }
-  function ligarAviso() { const c = $("crAviso"); if (c) c.onchange = () => { RK.pref.criptoAviso = c.checked; RK.salvarPref(); if (c.checked) RK.som("aviso", true); }; }
+  function ligarAviso() { const c = $("crAviso"); if (c) c.onchange = () => { AX.pref.criptoAviso = c.checked; AX.salvarPref(); if (c.checked) AX.som("aviso", true); }; }
 
   // ---------------------------------------------------------------- tokens novos (DEX)
   const ICO = { perigo: "⛔", aviso: "⚠", ok: "✔", info: "·" };
   function renderDex() {
     const d = C.dex;
     if (!d) { $("crLista").innerHTML = `<div class="vazio-bloco">Buscando os tokens em alta nas DEX…</div>`; return; }
-    if (!d.tokens.length) { $("crLista").innerHTML = `<div class="vazio-bloco">O GeckoTerminal não respondeu agora${d.erro ? " (" + RK.esc(d.erro) + ")" : ""}. Tento de novo em 1 minuto.</div>`; return; }
+    if (!d.tokens.length) { $("crLista").innerHTML = `<div class="vazio-bloco">O GeckoTerminal não respondeu agora${d.erro ? " (" + AX.esc(d.erro) + ")" : ""}. Tento de novo em 1 minuto.</div>`; return; }
     $("crLista").innerHTML = d.tokens.map((r, j) => {
       const ab = C.aberto === r.id, seg = C.seguranca[r.id];
       return `<div class="dx ${ab ? "ab" : ""}" data-j="${j}">
-        <div class="dx-l1"><b>${RK.esc(r.simbolo)}</b><span class="tag">${RK.esc(r.redeNome)}</span><span class="neutro dx-nome">${RK.esc(r.nome)}</span><span class="chip ${r.risco === "MUITO ALTO" ? "despencando" : "esticada"} dir">risco ${r.risco.toLowerCase()}</span></div>
+        <div class="dx-l1"><b>${AX.esc(r.simbolo)}</b><span class="tag">${AX.esc(r.redeNome)}</span><span class="neutro dx-nome">${AX.esc(r.nome)}</span><span class="chip ${r.risco === "MUITO ALTO" ? "despencando" : "esticada"} dir">risco ${r.risco.toLowerCase()}</span></div>
         <div class="dx-l2">US$ ${preco(r.preco)} · 1 h ${pct(r.r60, 0)} · 24 h ${pct(r.r24, 0)} · liquidez ${abrev(r.liq)} · criado há ${idade(r.idadeH)}</div>
         ${ab ? `<div class="dx-det">
           <div>Volume 24 h ${abrev(r.vol24)} · valor de mercado ${abrev(r.fdv)} · última hora: ${r.compras1h} compras e ${r.vendas1h} vendas</div>
-          ${r.sinais.length ? `<ul class="seg-lista">${r.sinais.map(([n, t]) => `<li class="${n}">${ICO[n]} ${RK.esc(t)}</li>`).join("")}</ul>` : `<div class="neutro">Nenhum sinal de risco só pelos números da pool (isso não quer dizer que é seguro).</div>`}
+          ${r.sinais.length ? `<ul class="seg-lista">${r.sinais.map(([n, t]) => `<li class="${n}">${ICO[n]} ${AX.esc(t)}</li>`).join("")}</ul>` : `<div class="neutro">Nenhum sinal de risco só pelos números da pool (isso não quer dizer que é seguro).</div>`}
           <div class="botoes"><button class="primario" data-a="seg">${seg === "carregando" ? "Checando…" : "Checar golpe"}</button>
-            <a class="bt" href="${RK.esc(r.gt)}" target="_blank" rel="noopener noreferrer">GeckoTerminal ↗</a><a class="bt" href="${RK.esc(r.ds)}" target="_blank" rel="noopener noreferrer">DexScreener ↗</a></div>
-          ${seg && seg !== "carregando" ? (seg.erro ? `<div class="erro">⚠ ${RK.esc(seg.erro)}</div>` : `<div class="rot" style="margin-top:10px">CHECAGEM <span class="dir">${seg.perigos} perigo(s) · ${seg.avisos} aviso(s)</span></div>
-            ${seg.itens.length ? `<ul class="seg-lista">${seg.itens.map((i) => `<li class="${i.nivel}">${ICO[i.nivel]} ${RK.esc(i.texto)}</li>`).join("")}</ul>` : `<div class="neutro">As fontes de checagem não responderam para este token.</div>`}
-            <div class="nota">Fontes: ${seg.fontes.map(RK.esc).join(", ") || "nenhuma respondeu"}. Passar na checagem <b>não</b> quer dizer que é seguro: ela só pega os golpes mais comuns.</div>`) : ""}
+            <a class="bt" href="${AX.esc(r.gt)}" target="_blank" rel="noopener noreferrer">GeckoTerminal ↗</a><a class="bt" href="${AX.esc(r.ds)}" target="_blank" rel="noopener noreferrer">DexScreener ↗</a></div>
+          ${seg && seg !== "carregando" ? (seg.erro ? `<div class="erro">⚠ ${AX.esc(seg.erro)}</div>` : `<div class="rot" style="margin-top:10px">CHECAGEM <span class="dir">${seg.perigos} perigo(s) · ${seg.avisos} aviso(s)</span></div>
+            ${seg.itens.length ? `<ul class="seg-lista">${seg.itens.map((i) => `<li class="${i.nivel}">${ICO[i.nivel]} ${AX.esc(i.texto)}</li>`).join("")}</ul>` : `<div class="neutro">As fontes de checagem não responderam para este token.</div>`}
+            <div class="nota">Fontes: ${seg.fontes.map(AX.esc).join(", ") || "nenhuma respondeu"}. Passar na checagem <b>não</b> quer dizer que é seguro: ela só pega os golpes mais comuns.</div>`) : ""}
         </div>` : ""}</div>`;
     }).join("");
     $("crLista").querySelectorAll(".dx").forEach((el) => {
@@ -201,9 +201,9 @@
       if (b) b.onclick = async () => {
         if (C.seguranca[r.id] === "carregando") return;
         C.seguranca[r.id] = "carregando"; renderDex();
-        try { C.seguranca[r.id] = await RK.json(`/api/cripto/seguranca?rede=${encodeURIComponent(r.rede)}&token=${encodeURIComponent(r.token)}`); }
+        try { C.seguranca[r.id] = await AX.json(`/api/cripto/seguranca?rede=${encodeURIComponent(r.rede)}&token=${encodeURIComponent(r.token)}`); }
         catch (e) { C.seguranca[r.id] = { erro: e.message }; }
-        if (RK.aba === "cripto" && C.seg === "dex") renderDex();
+        if (AX.aba === "cripto" && C.seg === "dex") renderDex();
       };
     });
   }
@@ -224,31 +224,31 @@
     if (!/(USDT|USDC|FDUSD|BRL|BTC)$/.test(s) || s.length <= 4) s += "USDT";
     for (const mercado of ["BN", "BF"]) {
       try {
-        const r = await RK.json("/api/cripto/info?chave=" + mercado + ":" + s);
+        const r = await AX.json("/api/cripto/info?chave=" + mercado + ":" + s);
         $("crBusca").value = "";
-        RK.abrirCripto(r.chave, r.nome);
-        RK.toast(`${r.nome} no gráfico.`, "ok");
+        AX.abrirCripto(r.chave, r.nome);
+        AX.toast(`${r.nome} no gráfico.`, "ok");
         return;
       } catch (e) { /* tenta o outro mercado */ }
     }
-    RK.toast(`Não achei "${s}" na Binance (à vista nem nos futuros).`, "aviso");
+    AX.toast(`Não achei "${s}" na Binance (à vista nem nos futuros).`, "aviso");
   }
   $("crBusca").addEventListener("keydown", (e) => { if (e.key === "Enter") abrirSigla($("crBusca").value); });
   document.querySelectorAll("#crSeg button").forEach((b) => (b.onclick = () => {
-    C.seg = b.dataset.s; RK.pref.criptoSeg = C.seg; RK.salvarPref(); C.ordem = "onda"; render(); buscar(true); cuidarWS();
+    C.seg = b.dataset.s; AX.pref.criptoSeg = C.seg; AX.salvarPref(); C.ordem = "onda"; render(); buscar(true); cuidarWS();
   }));
 
-  RK.on("aba", (nome) => {
+  AX.on("aba", (nome) => {
     if (nome !== "cripto") { cuidarWS(); return; }
     if (!["memes", "maiores", "dex"].includes(C.seg)) C.seg = "memes";
     render(); buscar(true); cuidarWS();
   });
-  RK.on("config", () => { C.seg = ["memes", "maiores", "dex"].includes(RK.pref.criptoSeg) ? RK.pref.criptoSeg : "memes"; });
-  RK.on("dadosVivo", cuidarWS);
+  AX.on("config", () => { C.seg = ["memes", "maiores", "dex"].includes(AX.pref.criptoSeg) ? AX.pref.criptoSeg : "memes"; });
+  AX.on("dadosVivo", cuidarWS);
   setInterval(() => {
     cuidarWS();
-    if (RK.aba === "cripto" && !document.hidden) buscar();
-    else if (RK.pref.criptoAviso && RK.cfg && Date.now() - C.ultPainel > 30000) buscar(true, "painel");     // aviso de rompimento em segundo plano
+    if (AX.aba === "cripto" && !document.hidden) buscar();
+    else if (AX.pref.criptoAviso && AX.cfg && Date.now() - C.ultPainel > 30000) buscar(true, "painel");     // aviso de rompimento em segundo plano
   }, 5000);
   document.addEventListener("visibilitychange", cuidarWS);
 })();

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Gera o icone do ROBO KELLER (mini grafico de candles subindo) em alta resolucao:
+"""Gera o icone do ROBO APEX (mini grafico de candles subindo) em alta resolucao:
    app/web/icone.png (512), app/web/icone-64.png, app/robo.ico (16 a 256) e ferramentas/splash.png (tela do .exe).
    Uso: python ferramentas/gerar_icone.py   (precisa do Pillow)"""
 import os
@@ -83,7 +83,7 @@ def main():
         f2 = ImageFont.truetype("segoeui.ttf", 16)
     except OSError:
         f1 = f2 = ImageFont.load_default()
-    d.text((185, 88), "ROBÔ KELLER", font=f1, fill=(236, 242, 250, 255))
+    d.text((185, 88), "ROBÔ APEX", font=f1, fill=(236, 242, 250, 255))
     d.text((188, 142), "Day trade informativo · não envia ordens", font=f2, fill=(138, 150, 168, 255))
     d.rounded_rectangle([188, 180, 480, 186], radius=3, fill=(34, 43, 59, 255))
     d.rounded_rectangle([188, 180, 300, 186], radius=3, fill=(0, 212, 160, 255))

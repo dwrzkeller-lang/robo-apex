@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Fontes de dados do ROBO KELLER.
+"""Fontes de dados do ROBO APEX.
 
   * Base de 5 meses em candles de 1 minuto (app/historico.py): Dukascopy para forex, ouro, Nasdaq 100 (USTEC)
     e Nikkei 225 (JP225); Binance para o Bitcoin. Os candles de HOJE vem do Yahoo (ou da Binance, no BTC),
@@ -18,11 +18,14 @@ Custos (por lado = na entrada E na saida):
 import csv
 import glob
 import io
+import itertools
 import json
 import os
+import threading
 import time
 import unicodedata
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 import historico
@@ -79,9 +82,6 @@ def sessao_cfg(cfg):
                 valor_ponto=cfg.get("valor_ponto") or 1.0, fracionado=cfg.get("fracionado", False),
                 hora_inicio=p.get("HoraInicio", 905), hora_fim=p.get("HoraFimEntradas", 1700),
                 hora_zeragem=p.get("HoraZeragem", 1745))
-
-
-_cache = {}
 
 
 def caminho_longo(p):
@@ -166,7 +166,32 @@ def agrupar(cfg, minutos, tf):
 
 
 # ------------------------------------------------------------------------------------------ Yahoo
-def _baixar_yahoo(simbolo, intervalo="5m", periodo="60d"):
+YAHOO_POR_MINUTO = 45                                # pedidos ao Yahoo por minuto, somados todos os ativos
+_yh_trava = threading.Lock()
+_yh_pedidos = []                                     # horarios dos pedidos do ultimo minuto
+
+
+def _vez_no_yahoo(esperar):
+    """Limite educado de pedidos ao Yahoo (ele e gratuito e bloqueia quem exagera). Com muitos testes ao vivo ligados,
+    cada ativo passa a ser renovado um pouco menos vezes em vez de o robo inteiro ser bloqueado. esperar=True (primeira
+    carga de um ativo) aguarda a vez por alguns segundos; a renovacao de rotina desiste e tenta de novo depois."""
+    fim = time.time() + (8.0 if esperar else 0.0)
+    while True:
+        with _yh_trava:
+            agora = time.time()
+            while _yh_pedidos and agora - _yh_pedidos[0] > 60.0:
+                _yh_pedidos.pop(0)
+            if len(_yh_pedidos) < YAHOO_POR_MINUTO:
+                _yh_pedidos.append(agora)
+                return True
+        if time.time() >= fim:
+            return False
+        time.sleep(0.25)
+
+
+def _baixar_yahoo(simbolo, intervalo="5m", periodo="60d", esperar=True):
+    if not _vez_no_yahoo(esperar):
+        raise RuntimeError("muitos pedidos ao Yahoo neste minuto: a renovacao fica para daqui a pouco")
     url = ("https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=%s&range=%s"
            % (urllib.request.quote(simbolo, safe=""), intervalo, periodo))
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -225,71 +250,214 @@ def _juntar(antigo, novo):
     return out
 
 
-def carregar_yahoo(base, chave, tf=5, guardar=True):
+# ------------------------------------------------------------------------------------------ dados "vivos"
+# Cada fonte (ativo + tempo grafico) e uma CELULA que guarda o ultimo retrato bom dos candles. Quem pede recebe o
+# retrato na hora; se ele ja passou da validade, a renovacao roda em segundo plano (uma por celula) e baixa so o
+# trecho novo. Assim nenhum pedido da tela espera a internet depois da primeira carga, e um site lento nao segura
+# os outros ativos (antes havia uma trava unica para todos e cada renovacao baixava os 60 dias de novo).
+_SERIE = itertools.count(1)
+_celulas = {}
+_trava_celulas = threading.Lock()
+_fila = ThreadPoolExecutor(max_workers=4, thread_name_prefix="dados")
+COLUNAS = ("t", "o", "h", "l", "c", "v", "d", "hm")
+
+
+class _Celula:
+    def __init__(self, fn, ttl):
+        self.fn, self.ttl = fn, ttl
+        self.trava = threading.Lock()
+        self.valor, self.t_ok, self.erro = None, 0.0, None
+        self.renovando, self.t_tentativa = False, 0.0
+
+    def ler(self, max_idade=None):
+        """max_idade (segundos): se o retrato e mais velho que isso, renova AGORA e espera (so para quem ja esta num
+        trabalho de fundo, como a base de 5 meses pedindo os candles de hoje)."""
+        if self.valor is None or (max_idade is not None and time.time() - self.t_ok >= max_idade):
+            with self.trava:                                   # so quem pediu ESTA fonte espera
+                if self.valor is None:
+                    self.valor = self.fn(None)                 # primeira carga: o erro sobe para quem pediu
+                    self.t_ok, self.erro = time.time(), None
+                elif max_idade is not None and time.time() - self.t_ok >= max_idade:
+                    self._renovar_agora()                      # (sem max_idade: outro pedido fez a primeira carga enquanto este esperava)
+            return self.valor
+        agora = time.time()
+        if agora - self.t_ok >= self.ttl and not self.renovando and agora - self.t_tentativa >= min(self.ttl, 5.0):
+            self.renovando, self.t_tentativa = True, agora
+            _fila.submit(self._renovar)
+        return self.valor
+
+    def _renovar_agora(self):
+        try:
+            novo = self.fn(self.valor)
+            if novo is not None:
+                self.valor = novo
+            self.t_ok, self.erro = time.time(), None
+        except Exception as e:                                 # sem internet: fica com o ultimo retrato bom
+            self.erro = str(e)
+
+    def _renovar(self):
+        try:
+            with self.trava:
+                if time.time() - self.t_ok >= self.ttl:        # outra renovacao pode ter chegado antes desta
+                    self._renovar_agora()
+        finally:
+            self.renovando = False
+
+
+def vivo(ck, fabrica, ttl, max_idade=None):
+    """Valor da celula `ck` (criada com fabrica() -> fn(anterior) na primeira vez)."""
+    cel = _celulas.get(ck)
+    if cel is None:
+        with _trava_celulas:
+            cel = _celulas.get(ck)
+            if cel is None:
+                cel = _celulas[ck] = _Celula(fabrica(), ttl)
+    return cel.ler(max_idade)
+
+
+def idade(ck):
+    """(segundos desde a ultima renovacao boa, ultimo erro) da celula, ou (None, None) se ela ainda nao existe."""
+    cel = _celulas.get(ck)
+    if cel is None or not cel.t_ok:
+        return None, None
+    return time.time() - cel.t_ok, cel.erro
+
+
+def marcar(b, anterior=None):
+    """Da um numero de serie ao retrato. Se nada mudou em relacao ao anterior, devolve o proprio anterior:
+    quem compara retratos pelo objeto (cache de indicadores e de respostas) nao refaz conta nenhuma."""
+    if anterior is not None and all(b[c] == anterior[c] for c in COLUNAS) and b.get("tf") == anterior.get("tf"):
+        return anterior
+    b["sid"] = next(_SERIE)
+    return b
+
+
+def carregar_yahoo(base, chave, tf=5, guardar=True, max_idade=None):
     cfg = ATIVOS[chave]
-    agora = time.time()
-    ck = ("y", chave, tf, guardar)
-    if ck in _cache and agora - _cache[ck][0] < (25 if tf < 1440 else 1800):
-        return _cache[ck][1]
-    sufixo = "" if tf == 5 else ("_D" if tf == 1440 else "_%dm" % tf)
-    arq_cache = os.path.join(pasta_dados(base), "cache", "yahoo_%s%s.json" % (chave, sufixo))
-    fonte = "Yahoo Finance (%s%s)" % (NOME_TEMPO[tf], ", atraso ~15 min" if tf < 1440 and chave in ("WIN", "WDO") else "")
-    try:
-        js = _baixar_yahoo(cfg["yahoo"], *TEMPOS[tf])
-        if not (js.get("chart") or {}).get("result"):
-            raise RuntimeError("o Yahoo nao devolveu candles")
-        try:
-            tmp = arq_cache + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(js, f)
-            os.replace(tmp, arq_cache)
-        except OSError:
-            pass            # sem permissao de gravar: segue com o download na memoria
-    except Exception as e:  # sem internet -> ultimo arquivo salvo
-        if not os.path.exists(arq_cache):
-            raise RuntimeError("Sem internet e sem dados salvos para %s (%s)" % (chave, e))
-        with open(arq_cache, encoding="utf-8") as f:
-            js = json.load(f)
-        fonte = "OFFLINE - ultimo download salvo em %s" % datetime.fromtimestamp(
-            os.path.getmtime(arq_cache)).strftime("%d/%m %H:%M")
-    b = _yahoo_para_barras(js, cfg, tf=tf)
-    if guardar and tf < 1440 and b["t"]:
-        # acumula: o Yahoo so da 60 dias em 2-30 min, mas o que ja foi baixado fica guardado
-        pasta = os.path.join(pasta_dados(base), "historico", "yahoo")
-        os.makedirs(pasta, exist_ok=True)
-        arq = os.path.join(pasta, "%s_%d.json" % (chave, tf))
-        try:
-            antigo = None
-            if os.path.exists(arq):
-                with open(arq, encoding="utf-8") as f:
-                    antigo = json.load(f)
-            b = _juntar(antigo, b)
-            with open(arq + ".tmp", "w", encoding="utf-8") as f:
-                json.dump(b, f, separators=(",", ":"))
-            os.replace(arq + ".tmp", arq)
-        except (OSError, ValueError, KeyError):
-            pass
-        dias = len(set(b["d"]))
-        fonte += " · %d dias guardados" % dias
-    out = (b, fonte)
-    _cache[ck] = (agora, out)
-    return out
+
+    def fabrica():
+        intervalo, periodo = TEMPOS[tf]
+        sufixo = "" if tf == 5 else ("_D" if tf == 1440 else "_%dm" % tf)
+        arq_cache = os.path.join(pasta_dados(base), "cache", "yahoo_%s%s.json" % (chave, sufixo))
+        arq_hist = os.path.join(pasta_dados(base), "historico", "yahoo", "%s_%d.json" % (chave, tf))
+        st = dict(completo=0.0, gravado=0.0, n_gravado=0, ok=0.0)
+        rotulo = "Yahoo Finance (%s%s)" % (NOME_TEMPO[tf], ", atraso ~15 min" if tf < 1440 and chave in ("WIN", "WDO") else "")
+
+        def gravar_hist(b):
+            try:
+                os.makedirs(os.path.dirname(arq_hist), exist_ok=True)
+                with open(arq_hist + ".tmp", "w", encoding="utf-8") as f:
+                    json.dump({c: b[c] for c in COLUNAS + ("tf",)}, f, separators=(",", ":"))
+                os.replace(arq_hist + ".tmp", arq_hist)
+                st["gravado"], st["n_gravado"] = time.time(), len(b["t"])
+            except OSError:
+                pass
+
+        def fn(ant):
+            agora = time.time()
+            fonte = rotulo
+            ant_b = ant[0] if ant else None
+            # carga completa: na 1a vez, depois de muito tempo parado (o trecho curto deixaria buraco) e de 6 em 6 horas
+            completa = ant_b is None or tf >= 1440 or agora - st["completo"] > 6 * 3600 or agora - st["ok"] > 12 * 3600
+            if completa:
+                try:
+                    js = _baixar_yahoo(cfg["yahoo"], intervalo, periodo)
+                    if not (js.get("chart") or {}).get("result"):
+                        raise RuntimeError("o Yahoo nao devolveu candles")
+                    try:
+                        with open(arq_cache + ".tmp", "w", encoding="utf-8") as f:
+                            json.dump(js, f)
+                        os.replace(arq_cache + ".tmp", arq_cache)
+                    except OSError:
+                        pass                                   # sem permissao de gravar: segue com o download na memoria
+                except Exception as e:                         # sem internet -> ultimo arquivo salvo
+                    if ant_b is not None:
+                        raise
+                    if not os.path.exists(arq_cache):
+                        raise RuntimeError("Sem internet e sem dados salvos para %s (%s)" % (chave, e))
+                    with open(arq_cache, encoding="utf-8") as f:
+                        js = json.load(f)
+                    fonte = "OFFLINE - ultimo download salvo em %s" % datetime.fromtimestamp(
+                        os.path.getmtime(arq_cache)).strftime("%d/%m %H:%M")
+                b = _yahoo_para_barras(js, cfg, tf=tf)
+                if guardar and tf < 1440 and b["t"]:
+                    # acumula: o Yahoo so da 60 dias em 2-30 min, mas o que ja foi baixado fica guardado
+                    antigo = ant_b
+                    if antigo is None and os.path.exists(arq_hist):
+                        try:
+                            with open(arq_hist, encoding="utf-8") as f:
+                                antigo = json.load(f)
+                        except (OSError, ValueError):
+                            antigo = None
+                    try:
+                        b = _juntar(antigo, b)
+                    except (KeyError, TypeError):
+                        pass
+                    gravar_hist(b)
+                st["completo"] = agora
+            else:
+                curto = "1d" if tf < 60 else "5d"              # so o trecho recente: poucos KB em vez dos 60 dias
+                js = _baixar_yahoo(cfg["yahoo"], intervalo, curto, esperar=False)
+                if not (js.get("chart") or {}).get("result"):
+                    raise RuntimeError("o Yahoo nao devolveu candles")
+                novo = _yahoo_para_barras(js, cfg, tf=tf)
+                b = _juntar(ant_b, novo) if novo["t"] else ant_b
+                if guardar and tf < 1440 and len(b["t"]) != st["n_gravado"] and agora - st["gravado"] > 300:
+                    gravar_hist(b)                             # no disco no maximo a cada 5 min
+            st["ok"] = agora
+            b = marcar(b, ant_b)
+            if guardar and tf < 1440 and b["t"]:
+                fonte += " · %d dias guardados" % len(set(b["d"]))
+            return b, fonte
+        return fn
+    return vivo(("y", os.path.abspath(base), chave, tf, guardar), fabrica, 20.0 if tf < 1440 else 900.0, max_idade)
 
 
 # ------------------------------------------------------------------------------------------ base de 5 meses
 _base_cache = {}
+_travas_base = {}
+_trava_base = threading.Lock()
+
+
+def _assinatura_base(base, chave):
+    sym, ext = (historico.DUKAS[chave][0], ".bi5") if chave in historico.DUKAS else (historico.BINANCE[chave], ".json")
+    nomes = sorted(n for n in os.listdir(historico._pasta(base, sym)) if n.endswith(ext))
+    return [len(nomes), nomes[0] if nomes else "", nomes[-1] if nomes else ""]
 
 
 def _historia(base, chave, tf):
-    """Candles da base local (1 min agrupados), com cache enquanto nenhum arquivo novo chegar."""
-    n = historico.dias_na_base(base, chave)
-    ck = (chave, tf)
-    if ck in _base_cache and _base_cache[ck][0] == n:
-        return _base_cache[ck][1]
-    minutos = historico.ler_minutos(base, chave)
-    b = agrupar(ATIVOS[chave], minutos, tf)
-    _base_cache[ck] = (n, b)
-    return b
+    """Candles da base local (1 min agrupados). Montar a base inteira leva segundos (descompactar ~150 arquivos), entao
+    o resultado fica na memoria e num arquivo: so e refeito quando chega um dia novo (ou, enquanto a base ainda esta
+    sendo baixada, no maximo a cada 10 minutos)."""
+    ass = _assinatura_base(base, chave)
+    ck = (os.path.abspath(base), chave, tf)
+    agora = time.time()
+    with _trava_base:
+        trava = _travas_base.setdefault(ck, threading.Lock())
+    with trava:
+        v = _base_cache.get(ck)
+        if v and (v["ass"] == ass or (v["ass"][2] == ass[2] and agora - v["feito"] < 600)):
+            return v["b"]
+        arq = os.path.join(pasta_dados(base), "cache", "base_%s_%d.json" % (chave, tf))
+        if v is None and os.path.exists(arq):
+            try:
+                with open(arq, encoding="utf-8") as f:
+                    js = json.load(f)
+                if js.get("ass") == ass and js.get("b", {}).get("t"):
+                    js["b"]["tf"] = tf
+                    _base_cache[ck] = dict(ass=ass, b=js["b"], feito=agora)
+                    return js["b"]
+            except (OSError, ValueError, AttributeError):
+                pass
+        b = agrupar(ATIVOS[chave], historico.ler_minutos(base, chave), tf)
+        _base_cache[ck] = dict(ass=ass, b=b, feito=time.time())
+        try:
+            with open(arq + ".tmp", "w", encoding="utf-8") as f:
+                json.dump(dict(ass=ass, b={c: b[c] for c in COLUNAS}), f, separators=(",", ":"))
+            os.replace(arq + ".tmp", arq)
+        except OSError:
+            pass
+        return b
 
 
 def _mediana(x):
@@ -297,59 +465,76 @@ def _mediana(x):
     return x[len(x) // 2] if x else 0.0
 
 
-def carregar(base, chave, tf=5):
-    """Candles para o robo: base de 5 meses quando existir (forex, ouro, USTEC, JP225, BTC), senao Yahoo."""
+def _base_viva(base, chave, tf, max_idade=None):
+    cfg = ATIVOS[chave]
+
+    def fabrica():
+        st = dict(minutos=None)                                # Binance: minutos recentes, baixados so do ultimo em diante
+
+        def fn(ant):
+            hist = _historia(base, chave, tf)
+            fonte_hist = "Dukascopy" if chave in historico.DUKAS else "Binance"
+            recente, nota = None, ""
+            try:
+                if chave in historico.BINANCE:
+                    st["minutos"] = historico.minutos_recentes_binance(chave, anteriores=st["minutos"])
+                    recente = agrupar(cfg, st["minutos"], tf)
+                else:
+                    recente = carregar_yahoo(base, chave, tf if tf in (2, 5, 15, 30, 60) else 5, guardar=False, max_idade=3.0)[0]
+            except Exception as e:
+                nota = " · sem candles de hoje (%s)" % str(e)[:60]
+            b = hist
+            if recente and recente["t"] and hist["t"]:
+                ult = hist["t"][-1]
+                cauda = max(0, len(hist["t"]) - 3000)          # a sobreposicao que interessa esta no fim da base
+                pos = {t: cauda + k for k, t in enumerate(hist["t"][cauda:])}
+                difs = [hist["c"][pos[t]] - recente["c"][k] for k, t in enumerate(recente["t"]) if t in pos][-300:]
+                ajuste = _mediana(difs) if chave in historico.DUKAS else 0.0
+                b = _barras_vazias(tf)
+                for c in COLUNAS:
+                    b[c] = list(hist[c])
+                novos = 0
+                for k, t in enumerate(recente["t"]):
+                    if t <= ult:
+                        continue
+                    _add(b, datetime.fromtimestamp(t, timezone.utc).replace(tzinfo=None), recente["o"][k] + ajuste,
+                         recente["h"][k] + ajuste, recente["l"][k] + ajuste, recente["c"][k] + ajuste, recente["v"][k])
+                    novos += 1
+                if novos:
+                    nota = " + hoje: %s (%d candles%s)" % ("Binance" if chave in historico.BINANCE else "Yahoo", novos,
+                                                           ", nível ajustado" if abs(ajuste) > 0 else "")
+            elif b is hist:
+                b = dict(hist)                                 # copia rasa: o numero de serie nao pode ir para a base em cache
+            b["gap_real"] = chave in ("USTEC", "JP225")        # CFD negociado a noite: a abertura do pregao tem gap de verdade
+            b = marcar(b, ant[0] if ant else None)
+            return b, "%s 1 min → %s · %d dias%s" % (fonte_hist, NOME_TEMPO[tf], len(set(b["d"])), nota)
+        return fn
+    return vivo(("b", os.path.abspath(base), chave, tf), fabrica, 6.0 if chave in historico.BINANCE else 15.0, max_idade)
+
+
+def carregar(base, chave, tf=5, max_idade=None):
+    """Candles para o robo: base de 5 meses quando existir (forex, ouro, USTEC, JP225, BTC), senao Yahoo.
+    Devolve (retrato, fonte). O retrato nunca e alterado depois de pronto: cada renovacao cria outro."""
     if chave not in ATIVOS:
         raise ValueError("ativo desconhecido: %s" % chave)
-    cfg = ATIVOS[chave]
     tem_base = chave in historico.DUKAS or chave in historico.BINANCE
     # usa a fonte com mais historico: o Yahoo tem 60 dias em 2-30 min e 2 anos em 60 min;
     # a base de 5 meses so entra quando ja tiver mais dias que isso (ela cresce em segundo plano)
     dias_yahoo = 60 if tf < 60 else 730
     if tf >= 1440 or not tem_base or historico.dias_na_base(base, chave) <= dias_yahoo:
-        b, fonte = carregar_yahoo(base, chave, tf)
+        b, fonte = carregar_yahoo(base, chave, tf, max_idade=max_idade)
         if tem_base and tf < 60:
             fonte += " · base de 5 meses baixando (%d dias)" % historico.dias_na_base(base, chave)
         return b, fonte
-    agora = time.time()
-    ck = ("b", chave, tf)
-    if ck in _cache and agora - _cache[ck][0] < 25:
-        return _cache[ck][1]
-    hist = _historia(base, chave, tf)
-    fonte_hist = "Dukascopy" if chave in historico.DUKAS else "Binance"
-    recente, nota = None, ""
-    try:
-        if chave in historico.BINANCE:
-            recente = agrupar(cfg, historico.minutos_recentes_binance(chave), tf)
-        else:
-            ry, _ = carregar_yahoo(base, chave, tf if tf in (2, 5, 15, 30, 60) else 5, guardar=False)
-            recente = ry
-    except Exception as e:
-        nota = " · sem candles de hoje (%s)" % str(e)[:60]
-    b = hist
-    if recente and recente["t"] and hist["t"]:
-        ult = hist["t"][-1]
-        pos = {t: k for k, t in enumerate(hist["t"])}
-        difs = [hist["c"][pos[t]] - recente["c"][k] for k, t in enumerate(recente["t"]) if t in pos][-300:]
-        ajuste = _mediana(difs) if chave in historico.DUKAS else 0.0
-        b = _barras_vazias(tf)
-        for c in ("t", "o", "h", "l", "c", "v", "d", "hm"):
-            b[c] = list(hist[c])
-        novos = 0
-        for k, t in enumerate(recente["t"]):
-            if t <= ult:
-                continue
-            _add(b, datetime.fromtimestamp(t, timezone.utc).replace(tzinfo=None), recente["o"][k] + ajuste,
-                 recente["h"][k] + ajuste, recente["l"][k] + ajuste, recente["c"][k] + ajuste, recente["v"][k])
-            novos += 1
-        if novos:
-            nota = " + hoje: %s (%d candles%s)" % ("Binance" if chave in historico.BINANCE else "Yahoo", novos,
-                                                   ", nível ajustado" if abs(ajuste) > 0 else "")
-    dias = len(set(b["d"]))
-    b["gap_real"] = chave in ("USTEC", "JP225")          # CFD negociado a noite: a abertura do pregao tem gap de verdade
-    out = (b, "%s 1 min → %s · %d dias%s" % (fonte_hist, NOME_TEMPO[tf], dias, nota))
-    _cache[ck] = (agora, out)
-    return out
+    return _base_viva(base, chave, tf, max_idade)
+
+
+def chave_viva(base, chave, tf):
+    """Chave da celula que `carregar` usa agora para este ativo/tempo (para perguntar a idade dos dados)."""
+    tem_base = chave in historico.DUKAS or chave in historico.BINANCE
+    if tf >= 1440 or not tem_base or historico.dias_na_base(base, chave) <= (60 if tf < 60 else 730):
+        return ("y", os.path.abspath(base), chave, tf, True)
+    return ("b", os.path.abspath(base), chave, tf)
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Criptomoedas do ROBO KELLER.
+Criptomoedas do ROBO APEX.
 
   * Candles e precos em tempo real pela BINANCE (a corretora de maior volume), sem chave: mercado a vista ("BN:DOGEUSDT")
     e futuros perpetuos ("BF:POPCATUSDT"). Qualquer moeda da Binance vira um ativo do robo (grafico, estrategias,

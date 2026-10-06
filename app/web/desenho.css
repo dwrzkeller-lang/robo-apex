@@ -1,0 +1,47 @@
+/* ROBÔ APEX — ferramentas de desenho (desenho.js): grupos da barra lateral, menu de cada grupo, barrinha do desenho
+   selecionado e caixa de texto. A barra em si (.ferramentas) e o canvas (#desenho) continuam no style.css. */
+
+#desenho.ativo { touch-action: none; }            /* desenhando com o dedo ou a caneta, a página não rola junto */
+
+/* ---------------- grupo: botão da última ferramenta usada + triângulo que abre as outras ---------------- */
+.ferramentas > * { flex-shrink: 0; }              /* barra baixa demais: rola, em vez de achatar os botões */
+.ferramentas .dz-grupo { position: relative; display: flex; width: 30px; height: 30px; }
+.ferramentas .dz-mais { position: absolute; right: 0; bottom: 0; width: 12px; height: 12px; padding: 0; border: 0;
+  border-radius: 0 0 6px 0; background: transparent; }
+.ferramentas .dz-mais::after { content: ""; position: absolute; right: 2px; bottom: 2px; border: 3px solid transparent;
+  border-right-color: var(--txt2); border-bottom-color: var(--txt2); }
+.ferramentas .dz-mais:hover { background: var(--bg3); }
+.ferramentas .dz-mais:hover::after, .ferramentas .dz-grupo.aberto .dz-mais::after { border-right-color: var(--txt);
+  border-bottom-color: var(--txt); }
+.ferramentas button.dz-apagado { opacity: .35; }  /* desfazer/refazer sem nada para fazer (continua mostrando a dica) */
+
+/* ---------------- menu do grupo: abre ao lado da barra, por cima do gráfico ---------------- */
+.dz-menu { position: fixed; left: 44px; top: 80px; z-index: 30; min-width: 196px; padding: 4px; display: flex;
+  flex-direction: column; gap: 1px; background: var(--bg2); border: 1px solid var(--linha2); border-radius: 9px;
+  box-shadow: 0 12px 34px #000b; }
+.dz-menu .dz-titulo { padding: 3px 8px 4px; font-size: 10px; letter-spacing: .6px; text-transform: uppercase;
+  color: var(--txt2); }
+.dz-menu button { display: flex; align-items: center; gap: 9px; width: 100%; padding: 5px 12px 5px 7px;
+  text-align: left; white-space: nowrap; background: transparent; border-color: transparent; }
+.dz-menu button:hover { background: var(--bg3); border-color: var(--linha2); }
+.dz-menu button.on { background: #1e7bff33; border-color: #1e7bff; }
+.dz-menu svg, .dz-barra svg { width: 18px; height: 18px; flex: none; fill: none; stroke: var(--txt); stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------------- barrinha do desenho selecionado (cor, espessura, duplicar, copiar, apagar) ---------------- */
+.dz-barra { position: absolute; left: 0; top: 0; z-index: 7; display: flex; align-items: center; gap: 2px; padding: 3px;
+  background: var(--bg2); border: 1px solid var(--linha2); border-radius: 8px; box-shadow: 0 6px 20px #0009;
+  user-select: none; }
+.dz-barra button { width: 26px; height: 26px; padding: 3px; display: grid; place-items: center;
+  background: transparent; border-color: transparent; }
+.dz-barra button:hover { background: var(--bg3); border-color: var(--linha2); }
+.dz-barra input[type=color] { width: 26px; height: 24px; padding: 1px; cursor: pointer; }
+.dz-barra .dz-traco { display: block; width: 14px; height: 2px; border-radius: 2px; background: var(--txt); }
+.dz-barra .dz-div { width: 1px; height: 18px; margin: 0 2px; background: var(--linha2); }
+.dz-barra.dz-fixo .dz-estilo { display: none; }   /* Fibonacci, régua e posição têm cores próprias */
+
+/* ---------------- caixa de texto no lugar do clique ---------------- */
+.dz-texto { position: absolute; left: 0; top: 0; z-index: 8; transform: translateY(-50%); min-width: 70px;
+  max-width: 70%; padding: 2px 3px; line-height: 1.2; font-family: "Segoe UI", system-ui, sans-serif;
+  background: rgba(13,16,22,.94); border: 1px solid var(--azul); border-radius: 4px; }
+.dz-texto::placeholder { color: var(--txt2); opacity: .75; }

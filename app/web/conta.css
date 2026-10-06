@@ -1,0 +1,143 @@
+/* ROBÔ APEX — conta (conta.js): botão do usuário no topo, o menu dele e a janela "Minha conta / Avisos no celular /
+   Usuários / Registro de acessos". Tudo com o prefixo ct- para não esbarrar no style.css; as cores, os campos, os
+   botões e .card, .rot, .campo, .nota, .erro, .chk, .tab e .mini-btn continuam vindo de lá. */
+
+/* ---------------- botão do usuário (o #btConta ganha a classe ct-botao quando o conta.js o preenche) ----------------
+   O formato de pílula vem de .bt-conta, no style.css, que também esconde o nome (.ct-primeiro) quando o topo está
+   cheio. Por isso o respiro à direita fica no nome e não no botão: só com a inicial, o círculo fica centrado. */
+.ct-botao { display: inline-flex; align-items: center; gap: 7px; max-width: 190px; padding: 3px 4px; }
+.ct-botao[aria-expanded="true"] { border-color: var(--acento, #1e7bff); background: #1e7bff26; }
+.ct-inicial { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+  background: linear-gradient(135deg, #1e7bff, #00b388); color: #fff; font-size: 12px; font-weight: 800; line-height: 1; }
+.ct-primeiro { min-width: 0; margin-right: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+
+/* ---------------- menu do usuário: fixo na janela, logo abaixo do botão (o conta.js calcula top/left) ---------------- */
+.ct-menu { position: fixed; z-index: 45; top: 56px; left: 8px; width: 264px; max-width: calc(100vw - 16px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 1px; padding: 6px; background: var(--bg2); border: 1px solid var(--linha2);
+  border-radius: var(--raio); box-shadow: 0 12px 40px #000a; }
+.ct-quem { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding: 6px 8px 9px; margin-bottom: 4px;
+  border-bottom: 1px solid var(--linha); }
+.ct-quem b, .ct-quem span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ct-quem b { font-size: 14px; }
+.ct-quem span { font-size: 12px; color: var(--txt2); }
+.ct-quem small { align-self: flex-start; margin-top: 4px; padding: 0 6px; border: 1px solid var(--linha2); border-radius: 5px;
+  font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--txt2); }
+.ct-menu button { flex: none; width: 100%; padding: 7px 10px; text-align: left; white-space: nowrap; background: transparent;
+  border-color: transparent; }
+.ct-menu button:hover, .ct-menu button:focus-visible { background: var(--bg3); border-color: var(--linha2); }
+.ct-menu .ct-sep { flex: none; height: 1px; margin: 4px 0; background: var(--linha); }
+.ct-menu .ct-sair { color: #ff9aa5; }
+
+/* ---------------- janela: uma só, com abas; o cabeçalho fica parado e o corpo rola ---------------- */
+.ct-fundo { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; padding: 0 12px;
+  background: rgba(4,6,10,.72); }
+.ct-janela { position: relative; display: flex; flex-direction: column; width: 100%; min-width: 0; max-width: 760px;
+  min-height: min(460px, 90vh); max-height: 90vh; background: var(--bg2); border: 1px solid var(--linha2);
+  border-radius: 14px; box-shadow: 0 20px 60px #000c; }
+.ct-janela:focus { outline: none; }                /* o foco programático na própria janela não precisa de moldura */
+.ct-cab { flex: none; padding: 14px 18px 0; }
+.ct-titulo { margin: 0 44px 0 0; font-size: 16px; font-weight: 800; letter-spacing: .3px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.ct-titulo small { margin-left: 6px; font-size: 12px; font-weight: 500; letter-spacing: 0; color: var(--txt2); }
+.ct-fechar { position: absolute; top: 10px; right: 10px; padding: 3px 10px; }
+.ct-abas { display: flex; flex-wrap: wrap; margin-top: 10px; border-bottom: 1px solid var(--linha); }
+.ct-abas button { margin-bottom: -1px; padding: 8px 12px; border: 0; border-bottom: 2px solid transparent; border-radius: 0;
+  background: transparent; color: var(--txt2); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.ct-abas button:hover { color: var(--txt); }
+.ct-abas button[aria-selected="true"] { color: var(--txt); border-bottom-color: var(--acento, #1e7bff); }
+/* overscroll-behavior: ao chegar ao fim da janela, a roda do mouse não passa a rolar a tela de trás */
+.ct-corpo { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 10px; padding: 14px 18px 18px; }
+.ct-corpo > * { flex: none; }
+.ct-corpo > .nota { margin: 0; }
+
+/* Com a janela aberta: a tela de trás não rola e o aviso (toast) do robô, que mora dentro do gráfico e ficaria
+   escondido pelo fundo escuro, sobe para o alto da janela do navegador, por cima de tudo. */
+body.ct-aberta { overflow: hidden; }
+body.ct-aberta .toast { position: fixed; top: 10px; z-index: 60; }
+
+/* ---------------- formulários dentro da janela ---------------- */
+.ct-corpo .rot { flex-wrap: wrap; }
+.ct-corpo .campo > span { white-space: normal; }
+.ct-corpo input:not([type=checkbox]), .ct-corpo select { padding: 7px 9px; background: var(--bg2); }
+.ct-corpo input:-webkit-autofill { -webkit-text-fill-color: var(--txt); caret-color: var(--txt);
+  box-shadow: 0 0 0 100px var(--bg2) inset; }       /* o preenchimento automático não pinta o campo de claro */
+.ct-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+.ct-linha { display: flex; align-items: flex-end; gap: 8px; }
+.ct-linha .campo { flex: 1; }
+.ct-linha button { flex: none; padding: 7px 14px; font-weight: 700; }
+.ct-botoes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.ct-botoes button { padding: 7px 14px; font-weight: 700; }
+.ct-corpo form .chk, .ct-corpo .card > .chk { margin-top: 8px; }
+.ct-corpo form .erro { margin-top: 8px; }
+.ct-corpo .rot .dir { color: var(--txt2); }
+.ct-regras { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 18px; font-size: 12px;
+  color: var(--txt2); }
+.ct-regras li::before { content: "○"; display: inline-block; width: 16px; }
+.ct-regras li.ct-ok { color: var(--verde2); }
+.ct-regras li.ct-ok::before { content: "✓"; }
+
+/* avisos: o passo a passo do Telegram e os tipos de aviso */
+.ct-passos { margin: 8px 0 10px; padding-left: 20px; font-size: 12.5px; }
+.ct-passos li { margin: 4px 0; }
+.ct-corpo code { padding: 0 4px; border: 1px solid var(--linha); border-radius: 4px; background: var(--bg2);
+  font-family: Consolas, "Cascadia Mono", monospace; font-size: 11.5px; overflow-wrap: anywhere; }
+.ct-tipos { display: flex; flex-wrap: wrap; gap: 6px 18px; min-width: 0; margin: 10px 0 0; padding: 8px 12px 10px;
+  border: 1px solid var(--linha); border-radius: 8px; }
+.ct-tipos legend { padding: 0 6px; font-size: 10px; letter-spacing: .6px; text-transform: uppercase; color: var(--txt2); }
+.ct-corpo .ct-tipos .chk { margin-top: 0; }
+
+/* usuários: a senha provisória, mostrada uma única vez */
+.ct-prov { padding: 12px 14px; border: 1px solid var(--amar); border-radius: var(--raio); background: #ffd23f14; }
+.ct-prov .rot { color: var(--amar); }
+.ct-prov-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ct-corpo .ct-prov input { flex: 1 1 220px; min-width: 0; padding: 8px 10px; background: var(--bg); border-color: #ffd23f66;
+  color: #ffe9a3; font: 700 18px/1.2 Consolas, "Cascadia Mono", monospace; letter-spacing: 1px; }
+.ct-prov-linha button { padding: 8px 14px; font-weight: 700; }
+
+/* ---------------- tabelas (usuários e registro) ---------------- */
+/* texto livre (nome, e-mail, quem, detalhe) quebra onde precisar; as colunas curtas (datas, papel) ficam inteiras */
+.ct-tab td { white-space: normal; vertical-align: top; padding: 5px 4px; }
+.ct-tab td.ct-quebra { overflow-wrap: anywhere; }
+.ct-tab td.ct-junto { white-space: nowrap; }
+.ct-tab td:first-child, .ct-tab th:first-child { padding-left: 0; }
+.ct-usuarios tr.ct-u td { border-bottom: 0; padding-bottom: 2px; }
+.ct-usuarios tr.ct-acoes td { padding: 0 0 8px; }
+.ct-acoes td > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.ct-acoes .nota { margin: 0; }
+.ct-perigo { color: #ff9aa5; }
+.ct-perigo:hover:not(:disabled) { border-color: var(--verm); }
+.ct-ponto { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; vertical-align: 1px; }
+.ct-ponto.ct-on { background: var(--verde2); box-shadow: 0 0 6px var(--verde2); }
+.ct-registro td:first-child { color: var(--txt2); }
+.ct-tag { display: inline-block; padding: 0 6px; border: 1px solid var(--linha2); border-radius: 4px; font-size: 10.5px;
+  font-weight: 700; color: var(--txt2); }
+.ct-tag.ct-negado { color: var(--verm); border-color: var(--verm); background: #ff5c6e14; }
+
+/* texto só para leitores de tela (e o campo de usuário que os gerenciadores de senha procuram ao trocar a senha;
+   o segundo seletor é para ganhar da regra dos campos da janela, que tem enchimento) */
+.ct-sr, .ct-corpo input.ct-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+
+/* foco bem visível para quem usa o teclado (o style.css usa 1px) */
+.ct-botao:focus-visible, .ct-menu button:focus-visible, .ct-janela button:focus-visible, .ct-janela input:focus,
+.ct-janela select:focus { outline: 2px solid var(--azul); outline-offset: 1px; }
+
+/* ---------------- telas estreitas ---------------- */
+@media (max-width: 640px) {
+  .ct-fundo { padding: 0 6px; }
+  .ct-cab { padding: 12px 12px 0; }
+  .ct-corpo { padding: 12px; }
+  .ct-abas button { padding: 8px 9px; }
+  .ct-linha { flex-wrap: wrap; }
+  .ct-linha .campo { flex: 1 1 180px; }
+  /* cada linha da tabela vira um bloco; o título da coluna (data-rot) passa para dentro da célula */
+  .ct-tab, .ct-tab tbody, .ct-tab tr, .ct-tab td { display: block; }
+  .ct-tab thead { display: none; }
+  .ct-tab td, .ct-usuarios tr.ct-u td { padding: 1px 0; border-bottom: 0; }
+  .ct-tab td[data-rot]::before { content: attr(data-rot) ": "; font-size: 11px; color: var(--txt2); }
+  .ct-tab tr { padding: 7px 0; border-bottom: 1px solid var(--linha); }
+  .ct-usuarios tr.ct-u { padding-bottom: 4px; border-bottom: 0; }
+  .ct-usuarios tr.ct-acoes { padding-top: 0; }
+}
+@media (max-width: 560px) { .ct-primeiro { display: none; } }       /* no topo apertado fica só o círculo com a inicial */

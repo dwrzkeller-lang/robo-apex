@@ -3,9 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Robô Keller</title>
+<title>Robô Apex</title>
 <link rel="icon" type="image/png" href="icone-64.png">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="desenho.css">
+<link rel="stylesheet" href="explica.css">
+<link rel="stylesheet" href="conta.css">
 </head>
 <body>
 
@@ -14,7 +17,7 @@
   <div class="splash-janela">
     <div class="splash-topo">
       <img src="icone.png" alt="">
-      <div><b>ROBÔ KELLER</b><small>day trade informativo · não envia ordens</small></div>
+      <div><b>ROBÔ APEX</b><small>day trade informativo · não envia ordens</small></div>
     </div>
     <ul class="splash-passos" id="splashPassos">
       <li data-p="dados">Carregando dados do mercado</li>
@@ -31,23 +34,24 @@
 <header class="topo">
   <div class="marca">
     <img class="logo" src="icone-64.png" alt="">
-    <div class="titulo">ROBÔ KELLER</div>
+    <div class="titulo">ROBÔ APEX</div>
   </div>
-  <label class="campo"><span>Ativo</span><select id="ativo"></select></label>
-  <label class="campo"><span>Tempo</span><select id="tf"></select></label>
-  <div class="campo"><span>Estratégia</span>
-    <div class="junto"><select id="est"></select><button id="btTodas" class="bt-todas" title="Roda todas as estratégias juntas: uma operação por vez, a primeira ordem que executar vale">▶ Todas</button></div>
+  <label class="campo"><span>Ativo <i class="q" data-dica="O que o gráfico e as estratégias vão analisar. WIN e WDO usam substitutos gratuitos (Ibovespa à vista e dólar) com cerca de 15 minutos de atraso; forex, ouro, índices lá de fora e cripto chegam mais rápido. Moedas abertas na aba Cripto aparecem aqui também."></i></span><select id="ativo"></select></label>
+  <label class="campo"><span>Tempo <i class="q" data-dica="Tempo gráfico: quanto tempo dura cada candle. Nos testes, 60 minutos foi onde as estratégias se saíram menos mal, porque o custo pesa menos em cada operação."></i></span><select id="tf"></select></label>
+  <div class="campo"><span>Estratégia <i class="q" data-dica="A regra que procura entradas. Escolha uma para estudar sozinha, ou ▶ Todas para deixar as 13 procurando ao mesmo tempo (uma operação por vez). Para entender uma estratégia, use o botão “Como funciona” no painel."></i></span>
+    <div class="junto"><select id="est"></select><button id="btTodas" class="bt-todas" data-dica="Liga ou desliga o modo TODAS juntas: todas as estratégias procuram entrada ao mesmo tempo, com uma operação por vez. A primeira ordem que executar vale e as outras são canceladas.">▶ Todas</button></div>
   </div>
-  <div class="campo"><span>Período <b id="periodoTxt" class="periodo-txt"></b></span>
+  <div class="campo"><span>Período <b id="periodoTxt" class="periodo-txt"></b> <i class="q" data-dica="Vale para a tela inteira: o gráfico mostra esse período e todos os números (resultado, acerto, pior queda, calendário, IA) são dele. O botão 📅 escolhe datas; com datas no passado a luz fica laranja (histórico)."></i></span>
     <div class="seg" id="periodo">
       <button data-p="hoje">Hoje</button><button data-p="5d">5 dias</button><button data-p="1m">1 mês</button>
-      <button data-p="3m">3 meses</button><button data-p="tudo">Tudo</button><button data-p="custom" title="Escolher as datas">📅</button>
+      <button data-p="3m">3 meses</button><button data-p="tudo">Tudo</button><button data-p="custom" data-dica="Escolher as datas de início e fim">📅</button>
     </div>
   </div>
-  <label class="campo pequeno"><span id="rotContratos">Contratos</span><input type="number" id="contratos" min="1" step="1" value="1"></label>
-  <button id="btAjustes" class="bt-icone" title="Ajustes: gestão da operação, capital, stops por dia, som">⚙</button>
-  <button id="btRobo" class="bt-robo" title="Testa todas as estratégias em 5, 15 e 60 min neste ativo e mostra a que mais se encaixa agora, com a projeção de ganho e perda">⚡ RODAR ROBÔ</button>
+  <label class="campo pequeno"><span><span id="rotContratos">Contratos</span> <i class="q" data-dica="Quantidade de cada operação nas contas (contratos na B3, lotes em forex e cripto). Com o “Tamanho pelo risco” ligado na aba Plano, o robô calcula a quantidade sozinho e este campo fica desligado."></i></span><input type="number" id="contratos" min="1" step="1" value="1"></label>
+  <button id="btAjustes" class="bt-icone" data-dica="Ajustes: capital, quantos stops param o dia, atualização ao vivo e sons.">⚙</button>
+  <button id="btRobo" class="bt-robo" data-dica="RODAR ROBÔ: testa todas as estratégias em 5, 15 e 60 minutos neste ativo e mostra qual está se encaixando melhor agora, com a projeção de ganho e de perda feita com as operações reais dela. Se nenhuma tiver histórico positivo, ele diz FICAR DE FORA. Não envia ordens.">⚡ RODAR ROBÔ</button>
   <div class="status" id="statusDados"><i class="luz"></i><span>carregando…</span></div>
+  <button id="btConta" class="bt-conta" type="button" aria-label="Conta" data-dica="Sua conta: trocar a senha, avisos no celular, usuários e registro de acessos (administrador) e sair."></button>
 </header>
 
 <!-- escolher datas -->
@@ -64,63 +68,50 @@
 <!-- ajustes -->
 <div class="popover oculto" id="popAjustes">
   <div class="rot">AJUSTES</div>
-  <label class="campo"><span>Gestão da operação</span><select id="gestao"></select></label>
+  <label class="campo"><span>Gestão da operação <i class="q" data-dica="Como a operação é conduzida depois da entrada: alvo fixo (2:1, 3:1, 4:1 = quantas vezes o risco), parcial, condução pela média ou trailing stop (o stop acompanha o preço). Os mesmos botões ficam no painel Ao vivo."></i></span><select id="gestao"></select></label>
   <div class="grade2">
     <label class="campo"><span>Capital inicial</span><input type="number" id="capital" min="1" step="100" value="10000"></label>
     <label class="campo"><span>Parar o dia após N stops</span><input type="number" id="maxstops" min="1" max="20" step="1" value="2"></label>
   </div>
-  <label class="chk"><input type="checkbox" id="autoVivo" checked> atualizar ao vivo (30 s; cripto a cada 10 s)</label>
+  <label class="chk"><input type="checkbox" id="autoVivo" checked> atualizar ao vivo (a cada 5 s; só o trecho novo)</label>
   <label class="chk"><input type="checkbox" id="somVivo" checked> sons (ordem armada, entrada, saída, notícia forte)</label>
+  <label class="chk"><input type="checkbox" id="notifVivo"> aviso do Windows quando esta janela estiver minimizada <i class="q" data-dica="Mostra um aviso do Windows a cada sinal (ordem armada, entrada, saída) quando a janela do robô não estiver na frente. O robô precisa estar aberto. Para receber no celular, use os avisos da sua conta."></i></label>
   <div class="ouvir" id="ouvirSons"><span>ouvir:</span><button data-s="ordem">ordem armada</button><button data-s="entrada">entrada</button><button data-s="ganho">ganho</button><button data-s="perda">perda</button></div>
-  <div class="nota">Tamanho por risco, limite de perda do dia, meta e modo seletivo ficam na aba <b>Plano</b>.</div>
+  <div class="nota">Tamanho por risco, limite de perda do dia, meta e modo seletivo ficam na aba <b>Plano</b>. Avisos no celular ficam no botão da sua conta.</div>
   <div class="botoes"><button id="btAtualizar">Atualizar agora</button><button id="ajFechar" class="primario">Fechar</button></div>
 </div>
 
 <main>
-  <nav class="ferramentas" id="ferramentas" aria-label="Ferramentas de desenho">
-    <button data-f="cursor" class="on" title="Cursor: clique num desenho para selecionar (Delete apaga)"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.5L10 19z"/></svg></button>
-    <button data-f="tendencia" title="Linha de tendência"><svg viewBox="0 0 24 24"><path d="M4 19L20 5"/><circle cx="4" cy="19" r="2"/><circle cx="20" cy="5" r="2"/></svg></button>
-    <button data-f="horizontal" title="Linha horizontal (suporte/resistência)"><svg viewBox="0 0 24 24"><path d="M2 12h20"/></svg></button>
-    <button data-f="vertical" title="Linha vertical"><svg viewBox="0 0 24 24"><path d="M12 2v20"/></svg></button>
-    <button data-f="fibo" title="Fibonacci de retração"><svg viewBox="0 0 24 24"><path d="M3 5h18M3 9h18M3 12h18M3 15h18M3 19h18" stroke-dasharray="2 1.5"/></svg></button>
-    <button data-f="retangulo" title="Retângulo"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12"/></svg></button>
-    <button data-f="regua" title="Régua (mede pontos, % e dinheiro)"><svg viewBox="0 0 24 24"><path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/></svg></button>
-    <button data-f="pincel" title="Pincel (marcar livre)"><svg viewBox="0 0 24 24"><path d="M3 21c3 0 5-2 5-4s2-3 3-3l9-9-2-2-9 9c0 1-1 3-3 3s-4 2-4 5z"/></svg></button>
-    <button data-f="texto" title="Texto"><svg viewBox="0 0 24 24"><path d="M5 5h14M12 5v14"/></svg></button>
-    <button data-f="borracha" title="Borracha (clique no desenho)"><svg viewBox="0 0 24 24"><path d="M4 16l8-8 6 6-5 5H8z"/><path d="M13 19h7"/></svg></button>
-    <div class="sep"></div>
-    <button id="ima" class="toggle" title="Ímã: gruda na máxima/mínima/abertura/fechamento"><svg viewBox="0 0 24 24"><path d="M6 3v8a6 6 0 0012 0V3h-4v8a2 2 0 01-4 0V3z"/></svg></button>
-    <input type="color" id="corDesenho" value="#ffd23f" title="Cor do desenho">
-    <select id="espDesenho" title="Espessura"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option></select>
-    <button id="desfazer" title="Desfazer (Ctrl+Z)"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 010 10h-3"/></svg></button>
-    <button id="limparDesenhos" title="Apagar todos os desenhos deste ativo"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
-  </nav>
+  <nav class="ferramentas" id="ferramentas" aria-label="Ferramentas de desenho"></nav>
 
   <section class="grafico" id="areaGrafico">
     <div id="chart"></div>
     <canvas id="desenho"></canvas>
     <div class="legenda" id="legenda"></div>
     <div class="graf-botoes">
-      <button id="btInd" title="Médias móveis, VWAP, Bollinger, Keltner, volume, IFR, estocástico e como as operações aparecem no gráfico">Indicadores</button>
-      <button id="btPeriodoTodo" title="Mostrar o período inteiro escolhido no topo">↔</button>
-      <button id="btCentro" title="Voltar para o último candle com a escala automática (tecla Home)">⌖ Centralizar</button>
+      <button id="btCandles" data-dica="Aparência dos candles: cores de alta e de baixa, candle cheio ou vazado e a opção de colorir pela tendência das médias. Duplo clique num candle abre a mesma janela.">Candles</button>
+      <button id="btInd" data-dica="Indicadores: médias móveis à escolha, VWAP, Bollinger, Keltner, volume, IFR e estocástico; os níveis que o robô traça sozinho; e como as operações aparecem no gráfico. São só para leitura: as estratégias não mudam.">Indicadores</button>
+      <button id="btPeriodoTodo" data-dica="Mostra o período inteiro escolhido no topo.">↔</button>
+      <button id="btCentro" data-dica="Volta para o último candle com a escala de preço automática (tecla Home).">⌖ Centralizar</button>
     </div>
     <div class="popover oculto" id="popInd"></div>
+    <div class="popover oculto" id="popCandles"></div>
     <div class="aviso-carregando oculto" id="carregando">Carregando…</div>
     <div class="toast" id="toast"></div>
   </section>
 
-  <div class="divisor" id="divisor" title="Arraste para ajustar a largura do painel · duplo clique volta ao padrão"></div>
+  <div class="divisor" id="divisor" data-dica="Arraste para ajustar a largura do painel. Duplo clique volta ao padrão."></div>
 
   <aside class="painel" id="painel">
     <div class="abas" role="tablist">
-      <button data-aba="vivo" class="on" role="tab">Ao vivo <span class="badge verde oculto" id="badgeTestes" title="testes ao vivo rodando">0</span></button>
-      <button data-aba="plano" role="tab" title="Plano de trade: tamanho pelo risco, limite do dia, modo seletivo e meta x realidade">Plano</button>
-      <button data-aba="sim" role="tab">Simulação</button>
-      <button data-aba="cal" role="tab">Calendário</button>
-      <button data-aba="cmp" role="tab">Comparar</button>
-      <button data-aba="news" role="tab">Notícias <span class="badge oculto" id="badgeNews">0</span></button>
-      <button data-aba="cripto" role="tab" title="Criptomoedas em tempo real: memes, maiores e tokens novos">Cripto <span class="badge verde oculto" id="badgeCripto" title="memes rompendo com volume agora">0</span></button>
+      <button data-aba="vivo" class="on" role="tab" data-dica="Ao vivo: o que fazer agora, o teste ao vivo, a central de sinais, o resultado no período e as operações."><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span>Ao vivo</span><b class="badge verde oculto" id="badgeTestes">0</b></button>
+      <button data-aba="ia" role="tab" data-dica="IA: o que o robô aprendeu com as operações deste ativo, a nota dela fora da amostra, as lições e o que deu errado que poderia ter dado certo."><svg viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="11" rx="2"/><path d="M12 7V3M9 12h.01M15 12h.01M9 15.5h6M2 11v4M22 11v4"/></svg><span>IA</span></button>
+      <button data-aba="plano" role="tab" data-dica="Plano: tamanho pelo risco, limite de perda e de ganho do dia, modo seletivo e a conta meta × realidade."><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg><span>Plano</span></button>
+      <button data-aba="sim" role="tab" data-dica="Simulação: o resultado do período com cada operação, e o replay candle a candle."><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l6 3.5-6 3.5z"/></svg><span>Simulação</span></button>
+      <button data-aba="cal" role="tab" data-dica="Calendário: o resultado de cada dia; clique no dia para ver as operações."><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/></svg><span>Calendário</span></button>
+      <button data-aba="cmp" role="tab" data-dica="Comparar: todas as estratégias em todos os ativos, no período escolhido."><svg viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-7"/></svg><span>Comparar</span></button>
+      <button data-aba="news" role="tab" data-dica="Notícias e agenda econômica: o que saiu e o que tem hora marcada para mexer no mercado."><svg viewBox="0 0 24 24"><path d="M5 5h11v14H7a2 2 0 01-2-2zM16 9h3v8a2 2 0 01-2 2M8 9h5M8 12.5h5M8 16h3"/></svg><span>Notícias</span><b class="badge oculto" id="badgeNews">0</b></button>
+      <button data-aba="cripto" role="tab" data-dica="Cripto em tempo real: memes, maiores moedas e tokens novos, com checagem de golpe."><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 7.5h4a2.2 2.2 0 010 4.5h-4zm0 4.5h4.6a2.2 2.2 0 010 4.5H9.5zM11 6v1.5M11 16.5V18M13.2 6v1.5M13.2 16.5V18"/></svg><span>Cripto</span><b class="badge verde oculto" id="badgeCripto">0</b></button>
     </div>
 
     <!-- ============================== AO VIVO ============================== -->
@@ -129,9 +120,16 @@
       <div class="card momento" id="cardVivo"><div class="estado">—</div></div>
       <div id="chipRobo"></div>
       <div class="card" id="cardTeste"></div>
+      <div class="card oculto" id="cardSinais"></div>
       <div class="card" id="resumoVivo"></div>
       <div class="card oculto" id="cardOps"></div>
       <div class="card oculto" id="tabelaVivo"></div>
+    </section>
+
+    <!-- ============================== IA ============================== -->
+    <section class="aba" id="aba-ia">
+      <div class="erro oculto" id="erroIa"></div>
+      <div id="iaConteudo"></div>
     </section>
 
     <!-- ============================== PLANO ============================== -->
@@ -142,13 +140,13 @@
           <label class="campo"><span>Capital</span><input type="number" id="plCapital" min="1" step="100"></label>
           <label class="campo"><span>Parar o dia após N stops</span><input type="number" id="plStops" min="1" max="20" step="1"></label>
         </div>
-        <div class="campo" style="margin-top:8px"><span>Tamanho de cada operação</span>
-          <div class="seg" id="plTam"><button data-v="fixo" title="Sempre a quantidade escrita no topo">Fixo (o do topo)</button><button data-v="risco" title="O robô calcula a quantidade para arriscar sempre a mesma fatia do capital">Pelo risco</button></div>
+        <div class="campo" style="margin-top:8px"><span>Tamanho de cada operação <i class="q" data-dica="Fixo: sempre a quantidade escrita no topo. Pelo risco: você diz quanto do capital aceita perder por operação e o robô calcula a quantidade pela distância do stop, já com os custos. Se nem o lote mínimo cabe, a ordem fica de fora."></i></span>
+          <div class="seg" id="plTam"><button data-v="fixo">Fixo (o do topo)</button><button data-v="risco">Pelo risco</button></div>
         </div>
         <label class="campo oculto" id="plRiscoBox" style="margin-top:8px"><span>Arriscar por operação (% do capital)</span><input type="number" id="plRisco" min="0.1" max="10" step="0.1"></label>
         <div class="grade2" style="margin-top:8px">
-          <label class="campo" title="Perda no dia que encerra as operações do dia. 0 = não usa"><span>Parar o dia ao perder</span><input type="number" id="plLoss" min="0" step="10" placeholder="0 = não usa"></label>
-          <label class="campo" title="Ganho no dia que encerra as operações do dia (a 'meta diária'). 0 = não usa"><span>Parar o dia ao ganhar</span><input type="number" id="plMeta" min="0" step="10" placeholder="0 = não usa"></label>
+          <label class="campo"><span>Parar o dia ao perder <i class="q" data-dica="Perda no dia que encerra as operações do dia. 0 = não usa."></i></span><input type="number" id="plLoss" min="0" step="10" placeholder="0 = não usa"></label>
+          <label class="campo"><span>Parar o dia ao ganhar <i class="q" data-dica="Ganho no dia que encerra as operações do dia (a “meta diária”). 0 = não usa. Nos testes não houve evidência de que ajuda: ela corta os dias grandes das estratégias de tendência."></i></span><input type="number" id="plMeta" min="0" step="10" placeholder="0 = não usa"></label>
         </div>
         <label class="chk" style="margin-top:10px"><input type="checkbox" id="plSeletivo"> <span><b>Modo seletivo</b>: só opera a favor da tendência do diário e, nas estratégias de correção, só com movimento limpo</span></label>
         <div class="nota">Tudo aqui vale para o robô inteiro: ao vivo, simulação, calendário, teste ao vivo e ⚡. Mude e veja abaixo o que cada regra fez no período do topo.</div>
@@ -173,20 +171,20 @@
     <section class="aba" id="aba-sim">
       <div class="card">
         <div class="rot">SIMULAR COM DADOS REAIS <span class="dir" id="simPeriodo"></span></div>
-        <div class="nota">Usa o ativo, o tempo, a estratégia, o <b>período</b> e os contratos do topo. Capital e gestão ficam em ⚙.</div>
+        <div class="nota">Usa o ativo, o tempo, a estratégia, o <b>período</b> e os contratos do topo. Capital fica em ⚙; a gestão, nos botões do painel Ao vivo.</div>
         <div class="botoes">
           <button id="btSimular" class="primario">Calcular resultado</button>
           <button id="btAssistir" class="secundario">▶ Assistir candle a candle</button>
         </div>
         <div class="replay oculto" id="replayCtl">
-          <button id="rpPlay" title="Play / pausa (espaço)">⏸</button>
-          <button id="rpPasso" title="Próximo candle (→)">▶|</button>
-          <select id="rpVel" title="Velocidade">
+          <button id="rpPlay" data-dica="Play / pausa (espaço)">⏸</button>
+          <button id="rpPasso" data-dica="Próximo candle (→)">▶|</button>
+          <select id="rpVel" aria-label="Velocidade">
             <option value="2">2 candles/s</option><option value="5" selected>5 candles/s</option>
             <option value="15">15 candles/s</option><option value="50">50 candles/s</option><option value="200">200 candles/s</option>
           </select>
-          <button id="rpFim" title="Pular para o fim">⏭ fim</button>
-          <button id="rpSair" title="Parar o replay">✕</button>
+          <button id="rpFim" data-dica="Pular para o fim">⏭ fim</button>
+          <button id="rpSair" data-dica="Parar o replay">✕</button>
           <div class="rp-prog"><div id="rpBarra"></div></div>
           <div class="rp-txt" id="rpTxt"></div>
         </div>
@@ -227,8 +225,8 @@
       <div class="card">
         <div class="rot">NOTÍCIAS QUE MEXEM NO MERCADO <span class="dir" id="newsAtual">—</span></div>
         <div class="grade3">
-          <select id="newsImpacto" title="Impacto"><option value="ALTO">Só alto impacto</option><option value="MEDIO" selected>Alto e médio</option><option value="TODOS">Todas</option></select>
-          <select id="newsAtivo" title="Mexe em"><option value="">WIN e WDO</option><option value="WIN">WIN (bolsa)</option><option value="WDO">WDO (dólar)</option></select>
+          <select id="newsImpacto" aria-label="Impacto"><option value="ALTO">Só alto impacto</option><option value="MEDIO" selected>Alto e médio</option><option value="TODOS">Todas</option></select>
+          <select id="newsAtivo" aria-label="Mexe em"><option value="">WIN e WDO</option><option value="WIN">WIN (bolsa)</option><option value="WDO">WDO (dólar)</option></select>
           <input type="text" id="newsBusca" placeholder="buscar: Copom, IPCA…">
         </div>
       </div>
@@ -243,8 +241,8 @@
       <div class="card">
         <div class="rot">CRIPTO EM TEMPO REAL <span class="dir" id="crStatus">—</span></div>
         <div class="linha-cr">
-          <div class="seg" id="crSeg"><button data-s="memes">Memes</button><button data-s="maiores">Maiores</button><button data-s="dex" title="Tokens em alta nas corretoras descentralizadas (risco muito alto)">Novas (DEX)</button></div>
-          <input type="text" id="crBusca" placeholder="abrir moeda: SOL, PEPE…" title="Digite a sigla de qualquer moeda da Binance e aperte Enter">
+          <div class="seg" id="crSeg"><button data-s="memes">Memes</button><button data-s="maiores">Maiores</button><button data-s="dex" data-dica="Tokens em alta nas corretoras descentralizadas (risco muito alto)">Novas (DEX)</button></div>
+          <input type="text" id="crBusca" placeholder="abrir moeda: SOL, PEPE…" data-dica="Digite a sigla de qualquer moeda da Binance e aperte Enter">
         </div>
         <div id="crEstudo"></div>
       </div>
@@ -258,7 +256,7 @@
 <!-- janela do "RODAR ROBÔ" -->
 <div class="modal oculto" id="modalRobo">
   <div class="modal-janela">
-    <button class="modal-fechar" id="roboFechar" title="Fechar (Esc)">✕</button>
+    <button class="modal-fechar" id="roboFechar" aria-label="Fechar (Esc)">✕</button>
     <div id="roboConteudo"></div>
   </div>
 </div>
@@ -270,6 +268,7 @@
 
 <script src="lightweight-charts.js"></script>
 <script src="app.js"></script>
+<script src="dicas.js"></script>
 <script src="ind.js"></script>
 <script src="sim.js"></script>
 <script src="calendario.js"></script>
@@ -280,5 +279,8 @@
 <script src="ops.js"></script>
 <script src="plano.js"></script>
 <script src="cripto.js"></script>
+<script src="ia.js"></script>
+<script src="explica.js"></script>
+<script src="conta.js"></script>
 </body>
 </html>
