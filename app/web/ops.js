@@ -27,86 +27,131 @@
     ctx.fillStyle = "rgba(11,14,20,.88)"; ctx.fillRect(x0 - 3, y - 8, w + 6, 16);
     ctx.fillStyle = cor; ctx.fillText(txt, x0, y);
   }
-  function desenhar(ctx, u, D, t, completo, sel) {
+  // ---- plaquinhas: cada operação leva no gráfico uma placa na ENTRADA, uma na SAÍDA e, quando há espaço, STOP e ALVO.
+  // As placas de um mesmo quadro não se sobrepõem: se o lugar já está ocupado, a placa desce ou sobe até caber.
+  let ocupadas = [];
+  function placa(ctx, txt, x, y, fundo, tinta, alinhar, forte) {
+    ctx.font = (forte ? "700 12px" : "600 11px") + " Segoe UI, system-ui";
+    const w = Math.ceil(ctx.measureText(txt).width) + 12, h = forte ? 20 : 17;
+    let x0 = alinhar === "right" ? x - w : alinhar === "center" ? x - w / 2 : x, y0 = y - h / 2;
+    const bate = (a, b) => ocupadas.some((r) => a < r[0] + r[2] && a + w > r[0] && b < r[1] + r[3] && b + h > r[1]);
+    let n = 0;
+    while (bate(x0, y0) && n < 8) { n++; y0 = y - h / 2 + Math.ceil(n / 2) * (h + 2) * (n % 2 ? 1 : -1); }
+    if (bate(x0, y0)) return false;
+    ocupadas.push([x0, y0, w, h]);
+    if (Math.abs(y0 + h / 2 - y) > 2) {                      // a placa saiu do lugar: um fio liga a placa ao ponto
+      ctx.strokeStyle = fundo; ctx.lineWidth = 1; ctx.setLineDash([]); ctx.beginPath();
+      ctx.moveTo(alinhar === "right" ? x0 + w : x0, y0 + h / 2); ctx.lineTo(x, y); ctx.stroke();
+    }
+    ctx.fillStyle = fundo; ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x0, y0, w, h, 4); else ctx.rect(x0, y0, w, h);
+    ctx.fill();
+    ctx.fillStyle = tinta; ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.fillText(txt, x0 + 6, y0 + h / 2 + 0.5);
+    return true;
+  }
+  const TINTA = "#06101c";
+  // nivel 0 = só a linha da entrada até a saída; 1 = caixa da operação + placas de entrada e saída;
+  // 2 = tudo: faixas de risco e de alvo, linhas e placas de STOP e ALVOS, candle do sinal e horários
+  function desenhar(ctx, u, D, t, nivel, sel) {
     const ix = indices(D, t), k = AX.i;
     if (!ix || ix.e > k) return;
     const aberta = ix.x == null || ix.x < 0 || ix.x > k;
     const xe = u.x(ix.e), xf = u.x(aberta ? k : ix.x);
     if (xe == null || xf == null) return;
-    const x2 = Math.max(xf, xe + 8);
-    if (x2 < -40 || xe > u.W + 40) return;
+    const meia = Math.max(3, Math.abs((u.x(1) ?? 0) - (u.x(0) ?? 0)) / 2);
+    const x1 = xe - meia, x2 = Math.max(xf + meia, x1 + 10);
+    if (x2 < -60 || x1 > u.W + 60) return;
     const stop = t.stop_ini ?? t.stop, precoFim = aberta ? D.c[k] : t.sai;
-    // alvo muito longe (ex.: 10:1 do ORB): fora da operação clicada a faixa verde vai só até 3x o risco, sem a linha
-    const longe = !sel && t.alvo != null && t.risco > 0 && Math.abs(t.alvo - t.ent) > 3 * t.risco;
-    const yE = u.y(t.ent), yS = u.y(stop), yA = t.alvo == null ? null : u.y(longe ? t.ent + t.dir * 3 * t.risco : t.alvo), yX = u.y(precoFim);
+    const yE = u.y(t.ent), yS = u.y(stop), yX = u.y(precoFim);
     if (yE == null || yX == null) return;
+    const longe = t.alvo != null && t.risco > 0 && Math.abs(t.alvo - t.ent) > 4 * t.risco && nivel < 2;
+    const yA = t.alvo == null || longe ? null : u.y(t.alvo);
     const ganho = aberta ? t.dir * (precoFim - t.ent) > 0 : t.R > 0, cor = ganho ? COR.ganho : COR.perda;
-    const reta = (y, c, traco) => { ctx.strokeStyle = c; ctx.lineWidth = 1; ctx.setLineDash(traco || []); ctx.beginPath(); ctx.moveTo(xe, Math.round(y) + 0.5); ctx.lineTo(x2, Math.round(y) + 0.5); ctx.stroke(); ctx.setLineDash([]); };
-    if (completo || sel) {
-      const a = sel ? 0.17 : 0.08;
-      if (yS != null) { ctx.fillStyle = `rgba(255,92,110,${a})`; ctx.fillRect(xe, Math.min(yE, yS), x2 - xe, Math.abs(yS - yE)); }
-      if (yA != null) { ctx.fillStyle = `rgba(34,227,154,${a})`; ctx.fillRect(xe, Math.min(yE, yA), x2 - xe, Math.abs(yA - yE)); }
-      ctx.globalAlpha = sel ? 1 : 0.6;
-      reta(yE, "#d9e0ea");
-      if (yS != null) reta(yS, COR.perda, [4, 3]);
-      if (yA != null && !longe) reta(yA, COR.ganho, [4, 3]);
-      ctx.globalAlpha = 1;
+    const corLado = t.dir > 0 ? COR.compra : COR.venda;
+    const reta = (y, c, traco, w = 1) => { ctx.strokeStyle = c; ctx.lineWidth = w; ctx.setLineDash(traco || []); ctx.beginPath(); ctx.moveTo(x1, Math.round(y) + 0.5); ctx.lineTo(x2, Math.round(y) + 0.5); ctx.stroke(); ctx.setLineDash([]); };
+    if (nivel === 0) {
+      ctx.strokeStyle = cor; ctx.lineWidth = 1.5; ctx.setLineDash([5, 3]);
+      ctx.beginPath(); ctx.moveTo(xe, yE); ctx.lineTo(xf, yX); ctx.stroke(); ctx.setLineDash([]);
+      return;
     }
-    // caminho: da entrada até a saída (ou até o preço atual, se ainda está aberta)
-    ctx.strokeStyle = cor; ctx.lineWidth = sel ? 2 : 1.5; ctx.setLineDash(sel ? [] : [5, 3]);
-    ctx.beginPath(); ctx.moveTo(xe, yE); ctx.lineTo(x2, yX); ctx.stroke(); ctx.setLineDash([]);
-    if (!sel) return;
-    for (const [x, y] of [[xe, yE], [x2, yX]]) { ctx.fillStyle = "#0b0e14"; ctx.beginPath(); ctx.arc(x, y, 4, 0, 7); ctx.fill(); ctx.strokeStyle = cor; ctx.lineWidth = 2; ctx.stroke(); }
-    const xs = ix.s >= 0 && ix.s <= k ? u.x(ix.s) : null;  // candle de sinal
-    const borda = Math.min(xe, xs ?? xe) - 12;             // textos à esquerda do candle de sinal; se não couber, por dentro
-    const esq = borda > 150;
-    const X = esq ? borda : xe + 6, al = esq ? "right" : "left";
-    etiqueta(ctx, `${t.dir > 0 ? "COMPRA" : "VENDA"} ${AX.fmt(t.ent)}`, X, yE, "#fff", al);
-    if (yS != null && Math.abs(yS - yE) > 14) etiqueta(ctx, `STOP ${AX.fmt(stop)}`, X, yS, COR.perda, al);
-    const parciais = [[t.alvo1, "ALVO 1"], [t.alvo2, "ALVO 2"]].filter((a) => a[0] != null);      // estratégias de 2 ou 3 alvos
-    for (const [p, nome] of parciais) {
-      const y = u.y(p); if (y == null) continue;
-      ctx.globalAlpha = 0.75; reta(y, COR.ganho, [2, 3]); ctx.globalAlpha = 1;
-      if (Math.abs(y - yE) > 14 && (yA == null || Math.abs(y - yA) > 14)) etiqueta(ctx, `${nome} ${AX.fmt(p)}`, X, y, COR.ganho, al);
+    if (nivel >= 2) {                                        // faixas: vermelho = risco até o stop; verde = caminho até o alvo
+      if (yS != null) { ctx.fillStyle = "rgba(255,92,110,.10)"; ctx.fillRect(x1, Math.min(yE, yS), x2 - x1, Math.abs(yS - yE)); }
+      if (yA != null) { ctx.fillStyle = "rgba(34,227,154,.09)"; ctx.fillRect(x1, Math.min(yE, yA), x2 - x1, Math.abs(yA - yE)); }
     }
-    if (yA != null && Math.abs(yA - yE) > 14) etiqueta(ctx, `${parciais.length ? "ALVO " + (parciais.length + 1) : "ALVO"} ${AX.fmt(t.alvo)}`, X, yA, COR.ganho, al);
-    // linhas de prumo: uma no candle da entrada e outra no da saída, com o horário no pé do gráfico
-    const hora = (i2) => AX.quando(D, i2).slice(-5);
-    for (const [x, i2, c2, nome] of [[xe, ix.e, "#d9e0ea", "entrada "], aberta ? null : [x2, ix.x, cor, "saída "]].filter(Boolean)) {
-      ctx.strokeStyle = c2; ctx.globalAlpha = 0.35; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
-      ctx.beginPath(); ctx.moveTo(Math.round(x) + 0.5, 0); ctx.lineTo(Math.round(x) + 0.5, u.H); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
-      if (D.meta.intraday) etiqueta(ctx, nome + hora(i2), x, u.H - 10, c2, "center");
+    // caixa da operação: da entrada até a saída (ou até o preço de agora), na cor do resultado
+    ctx.fillStyle = ganho ? "rgba(34,227,154,.20)" : "rgba(255,92,110,.20)";
+    ctx.fillRect(x1, Math.min(yE, yX), x2 - x1, Math.max(2, Math.abs(yX - yE)));
+    ctx.strokeStyle = cor; ctx.lineWidth = sel ? 2 : 1; ctx.setLineDash([]);
+    ctx.strokeRect(Math.round(x1) + 0.5, Math.round(Math.min(yE, yX)) + 0.5, Math.round(x2 - x1), Math.max(2, Math.round(Math.abs(yX - yE))));
+    reta(yE, corLado, null, 2);                              // linha grossa na cor do lado = preço de entrada
+    reta(yX, cor, aberta ? [3, 3] : null, 2);                // linha na cor do resultado = preço de saída
+    if (nivel >= 2) {
+      if (yS != null) reta(yS, COR.perda, [5, 3], 1.5);
+      if (yA != null) reta(yA, COR.ganho, [5, 3], 1.5);
+      for (const p of [t.alvo1, t.alvo2]) { const y = p == null ? null : u.y(p); if (y != null) reta(y, COR.ganho, [2, 3], 1); }
+      if (aberta && t.stop != null && t.stop !== stop) { const y = u.y(t.stop); if (y != null) reta(y, COR.perda, null, 2); }
     }
-    const fimTxt = aberta ? `AGORA ${AX.fmt(precoFim)} · ${AX.R((t.dir * (precoFim - t.ent)) / t.risco)}` : `SAÍDA ${AX.fmt(t.sai)} · ${AX.R(t.R)}${t.dinheiro != null ? " · " + AX.dinheiro(t.dinheiro, D, true) : ""}`;
-    const dir = x2 + 8 + 130 < u.W;
-    etiqueta(ctx, fimTxt, dir ? x2 + 8 : x2 - 8, yX, cor, dir ? "left" : "right");
-    if (xs != null) {                                      // triângulo amarelo no candle de sinal, do lado oposto ao da entrada
-      const ys = u.y(t.dir > 0 ? D.l[ix.s] : D.h[ix.s]);
-      if (ys != null) {
-        const s = t.dir > 0 ? 1 : -1, y0 = ys + s * 5;
-        ctx.fillStyle = "#ffd23f"; ctx.beginPath(); ctx.moveTo(xs, y0); ctx.lineTo(xs - 5, y0 + s * 8); ctx.lineTo(xs + 5, y0 + s * 8); ctx.closePath(); ctx.fill();
+    // bolinhas no ponto exato da entrada e da saída
+    for (const [x, y, c] of [[xe, yE, corLado], [xf, yX, cor]]) { ctx.fillStyle = "#0b0e14"; ctx.beginPath(); ctx.arc(x, y, 4, 0, 7); ctx.fill(); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.stroke(); }
+    const f = (v) => AX.fmt(v), hora = (i2) => (D.meta.intraday ? " · " + AX.quando(D, i2).slice(-5) : "");
+    placa(ctx, `${t.dir > 0 ? "▲ COMPRA" : "▼ VENDA"} ${f(t.ent)}${hora(ix.e)}`, x1 - 6, yE, corLado, TINTA, "right", true);
+    const res = aberta ? `AGORA ${f(precoFim)} · ${AX.R((t.dir * (precoFim - t.ent)) / t.risco)}`
+      : `${ganho ? "✔" : "✖"} SAÍDA ${f(t.sai)}${hora(ix.x)} · ${AX.R(t.R)}${t.dinheiro != null ? " · " + AX.dinheiro(t.dinheiro, D, true) : ""}`;
+    placa(ctx, res, x2 + 6, yX, cor, TINTA, "left", true);
+    if (nivel >= 2) {
+      const stopAgora = aberta && t.stop != null && t.stop !== stop;
+      if (yS != null) placa(ctx, `STOP ${f(stop)}${stopAgora ? " (inicial)" : ""}`, x2 + 6, yS, "#3a1820", "#ff9aa6", "left");
+      if (stopAgora) { const y = u.y(t.stop); if (y != null) placa(ctx, `STOP AGORA ${f(t.stop)}`, x2 + 6, y, COR.perda, TINTA, "left"); }
+      const parciais = [[t.alvo1, "ALVO 1"], [t.alvo2, "ALVO 2"]].filter((a) => a[0] != null);
+      for (const [pr, nome] of parciais) { const y = u.y(pr); if (y != null) placa(ctx, `${nome} ${f(pr)}`, x2 + 6, y, "#12331f", "#7df0bf", "left"); }
+      if (yA != null) placa(ctx, `${parciais.length ? "ALVO " + (parciais.length + 1) : "ALVO"} ${f(t.alvo)}`, x2 + 6, yA, "#12331f", "#7df0bf", "left");
+      const xs = ix.s >= 0 && ix.s <= k ? u.x(ix.s) : null;  // candle do sinal: triângulo amarelo + placa
+      if (xs != null) {
+        const ys = u.y(t.dir > 0 ? D.l[ix.s] : D.h[ix.s]);
+        if (ys != null) {
+          const sg = t.dir > 0 ? 1 : -1, y0 = ys + sg * 6;
+          ctx.fillStyle = "#ffd23f"; ctx.beginPath(); ctx.moveTo(xs, y0); ctx.lineTo(xs - 6, y0 + sg * 9); ctx.lineTo(xs + 6, y0 + sg * 9); ctx.closePath(); ctx.fill();
+          placa(ctx, `SINAL ${t.est}`, xs, y0 + sg * 22, "#ffd23f", TINTA, "center");
+        }
       }
     }
   }
+  // ordem ARMADA (ainda não executou): zona à frente do candle do sinal com a entrada, o stop e o alvo
+  function desenharOrdem(ctx, u, D, o, k) {
+    if (o.i_sinal == null || o.i_sinal < 0) return;
+    const xa = u.x(o.i_sinal), xb = u.x(k + Math.max(2, (o.validade || 1) + 1));
+    const ref = o.gatilho ?? D.c[k], yE = u.y(ref), yS = u.y(o.stop), yA = o.alvo == null ? null : u.y(o.alvo);
+    if (xa == null || xb == null || yE == null) return;
+    const corLado = o.dir > 0 ? COR.compra : COR.venda, f = (v) => AX.fmt(v);
+    if (yS != null) { ctx.fillStyle = "rgba(255,92,110,.12)"; ctx.fillRect(xa, Math.min(yE, yS), xb - xa, Math.abs(yS - yE)); }
+    if (yA != null) { ctx.fillStyle = "rgba(34,227,154,.10)"; ctx.fillRect(xa, Math.min(yE, yA), xb - xa, Math.abs(yA - yE)); }
+    ctx.strokeStyle = corLado; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.beginPath(); ctx.moveTo(xa, yE); ctx.lineTo(xb, yE); ctx.stroke(); ctx.setLineDash([]);
+    const como = o.gatilho == null ? "A MERCADO" : o.tipo === "limite" ? "LIMITE " + f(o.gatilho) : (o.dir > 0 ? "ACIMA DE " : "ABAIXO DE ") + f(o.gatilho);
+    placa(ctx, `${o.dir > 0 ? "▲ COMPRA ARMADA" : "▼ VENDA ARMADA"} ${como} · ${o.est}`, xa - 6, yE, corLado, TINTA, "right", true);
+    if (yS != null) placa(ctx, `STOP ${f(o.stop)}`, xa - 6, yS, "#3a1820", "#ff9aa6", "right");
+    if (yA != null) placa(ctx, `ALVO ${f(o.alvo)}`, xa - 6, yA, "#12331f", "#7df0bf", "right");
+  }
   AX.camadas.push((ctx, u) => {
     const D = AX.graficoMostra(); if (!D) return;
+    ocupadas = [];
     const modo = AX.ind ? AX.ind.ops() : "detalhe", k = AX.i;
     const r = AX.chart.timeScale().getVisibleLogicalRange(); if (!r) return;
     const F = AX.fonteOps(D);                              // com teste ao vivo nesta tela, depois que ele foi ligado valem as operações dele
     const lista = F.trades.filter((t) => t.i_ent <= k && t.i_sai >= r.from - 1 && t.i_ent <= r.to + 1);
     if (k === D.meta.iFim) for (const a of F.abertas) lista.push(a);
     const selAqui = SEL && SEL.ativo === D.meta.ativo && SEL.tf === D.meta.tf ? SEL : null;
-    const completo = modo === "detalhe" && lista.length <= 14;
+    // quanto escrever em cada operação depende de quantas cabem na tela: poucas = tudo; muitas = só a caixa e as placas
+    const base = modo === "nada" ? -1 : modo === "simples" ? 0 : lista.length <= 6 ? 2 : lista.length <= 30 ? 1 : 0;
     let achou = false;
-    for (const t of lista) {
-      const sel = !!selAqui && chave(t) === selAqui.chave;
-      if (sel) { achou = true; continue; }
-      // a operação que está ABERTA agora aparece sempre completa (entrada, stop, alvos e resultado escritos), sem precisar clicar
-      const viva = !selAqui && t.i_sai == null && k === D.meta.iFim;
-      if (viva) desenhar(ctx, u, D, t, true, true);
-      else if (modo !== "nada") desenhar(ctx, u, D, t, completo, false);
+    const ordem = lista.slice().sort((a, b) => (b.i_ent || 0) - (a.i_ent || 0));      // as mais novas escolhem lugar primeiro
+    for (const t of ordem) {
+      if (selAqui && chave(t) === selAqui.chave) { achou = true; continue; }
+      const viva = t.i_sai == null && k === D.meta.iFim;
+      if (viva) desenhar(ctx, u, D, t, 2, !selAqui);
+      else if (base >= 0) desenhar(ctx, u, D, t, base, false);
     }
-    if (selAqui) desenhar(ctx, u, D, achou ? lista.find((t) => chave(t) === selAqui.chave) : selAqui.tr, true, true);
+    if (selAqui) desenhar(ctx, u, D, achou ? lista.find((t) => chave(t) === selAqui.chave) : selAqui.tr, 2, true);
+    if (k === D.meta.iFim && modo !== "nada") for (const o of AX.estadoEm(D, k).pend) desenharOrdem(ctx, u, D, o, k);
   });
 
   function selecionar(tr, meta, focar = true) {

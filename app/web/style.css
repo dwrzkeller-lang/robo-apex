@@ -588,3 +588,6 @@ table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nu
 .hud-vivo .hud-preco { font-size: 17px; font-weight: 800; }
 .hud-vivo .hud-tempo { color: var(--txt2); font-size: 11px; }
 .hud-vivo b.cmp { color: var(--aqua); } .hud-vivo b.vnd { color: var(--fucsia); }
+
+.titulo .versao { font-size: 10px; font-weight: 700; letter-spacing: .3px; margin-left: 5px; padding: 1px 5px; border-radius: 5px;
+  background: #1e7bff33; border: 1px solid #1e7bff; color: #9fd0ff; -webkit-text-fill-color: #9fd0ff; vertical-align: middle; }

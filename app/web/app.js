@@ -234,17 +234,17 @@
     const m = [], F = AX.fonteOps(D);      // seta = entrada (azul compra, rosa venda); quadrado = saída (verde ganho, vermelho perda)
     // As últimas operações levam o texto na própria marca: "COMPRA 128.450" na entrada e "SAÍDA 128.900 +2,0R" na saída.
     // As mais antigas ficam só com a marca, para o gráfico não virar um mar de letras.
-    const vistas = F.trades.filter((t) => t.i_ent <= k), comTexto = new Set(vistas.slice(-12));
-    for (const t of vistas) {
-      const txt = comTexto.has(t);
+    // As setas e os quadrados só marcam o candle; quem escreve o preço, o horário e o resultado são as placas (ops.js).
+    for (const t of F.trades) {
+      if (t.i_ent > k) continue;
       m.push({ time: D.t[t.i_ent], position: t.dir > 0 ? "belowBar" : "aboveBar", color: t.dir > 0 ? COR.compra : COR.venda,
-        shape: t.dir > 0 ? "arrowUp" : "arrowDown", size: txt ? 1.3 : 0.8, text: txt ? (t.dir > 0 ? "COMPRA " : "VENDA ") + AX.fmt(t.ent) : undefined });
+        shape: t.dir > 0 ? "arrowUp" : "arrowDown", size: 1.2 });
       if (t.i_sai <= k) m.push({ time: D.t[t.i_sai], position: t.dir > 0 ? "aboveBar" : "belowBar", color: t.R > 0 ? COR.ganho : COR.perda,
-        shape: "square", size: txt ? 1 : 0.6, text: txt ? "SAÍDA " + AX.fmt(t.sai) + " " + AX.R(t.R, 1) : undefined });
+        shape: "square", size: 0.8 });
     }
-    for (const a of F.abertas) if (a.i_ent <= k && k === D.meta.iFim)
-      m.push({ time: D.t[a.i_ent], position: a.dir > 0 ? "belowBar" : "aboveBar", color: a.dir > 0 ? COR.compra : COR.venda,
-        shape: a.dir > 0 ? "arrowUp" : "arrowDown", size: 1.6, text: (a.dir > 0 ? "COMPRA " : "VENDA ") + AX.fmt(a.ent) + " · ABERTA" });
+    for (const a2 of F.abertas) if (a2.i_ent <= k && k === D.meta.iFim)
+      m.push({ time: D.t[a2.i_ent], position: a2.dir > 0 ? "belowBar" : "aboveBar", color: a2.dir > 0 ? COR.compra : COR.venda,
+        shape: a2.dir > 0 ? "arrowUp" : "arrowDown", size: 1.6 });
     m.sort((a, b) => a.time - b.time);
     return m;
   }
@@ -1093,7 +1093,8 @@
       // espera os outros módulos (ind, sim, calendário, operações…) carregarem: eles ouvem o evento "config"
       if (document.readyState === "loading") await new Promise((ok) => document.addEventListener("DOMContentLoaded", ok, { once: true }));
       AX.cfg = await AX.json("/api/config");
-      if (identificar(AX.cfg.usuario)) return;         // outro usuário neste navegador: a página recomeça com as preferências dele
+      if (identificar(AX.cfg.usuario)) return;
+      document.querySelector(".topo .titulo").innerHTML = 'ROBÔ APEX <small class="versao">' + AX.esc(AX.cfg.versao || "") + "</small>";         // outro usuário neste navegador: a página recomeça com as preferências dele
       AX.cfg.estMap = Object.fromEntries(AX.cfg.estrategias.map((e) => [e.cod, e]));
       // link direto: ?ativo=WIN&tf=5&est=TODAS&per=5d&aba=sim&acao=simular|replay|robo&passos=40
       const u = new URLSearchParams(location.search);

@@ -15,6 +15,15 @@ Zarattini & Aziz, fechamento de gap e o momentum intraday da "faixa de ruído").
 
 ---
 
+## Novidades da versão 2.2
+
+- **Operações legíveis no próprio gráfico:** cada operação tem uma caixa na cor do resultado, a placa de **entrada**
+  (lado, preço e horário), a de **saída** (preço, horário, R e dinheiro), as de **stop** e **alvos** e o candle do
+  **sinal** marcado. A ordem armada aparece como uma zona à frente, com entrada, stop e alvo.
+- O número da versão aparece no topo, ao lado do nome.
+
+![Operações no gráfico](prints/22_OPERACOES_NO_GRAFICO.png)
+
 ## Novidades da versão 2.1
 
 - **Entrada e saída escritas no gráfico:** as últimas operações levam o texto na própria marca ("COMPRA 128.450",
