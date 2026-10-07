@@ -144,17 +144,23 @@
     const base = modo === "nada" ? -1 : modo === "simples" ? 0 : lista.length <= 6 ? 2 : lista.length <= 30 ? 1 : 0;
     let achou = false;
     const ordem = lista.slice().sort((a, b) => (b.i_ent || 0) - (a.i_ent || 0));      // as mais novas escolhem lugar primeiro
+    const hip = AX.replay && AX.replay.hipotese ? AX.replay.hipotese() : null;      // "e se…": a operação com o stop e o alvo editados
     for (const t of ordem) {
+      if (hip && chave(t) === chave(hip)) continue;
       if (selAqui && chave(t) === selAqui.chave) { achou = true; continue; }
       const viva = t.i_sai == null && k === D.meta.iFim;
       if (viva) desenhar(ctx, u, D, t, 2, !selAqui);
       else if (base >= 0) desenhar(ctx, u, D, t, base, false);
     }
-    if (selAqui) desenhar(ctx, u, D, achou ? lista.find((t) => chave(t) === selAqui.chave) : selAqui.tr, 2, true);
+    if (hip) desenhar(ctx, u, D, hip, 2, true);
+    else if (selAqui) desenhar(ctx, u, D, achou ? lista.find((t) => chave(t) === selAqui.chave) : selAqui.tr, 2, true);
     if (k === D.meta.iFim && modo !== "nada") for (const o of AX.estadoEm(D, k).pend) desenharOrdem(ctx, u, D, o, k);
   });
 
   function selecionar(tr, meta, focar = true) {
+    // trocar de operação com o "e se…" aberto: fecha o da anterior e já abre o da nova, para comparar uma atrás da outra
+    const editava = AX.replay && AX.replay.editando && AX.replay.editando();
+    if (AX.replay && (editava || AX.replay.ativo())) { AX.replay.fecharEse(); AX.replay.fechar(); }
     if (!tr || (SEL && SEL.chave === chave(tr) && SEL.ativo === meta.ativo && SEL.tf === meta.tf && focar === "alternar")) SEL = null;
     else SEL = { chave: chave(tr), tr, ativo: meta.ativo, tf: meta.tf };
     const D = AX.graficoMostra();
@@ -164,6 +170,7 @@
       else AX.toast("Esta operação está fora dos candles carregados neste tempo gráfico.", "aviso");
     }
     AX.redesenhar(); renderOps();
+    if (editava && SEL && $("opEse")) $("opEse").click();
   }
   AX.ops = { selecionar: (tr, meta) => selecionar(tr, meta, true), limpar: () => { if (SEL) { SEL = null; AX.redesenhar(); renderOps(); } },
     abrir: (n) => { const d = document.querySelectorAll("#cardOps .op")[n - 1]; if (d) d.click(); } };      // link direto: ?op=2
@@ -195,7 +202,7 @@
     if (!D) return;
     const foco = document.activeElement;
     if (foco && foco.tagName === "INPUT" && el.contains(foco)) return;      // digitando no "e se…": não refaz a lista por baixo
-    if ($("eseStop") || (AX.replay && AX.replay.ativo())) return;         // resultado do "e se…" na tela ou replay tocando
+    if ((AX.replay && AX.replay.editando && AX.replay.editando()) || (AX.replay && AX.replay.ativo())) return;         // resultado do "e se…" na tela ou replay tocando
     const x = T.atual(), r = x && T.det && T.det.id === x.id ? T.det : null;
     const vista = AX.pref.opsVista === "teste" && r ? "teste" : "per";
     const fonte = vista === "teste" ? r : D, meta = fonte.meta;

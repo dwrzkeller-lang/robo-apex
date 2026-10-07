@@ -32,17 +32,37 @@
   function passo() {
     if (!R.on || R.pausa) return;
     if (R.k >= R.fim) { R.pausa = true; pintarBarra(); return; }
-    R.k++; AX.avancar(R.k); AX.redesenhar(); pintarBarra();
-    // nos candles importantes (sinal, entrada, saída) o replay segura um pouco mais
-    const chave = R.k === R.is || R.k === R.ie || R.k === R.ix;
-    R.relogio = setTimeout(passo, (chave ? 1500 : 650) / R.vel);
+    const i = R.k + 1, D = R.D, dur = 650 / R.vel;
+    // o candle "se forma" na tela (abertura, um extremo, o outro, fechamento) em vez de aparecer pronto; acima de 3x vai direto
+    const sobe = D.c[i] >= D.o[i], a = sobe ? D.l[i] : D.h[i], b = sobe ? D.h[i] : D.l[i], o = D.o[i];
+    const quadros = R.vel > 3 ? [] : [[o, o, o], [Math.max(o, a), Math.min(o, a), a], [Math.max(o, a, b), Math.min(o, a, b), b]];
+    const fim = () => {
+      if (!R.on || R.k !== i - 1) return;
+      R.k = i; AX.avancar(i); AX.redesenhar(); pintarBarra();
+      // nos candles importantes (sinal, entrada, saída) o replay segura um pouco mais
+      const chave = i === R.is || i === R.ie || i === R.ix;
+      R.relogio = setTimeout(passo, (chave ? 1500 : 650) / R.vel - (quadros.length ? dur * 0.6 : 0));
+    };
+    let q = 0;
+    const quadro = () => {
+      if (!R.on || R.pausa || R.k !== i - 1) return;
+      if (q >= quadros.length) return fim();
+      const [h, l, c] = quadros[q++];
+      try { AX.S.candle.update({ time: D.t[i], open: o, high: h, low: l, close: c }); } catch (e) { return fim(); }
+      R.relogio = setTimeout(quadro, (dur * 0.6) / quadros.length);
+    };
+    quadro();
   }
+  // um candle inteiro de uma vez (botão ▶| e pausa no meio da formação)
+  function inteiro() { if (R.k < R.fim) { R.k++; AX.avancar(R.k); AX.redesenhar(); } }
   function comecar() {
     clearTimeout(R.relogio);
     const de = Math.max(0, R.is - 25);
     R.k = de; R.pausa = false;
     AX.mostrar(R.D, de, { manterZoom: true });
     AX.autoPreco();
+    // a câmera é enquadrada só aqui; depois é do usuário (arrastar, zoom, desenhar) e o replay não puxa de volta
+    AX.chart.applyOptions({ timeScale: { shiftVisibleRangeOnNewBar: false } });
     AX.chart.timeScale().setVisibleLogicalRange({ from: de - 8, to: R.fim + 12 });
     pintarBarra();
     R.relogio = setTimeout(passo, 900);
@@ -50,6 +70,7 @@
   function fechar() {
     if (!R.on) return;
     clearTimeout(R.relogio); R.on = false; AX.emReplay = false;
+    AX.chart.applyOptions({ timeScale: { shiftVisibleRangeOnNewBar: true } });
     if (barra) barra.classList.add("oculto");
     const D = AX.vivo.D;
     if (D) AX.mostrar(D, D.meta.iFim);
@@ -76,10 +97,10 @@
         const a = b.dataset.a;
         if (a === "sair") return fechar();
         if (a === "zero") return comecar();
-        if (a === "um") { R.pausa = true; clearTimeout(R.relogio); if (R.k < R.fim) { R.k++; AX.avancar(R.k); AX.redesenhar(); } return pintarBarra(); }
+        if (a === "um") { R.pausa = true; clearTimeout(R.relogio); inteiro(); return pintarBarra(); }
         if (a === "pausa") {
           if (R.k >= R.fim) return comecar();
-          R.pausa = !R.pausa; clearTimeout(R.relogio); pintarBarra(); if (!R.pausa) passo();
+          R.pausa = !R.pausa; clearTimeout(R.relogio); if (R.pausa && AX.i === R.k && AX.S.candle.data && AX.S.candle.data().length > R.k + 1) inteiro(); pintarBarra(); if (!R.pausa) passo();
         }
       });
     }
@@ -141,37 +162,124 @@
     }
     return { n, antes, depois, viraram, pioraram };
   }
-  function painelEse(tr, meta, alvoEl) {
-    const D = AX.vivo.D, dec = meta.decimais, f = (v) => (v == null ? "" : (+v).toFixed(dec).replace(".", ","));
-    const s0 = tr.stop_ini ?? tr.stop;
-    alvoEl.innerHTML = `<div class="ese"><div class="manual-tit">E SE… ${AX.q("Mude o stop e o alvo desta entrada e veja o que teria acontecido nos candles reais, com os mesmos custos. Depois salve como lição: o robô testa o mesmo ajuste em todas as operações desta estratégia no período, para mostrar se a correção vale no geral ou só nesta operação.")}</div>
-      <div class="manual-campos"><label class="campo"><span>Stop</span><input type="text" inputmode="decimal" id="eseStop" value="${f(s0)}"></label>
-        <label class="campo"><span>Alvo (vazio = sem alvo)</span><input type="text" inputmode="decimal" id="eseAlvo" value="${f(tr.alvo)}"></label><button id="eseVer">Refazer</button></div>
-      <div id="eseRes" class="nota">Original: <b class="${AX.cls(tr.R)}">${AX.R(tr.R)}</b> (${AX.esc(tr.motivo || "aberta")}). Mude os preços e clique em Refazer.</div></div>`;
-    const num = (id) => { const s = $(id).value.trim().replace(/\s/g, ""); if (!s) return null; const a = parseFloat(s.replace(/\./g, "").replace(",", ".")), b = parseFloat(s.replace(",", ".")); const ok = [a, b].filter((v) => v > 0); return ok.length ? ok.sort((p, q) => Math.abs(Math.log(p / tr.ent)) - Math.abs(Math.log(q / tr.ent)))[0] : NaN; };
-    $("eseVer").onclick = () => {
-      const stop = num("eseStop"), alvo = num("eseAlvo"), el = $("eseRes");
-      if (!(stop > 0) || Number.isNaN(alvo)) { el.innerHTML = '<span class="ruim">Não entendi os preços.</span>'; return; }
-      const r = D ? refazer(D, tr, stop, alvo) : null;
-      if (!r) { el.innerHTML = '<span class="ruim">O stop tem de ficar do lado da perda e o alvo do lado do ganho.</span>'; return; }
-      const fs = r.risco / Math.abs(tr.ent - s0), ra = alvo != null ? Math.abs(alvo - tr.ent) / r.risco : 0;
-      const g = generalizar(D, tr.est, fs, ra);
-      el.innerHTML = `Com esse ajuste: <b class="${AX.cls(r.R)}">${AX.R(r.R)} = ${AX.dinheiro(r.dinheiro, D, true)}</b> (${r.motivo} em ${AX.quando(D, r.i_sai)}), em vez de <b class="${AX.cls(tr.R)}">${AX.R(tr.R)}</b>.
-        <br>Stop a ${AX.num(fs, 2)}× a distância original${ra ? " e alvo a " + AX.num(ra, 1) + " : 1" : ", sem alvo"}.
-        <br><b>O mesmo ajuste nas ${g.n} operações da ${AX.esc(tr.est)} neste período:</b> de <b class="${AX.cls(g.antes)}">${AX.dinheiro(g.antes, D, true)}</b> para <b class="${AX.cls(g.depois)}">${AX.dinheiro(g.depois, D, true)}</b> · ${g.viraram} perda(s) viraram ganho, ${g.pioraram} ganho(s) viraram perda.
-        <span class="${g.depois > g.antes ? "bom" : "alerta"}">${g.depois > g.antes ? "Melhorou o conjunto: vale testar como regra." : "No conjunto não melhorou: a correção só funciona olhando esta operação depois que ela aconteceu."}</span>
-        <label class="campo" style="margin-top:6px"><span>O que você aprendeu nesta entrada (opcional)</span><input type="text" id="eseNota" maxlength="200" placeholder="ex.: stop curto demais para esse horário"></label>
-        <div class="botoes finos"><button id="eseSalvar" class="primario">Salvar como lição</button></div>`;
-      $("eseSalvar").onclick = async () => {
-        const lista = await licoes();
-        lista.push({ quando: Date.now(), ativo: meta.ativo, tf: +meta.tf, est: tr.est, dir: tr.dir, t_ent: tr.t_ent, fs: +fs.toFixed(3), ra: +ra.toFixed(2), antes: +(+tr.R).toFixed(2), depois: +r.R.toFixed(2),
-          nota: String($("eseNota").value || "").slice(0, 200), geral: { n: g.n, antes: Math.round(g.antes), depois: Math.round(g.depois) } });
-        L.lista = lista.slice(-200);
-        try { await AX.api.set("licoes", L.lista); AX.toast("Lição salva. Ela aparece na aba IA, em Suas lições.", "ok"); renderLicoes(); }
-        catch (e) { AX.toast("Não consegui salvar a lição: " + e.message, "erro"); }
-      };
-    };
+  // Hipótese em edição: a operação com o stop e o alvo que o usuário escolheu (arrastando no gráfico ou digitando).
+  const E = { tr: null, meta: null, stop: null, alvo: null, res: null, hip: null, box: null, drag: null };
+  function montarHip() {
+    const D = AX.vivo.D, t = E.tr;
+    E.res = D ? refazer(D, t, E.stop, E.alvo) : null;
+    if (!E.res) { E.hip = null; return; }
+    const r = E.res;
+    E.hip = Object.assign({}, t, { stop: E.stop, stop_ini: E.stop, alvo: E.alvo, alvo1: null, alvo2: null, risco: r.risco, sai: r.sai, R: r.R, dinheiro: r.dinheiro,
+      motivo: r.motivo + " (e se)", i_ent: AX.idxT(D, t.t_ent), i_sinal: AX.idxT(D, t.t_sinal), i_sai: r.motivo === "ainda aberta" ? null : r.i_sai,
+      t_sai: r.motivo === "ainda aberta" ? null : D.t[r.i_sai] });
+    if (E.hip.i_sai == null) delete E.hip.t_sai;
   }
+  function pintarEse() {
+    const el = E.box && $("eseRes"); if (!el) return;
+    const D = AX.vivo.D, t = E.tr, dec = E.meta.decimais, f = (v) => (v == null ? "" : (+v).toFixed(dec).replace(".", ","));
+    if (document.activeElement !== $("eseStop")) $("eseStop").value = f(E.stop);
+    if (document.activeElement !== $("eseAlvo")) $("eseAlvo").value = f(E.alvo);
+    const r = E.res;
+    if (!r) { el.innerHTML = '<span class="ruim">O stop tem de ficar do lado da perda e o alvo do lado do ganho.</span>'; AX.redesenhar(); return; }
+    const s0 = t.stop_ini ?? t.stop, fs = r.risco / Math.abs(t.ent - s0), ra = E.alvo != null ? Math.abs(E.alvo - t.ent) / r.risco : 0;
+    const g = generalizar(D, t.est, fs, ra);
+    E.fs = fs; E.ra = ra; E.g = g;
+    el.innerHTML = `<div class="ese-res"><div><small>Original</small><b class="${AX.cls(t.R)}">${AX.R(t.R)}</b><em>${AX.esc(t.motivo || "aberta")}</em></div>
+        <div><small>Com o seu ajuste</small><b class="${AX.cls(r.R)}">${AX.R(r.R)}</b><em>${AX.dinheiro(r.dinheiro, D, true)} · ${AX.esc(r.motivo)} em ${AX.quando(D, r.i_sai).slice(-5)}</em></div>
+        <div><small>Nas ${g.n} operações da ${AX.esc(t.est)}</small><b class="${AX.cls(g.depois - g.antes)}">${AX.dinheiro(g.depois - g.antes, D, true)}</b><em>de ${AX.dinheiro(g.antes, D, true)} para ${AX.dinheiro(g.depois, D, true)}</em></div></div>
+      <div class="nota">Stop a ${AX.num(fs, 2)}× a distância original${ra ? " · alvo a " + AX.num(ra, 1) + " : 1" : " · sem alvo"} · no conjunto, ${g.viraram} perda(s) viraram ganho e ${g.pioraram} ganho(s) viraram perda.
+        <span class="${g.depois > g.antes ? "bom" : "alerta"}">${g.depois > g.antes ? "Melhorou o conjunto: vale testar como regra." : "No conjunto não melhorou: a correção só funciona olhando esta operação depois que ela aconteceu."}</span></div>`;
+    AX.redesenhar();
+  }
+  function fecharEse() {
+    if (R.on) fechar();
+    E.tr = null; E.hip = null; E.res = null;
+    if (E.box) E.box.innerHTML = "";
+    E.box = null;
+    $("areaGrafico").style.cursor = "";
+    AX.redesenhar();
+  }
+  function painelEse(tr, meta, alvoEl) {
+    const D = AX.vivo.D;
+    if (!D || D.meta.ativo !== meta.ativo || +D.meta.tf !== +meta.tf || AX.idxT(D, tr.t_ent) < 0) return AX.toast("Abra este ativo e este tempo gráfico para editar a operação.", "aviso");
+    if (R.on) fechar();
+    const s0 = tr.stop_ini ?? tr.stop, risco0 = Math.abs(tr.ent - s0);
+    Object.assign(E, { tr, meta, stop: s0, alvo: tr.alvo != null ? tr.alvo : tr.ent + tr.dir * 2 * risco0, box: alvoEl });
+    alvoEl.innerHTML = `<div class="ese"><div class="manual-tit">E SE… ${AX.q("Arraste no gráfico as linhas ⇕ STOP e ⇕ ALVO desta operação (ou digite os preços). O robô refaz a entrada nos candles reais, com os mesmos custos, e aplica o mesmo ajuste a todas as operações desta estratégia no período, para mostrar se a correção vale no geral ou só aqui.")}
+        <span class="dir"><button id="eseFechar" class="mini-btn">✕ fechar</button></span></div>
+      <div class="nota" style="margin:0 0 6px"><b>Arraste no gráfico</b> as linhas ⇕ STOP e ⇕ ALVO, ou digite:</div>
+      <div class="ese-campos"><label class="campo"><span>Stop</span><input type="text" inputmode="decimal" id="eseStop" autocomplete="off"></label>
+        <label class="campo"><span>Alvo</span><input type="text" inputmode="decimal" id="eseAlvo" autocomplete="off" placeholder="vazio = sem alvo"></label></div>
+      <div id="eseRes"></div>
+      <div class="botoes finos"><button id="eseReplay" class="primario">▶ Replay com este ajuste</button><button id="eseOrig">Voltar ao original</button></div>
+      <label class="campo" style="margin-top:6px"><span>O que você aprendeu nesta entrada (opcional)</span><input type="text" id="eseNota" maxlength="200" placeholder="ex.: stop curto demais para esse horário"></label>
+      <div class="botoes finos"><button id="eseSalvar">Salvar como lição</button></div></div>`;
+    const num = (id) => { const x = $(id).value.trim().replace(/\s/g, ""); if (!x) return null; const a = parseFloat(x.replace(/\./g, "").replace(",", ".")), b = parseFloat(x.replace(",", ".")); const ok = [a, b].filter((v) => v > 0); return ok.length ? ok.sort((p, q) => Math.abs(Math.log(p / tr.ent)) - Math.abs(Math.log(q / tr.ent)))[0] : NaN; };
+    const digitou = () => { const st = num("eseStop"), al = num("eseAlvo"); if (!(st > 0) || Number.isNaN(al)) return AX.toast("Não entendi o preço.", "aviso"); E.stop = st; E.alvo = al; montarHip(); pintarEse(); };
+    for (const id of ["eseStop", "eseAlvo"]) { $(id).onchange = digitou; $(id).onkeydown = (e) => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); $(id).blur(); } }; }
+    $("eseFechar").onclick = (e) => { e.stopPropagation(); fecharEse(); };
+    $("eseOrig").onclick = () => { E.stop = s0; E.alvo = tr.alvo != null ? tr.alvo : tr.ent + tr.dir * 2 * risco0; montarHip(); pintarEse(); };
+    $("eseReplay").onclick = () => { if (!E.hip) return AX.toast("Ajuste o stop e o alvo primeiro.", "aviso"); tocar(E.hip, meta); };
+    $("eseSalvar").onclick = async () => {
+      if (!E.res) return;
+      const lista = await licoes(), r = E.res;
+      lista.push({ quando: Date.now(), ativo: meta.ativo, tf: +meta.tf, est: tr.est, dir: tr.dir, t_ent: tr.t_ent, fs: +E.fs.toFixed(3), ra: +E.ra.toFixed(2), antes: +(+tr.R).toFixed(2), depois: +r.R.toFixed(2),
+        nota: String($("eseNota").value || "").slice(0, 200), geral: { n: E.g.n, antes: Math.round(E.g.antes), depois: Math.round(E.g.depois) } });
+      L.lista = lista.slice(-200);
+      try { await AX.api.set("licoes", L.lista); AX.toast("Lição salva. Ela aparece na aba IA, em Suas lições.", "ok"); renderLicoes(); }
+      catch (e) { AX.toast("Não consegui salvar a lição: " + e.message, "erro"); }
+    };
+    montarHip(); pintarEse();
+    AX.focar(AX.idxT(D, tr.t_ent), E.res ? E.res.i_sai : AX.idxT(D, tr.t_ent));
+  }
+  // ---- linhas ⇕ STOP e ⇕ ALVO da hipótese: desenhadas e arrastáveis no gráfico
+  const linhasEse = () => (E.tr && E.box ? [["stop", E.stop, COR.perda, "⇕ STOP (e se) "], ["alvo", E.alvo, COR.ganho, "⇕ ALVO (e se) "]].filter((l) => l[1] != null) : []);
+  AX.camadas.push((ctx, u) => {
+    const D = AX.graficoMostra();
+    if (!E.tr || !E.box || !D || D.meta.ativo !== E.meta.ativo) return;
+    const xe = u.x(AX.idxT(D, E.tr.t_ent)); if (xe == null) return;
+    for (const [tipo, preco, cor, nome] of linhasEse()) {
+      const y = u.y(preco); if (y == null) continue;
+      const meu = E.drag === tipo;
+      ctx.strokeStyle = cor; ctx.lineWidth = meu ? 3 : 2; ctx.setLineDash([]); ctx.beginPath(); ctx.moveTo(Math.max(0, xe - 30), y); ctx.lineTo(u.W, y); ctx.stroke();
+      ctx.font = "700 12px Segoe UI, system-ui"; const txt = nome + AX.fmt(preco), w = ctx.measureText(txt).width + 14, x0 = u.W - w - 8;
+      ctx.fillStyle = cor; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x0, y - 11, w, 22, 5); else ctx.rect(x0, y - 11, w, 22); ctx.fill();
+      ctx.fillStyle = "#06101c"; ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.fillText(txt, x0 + 7, y + 0.5);
+    }
+  });
+  const areaG = $("areaGrafico"), grafEl = $("chart");
+  function linhaSob(e) {
+    if (!E.tr || !E.box || !grafEl.contains(e.target) || (AX.desenho && AX.desenho.ferramenta() !== "cursor")) return null;
+    const r = grafEl.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    if (x < 0 || x > AX.chart.timeScale().width()) return null;
+    let melhor = null, dmin = 8;
+    for (const [tipo, preco] of linhasEse()) { const yy = AX.S.candle.priceToCoordinate(preco); if (yy != null && Math.abs(yy - y) < dmin) { dmin = Math.abs(yy - y); melhor = tipo; } }
+    return melhor;
+  }
+  areaG.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || E.drag) return;
+    const tipo = linhaSob(e); if (!tipo) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    E.drag = tipo; E.antes = [E.stop, E.alvo];
+    try { areaG.setPointerCapture(e.pointerId); } catch (err) { /* ok */ }
+    areaG.style.cursor = "ns-resize";
+  }, true);
+  areaG.addEventListener("pointermove", (e) => {
+    if (!E.drag) { if (!e.buttons && linhaSob(e)) areaG.style.cursor = "ns-resize"; return; }
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (!e.buttons) { E.drag = null; areaG.style.cursor = ""; return; }
+    const r = grafEl.getBoundingClientRect(), p = AX.S.candle.coordinateToPrice(e.clientY - r.top);
+    if (p == null || !(p > 0)) return;
+    const tk = (AX.vivo.D && AX.vivo.D.meta.tick) || Math.pow(10, -E.meta.decimais), v = +(Math.round(p / tk) * tk).toFixed(E.meta.decimais + 2), t = E.tr;
+    // o stop não atravessa a entrada para o lado do ganho, e o alvo não atravessa para o lado da perda
+    if (E.drag === "stop") { if (t.dir * (t.ent - v) > tk / 2) E.stop = v; } else if (t.dir * (v - t.ent) > tk / 2) E.alvo = v;
+    montarHip(); pintarEse();
+  }, true);
+  const soltarEse = (e) => { if (!E.drag) return; if (e) e.stopImmediatePropagation(); E.drag = null; areaG.style.cursor = ""; if (R.on) tocar(E.hip, E.meta); AX.redesenhar(); };
+  areaG.addEventListener("pointerup", soltarEse, true);
+  areaG.addEventListener("pointercancel", soltarEse, true);
+  areaG.addEventListener("click", (e) => { if (E.drag) e.stopImmediatePropagation(); }, true);
+  areaG.addEventListener("touchmove", (e) => { if (E.drag) { if (e.cancelable) e.preventDefault(); e.stopImmediatePropagation(); } }, { capture: true, passive: false });
 
   // ================================================================ 3. suas lições (aba IA)
   async function renderLicoes() {
@@ -198,9 +306,9 @@
     $("licLimpar").onclick = async () => { if (!confirm("Apagar todas as suas lições?")) return; L.lista = []; try { await AX.api.set("licoes", []); } catch (e) { /* ok */ } renderLicoes(); };
   }
 
-  AX.replay = { tocar, fechar, ativo: () => R.on, painelEse, refazer, generalizar };
-  AX.on("aba", (n) => { if (R.on && n !== "vivo") fechar(); if (n === "ia") renderLicoes(); });
-  AX.on("mudou", () => { fechar(); if (AX.aba === "ia") setTimeout(renderLicoes, 1500); });
+  AX.replay = { tocar, fechar, ativo: () => R.on, painelEse, refazer, generalizar, hipotese: () => (E.tr && E.box ? E.hip : null), editando: () => !!(E.tr && E.box), fecharEse };
+  AX.on("aba", (n) => { if (n !== "vivo") fecharEse(); if (R.on && n !== "vivo") fechar(); if (n === "ia") renderLicoes(); });
+  AX.on("mudou", () => { fecharEse(); fechar(); if (AX.aba === "ia") setTimeout(renderLicoes, 1500); });
   AX.on("dadosVivo", () => { if (AX.aba === "ia") renderLicoes(); });
   AX.on("tecla", (e) => { if (R.on && e.key === "Escape") fechar(); if (R.on && e.key === " ") { e.preventDefault(); barra.querySelector("[data-a=pausa]").click(); } });
 })();

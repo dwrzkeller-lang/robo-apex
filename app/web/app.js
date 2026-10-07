@@ -263,6 +263,10 @@
   // Um stop/alvo movido com o candle ainda aberto só vale no candle seguinte: até lá aparece como linha pontilhada "NOVO".
   function linhasDoEstado(D, k) {
     if (G.arrastando) return;                              // uma linha está sendo arrastada: não refaz por baixo do mouse
+    if (AX.replay && AX.replay.editando && AX.replay.editando()) {      // "e se…": valem as linhas da hipótese, desenhadas pelo replay.js
+      if (G.sigLinhas !== "ese") { G.sigLinhas = "ese"; G.linhasPreco.forEach((l) => S.candle.removePriceLine(l.linha)); G.linhasPreco = []; }
+      return;
+    }
     const e = AX.estadoEm(D, k), lista = [], mov = !!e.teste;
     const add = (price, color, title, style = 2, w = 1, arr = null) => { if (price != null) lista.push({ o: { price, color, lineWidth: w, lineStyle: style, axisLabelVisible: true, title }, arr }); };
     const novo = (ch, tipo) => (mov ? (e.ajPend || []).filter((a) => a.chave === ch && a.tipo === tipo).pop() : null);

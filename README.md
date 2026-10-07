@@ -15,6 +15,19 @@ Zarattini & Aziz, fechamento de gap e o momentum intraday da "faixa de ruído").
 
 ---
 
+## Novidades da versão 2.4
+
+- **E se… direto no gráfico:** abra uma operação, clique em **✎ E se…** e **arraste as linhas ⇕ STOP e ⇕ ALVO** no
+  próprio gráfico (ou digite os preços). O resultado muda na hora: a operação original, a operação com o seu ajuste e
+  o efeito do mesmo ajuste em todas as operações da estratégia no período.
+- **▶ Replay com este ajuste:** toca a operação com o stop e o alvo que você escolheu. Clicar em outra operação da
+  lista já abre o editor dela, para comparar uma atrás da outra.
+- **Replay mais fluido e livre:** o candle se forma na tela em vez de aparecer pronto, e durante o replay você pode
+  arrastar o gráfico, dar zoom e usar as ferramentas de desenho; o replay não puxa mais a câmera de volta.
+- Corrigido: o painel "E se…" aparecia espremido e não dava para editar.
+
+![E se… no gráfico](prints/24_E_SE_NO_GRAFICO.png)
+
 ## Novidades da versão 2.3
 
 - **Replay da entrada:** clique numa operação da lista e em **▶ Replay da entrada**: o gráfico toca candle a candle,

@@ -602,3 +602,14 @@ table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nu
 .op-acoes { margin: 0 0 8px; }
 .ese { margin-bottom: 8px; padding: 8px; border: 1px solid var(--linha2); border-radius: 8px; background: #10151e; }
 .ese .nota { line-height: 1.5; }
+
+/* o "e se…" e os botões da operação ocupam a largura toda (as outras linhas do detalhe são rótulo + texto) */
+.op-det > .op-acoes, .op-det > #opEseBox { display: block !important; }
+.op-det > .op-acoes { display: flex !important; gap: 8px; }
+.ese-campos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ese .campo > span, .ese .manual-tit .dir { white-space: normal; color: var(--txt2); }
+.ese-res { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+.ese-res > div { background: #0c1119; border: 1px solid var(--linha); border-radius: 8px; padding: 6px 8px; min-width: 0; }
+.ese-res small { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .4px; color: var(--txt2); white-space: normal; }
+.ese-res b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
+.ese-res em { display: block; font-style: normal; font-size: 11px; color: var(--txt2); white-space: normal; }
