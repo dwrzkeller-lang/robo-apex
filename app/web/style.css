@@ -580,3 +580,11 @@ table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nu
   .status { margin-left: 0; }
   #popAjustes, #popDatas { left: 16px; right: 16px; width: auto; }
 }
+
+/* ---------------- painel AO VIVO sobre o gráfico ---------------- */
+.hud-vivo { position: absolute; left: 64px; bottom: 36px; z-index: 5; max-width: calc(100% - 170px); display: flex; align-items: center;
+  flex-wrap: wrap; gap: 4px 12px; padding: 6px 12px; border-radius: 9px; font-size: 12.5px; font-variant-numeric: tabular-nums;
+  background: rgba(13,19,32,.92); border: 1px solid var(--linha2); box-shadow: 0 6px 20px #0008; pointer-events: auto; }
+.hud-vivo .hud-preco { font-size: 17px; font-weight: 800; }
+.hud-vivo .hud-tempo { color: var(--txt2); font-size: 11px; }
+.hud-vivo b.cmp { color: var(--aqua); } .hud-vivo b.vnd { color: var(--fucsia); }

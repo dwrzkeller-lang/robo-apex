@@ -78,7 +78,10 @@
           <div class="auc-rot"><span style="left:${pos(0.5)}%">acaso 50%</span><span style="left:${pos(0.585)}%">melhor que o acaso →</span></div></div>`;
       }
     }
-    h += `</div><div class="card" id="iaSinal">${cartaoSinal()}</div>`;
+    h += `</div><div class="card" id="iaSinal">${cartaoSinal()}</div>
+      <div class="card"><div class="rot">${ic('<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>')}AJUSTE DA ESTRATÉGIA ${AX.q("O robô testa todas as gestões (2:1, 3:1, 4:1, parcial, condução, trailing, escalonadas) combinadas com as proteções do stop nesta estratégia. Para não escolher por sorte, escolhe a melhor usando só a primeira metade do histórico e depois confere na segunda metade, que não participou da escolha. Só vira sugestão se ganhar também na segunda metade.")}<span class="dir">${AX.esc(AX.nomeEst(p.est))}</span></div>
+        <div id="iaAjuste"><div class="botoes finos"><button id="iaAjustar">Procurar o melhor ajuste para esta estratégia</button></div>
+        <div class="nota">Leva de alguns segundos a um minuto: são 60 simulações completas com custos.</div></div></div>`;
 
     if (n) {
       const linhas = [["Todas as operações", n.todas], ["Só as que a IA aprovava", n.favor], ["As que a IA reprovava", n.contra], ["Terço com as maiores notas", n.alto], ["Terço com as menores notas", n.baixo]];
@@ -141,7 +144,33 @@
 
     el.querySelectorAll("tr.clic").forEach((tr) => (tr.onclick = () => { AX.escolherEst(tr.dataset.est); AX.trocarAba("vivo"); }));
     const bg = $("iaGestoes"); if (bg) bg.onclick = () => AX.abrirGestoes();
+    const ba = $("iaAjustar"); if (ba) ba.onclick = ajustar;
     const cv = $("iaDiario"); if (cv) curva(cv, Di);
+  }
+
+  async function ajustar() {
+    const el = $("iaAjuste");
+    el.innerHTML = '<div class="nota">testando as gestões e as proteções nas duas metades do histórico…</div>';
+    let j;
+    try { j = await AX.json("/api/ajuste?" + AX.parametros(), { tempo: 240000 }); }
+    catch (e) { el.innerHTML = `<div class="nota ruim">${AX.esc(e.message)}</div>`; return; }
+    if (!$("iaAjuste")) return;
+    const D = { meta: { moeda: j.moeda } }, din = (v) => (v == null ? "—" : AX.dinheiro(v, D, true));
+    const pr = (x) => (x.prot.length ? x.prot.map((k) => ({ corte: "corte antecipado", forca: "perdeu força", folga: "folga", tol: "tolerância" }[k] || k)).join(" + ") : "sem proteção");
+    const lin = (x, rot) => `<tr><td>${rot}<br><small class="neutro">${AX.esc(x.nome)} · ${AX.esc(pr(x))}</small></td>
+      <td class="n">${x.treino.n}<br><b class="${AX.cls(x.treino.media)}">${din(x.treino.media)}</b></td>
+      <td class="n">${x.prova.n}<br><b class="${AX.cls(x.prova.media)}">${din(x.prova.media)}</b></td></tr>`;
+    const top = j.melhores[0];
+    $("iaAjuste").innerHTML = `<div class="ia-topo"><span class="selo ${j.aprovada ? "verde" : "amarelo"}">${j.aprovada ? "AJUSTE APROVADO NA PROVA" : "NENHUM AJUSTE PASSOU NA PROVA"}</span></div>
+      <p class="ia-frase">${!top ? "Não há operações suficientes para comparar (mínimo de 15 em cada metade)." : j.aprovada
+    ? `Na metade que não participou da escolha, <b>${AX.esc(top.nome)}</b> com ${AX.esc(pr(top))} rendeu ${din(top.prova.media)} por operação, contra ${din(j.atual.prova.media)} da configuração atual. É passado e amostra de um ativo só: teste antes no teste ao vivo.`
+    : `A melhor combinação da primeira metade (<b>${AX.esc(top.nome)}</b>, ${AX.esc(pr(top))}) não se sustentou na segunda: ${din(top.prova.media)} por operação. Trocar a gestão aqui seria escolher pelo passado; a estratégia continua sem vantagem neste ativo e tempo.`}</p>
+      <table class="tab ia-tab"><tr><th>Configuração</th><th class="n">1ª metade (escolha)<br>ops · média</th><th class="n">2ª metade (prova)<br>ops · média</th></tr>
+      ${lin(j.atual, "<b>Atual</b>")}${j.melhores.map((x, k) => lin(x, (k + 1) + "ª na escolha")).join("")}</table>
+      ${j.aprovada ? `<div class="botoes finos"><button id="iaUsar" class="primario">Usar ${AX.esc(top.nome)} com ${AX.esc(pr(top))}</button></div>` : ""}
+      <div class="nota">${j.testadas} combinações testadas em ${AX.esc(j.nomeTf)}, de ${AX.dataTxt(j.dataIni)} a ${AX.dataTxt(j.dataFim)}; a prova começa em ${AX.dataTxt(j.dataMeio)}. Média por operação, já com custos.</div>`;
+    const bu = $("iaUsar");
+    if (bu) bu.onclick = () => { AX.pref.prot = top.prot.slice(); AX.salvarPref(); AX.escolherGestao(top.gestao); AX.emit("mudou", "plano"); AX.toast("Ajuste aplicado: " + top.nome + ", " + pr(top) + ".", "ok"); };
   }
 
   // linha da nota ao longo dos dias, com a reta do acaso (50%)

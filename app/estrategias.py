@@ -231,7 +231,7 @@ def eficiencia(c, p=ER_PERIODO):
 
 
 # Modo seletivo (opcional): menos operacoes, so no contexto que se saiu melhor nos testes com 41 mil operacoes em 12 ativos
-SELETIVO_TENDENCIA = ("E1", "E2", "E3", "E4", "E5", "E9", "E12", "E13")   # correcao/rompimento: a favor do diario E tendencia limpa
+SELETIVO_TENDENCIA = ("E1", "E2", "E3", "E4", "E5", "E9", "E12", "E13", "E14", "E15")   # correcao/rompimento: a favor do diario E tendencia limpa
 SELETIVO_DIRECAO = ("E7", "E11")                              # momentum do dia: so a favor do diario
 
 
@@ -814,6 +814,78 @@ def e13_atencao(G, i):
     return False                                               # a propria ordem limitada ja aparece armada na tela
 
 
+# ------------------------------------------------------------------------------------------ E14 e E15: stop curto
+def e14_fibo_raso(G, i):
+    """Gatilho de Fibonacci com stop curto (a E2 aperfeicoada): correcao RASA (23,6% a 50%) numa tendencia com as medias
+    alinhadas, stop logo abaixo do fundo da correcao (e nao do inicio da pernada) e tres alvos: o topo, 127,2% e 161,8%.
+    So arma se o risco couber em 1 ATR e o alvo 2 pagar pelo menos 2 vezes o risco."""
+    a = G.atr[i]
+    if not (G.mm9[i] > G.mm20[i] > G.mm200[i]) or G.mm20[i] <= G.mm20[i - 5]:
+        return None
+    j = _topo(G, i, 15)                                        # topo do impulso
+    npb = i - j
+    if not 2 <= npb <= 9 or G.h[i] >= G.h[j]:
+        return None
+    m = j - 1
+    for k in range(max(0, j - 30), j):                         # fundo do impulso
+        if G.l[k] <= G.l[m]:
+            m = k
+    perna = G.h[j] - G.l[m]
+    if perna < 1.5 * a or j - m < 2:
+        return None
+    fundo = min(G.l[k] for k in range(j + 1, i + 1))
+    ret = (G.h[j] - fundo) / perna
+    if not 0.236 <= ret <= 0.50:
+        return None
+    n50 = G.h[j] - 0.5 * perna
+    if any(G.c[k] < n50 for k in range(j + 1, i + 1)) or fundo < G.mm20[i] - 0.25 * a:
+        return None                                            # nenhum fechamento abaixo dos 50% e sem furar a MM20
+    if not (G.c[i] > G.o[i] and G.c[i] > G.h[i - 1]):
+        return None                                            # gatilho: candle de alta que fecha acima da maxima anterior
+    ent = G.acima(G.h[i] + G.tick)
+    stop = G.abaixo(fundo - 0.1 * a - G.tick)
+    if ent >= G.h[j] or not _risco_ok(G, i, ent, stop, 0.3, 1.0):
+        return None
+    alvos = (G.abaixo(G.h[j]), G.abaixo(G.l[m] + 1.272 * perna), G.abaixo(G.l[m] + 1.618 * perna))
+    if alvos[0] <= ent + G.tick or alvos[1] - ent < 2.0 * (ent - stop):
+        return None
+    return dict(tipo="stop", gatilho=ent, stop=stop, validade=3, alvos=alvos, ret=round(ret, 4),
+                info="correção rasa de %s%%, stop no fundo da correção" % _br(100 * ret))
+
+
+def e14_atencao(G, i):
+    if not (G.mm9[i] > G.mm20[i] > G.mm200[i]):
+        return False
+    j = _topo(G, i, 15)
+    return 1 <= i - j <= 9 and G.h[i] < G.h[j] and e14_fibo_raso(G, i) is None and G.l[i] >= G.mm20[i] - 0.25 * G.atr[i]
+
+
+def e15_pivo_curto(G, i):
+    """Pivo + Fibonacci com stop curto (a E9 aperfeicoada): a mesma pernada e correcao de ate 50% do OGRO, a mesma compra
+    no rompimento do topo, mas com o stop na minima dos 2 ultimos candles antes do rompimento (acima do fundo C) e tres
+    alvos na projecao a partir de C: 61,8%, 100% e 161,8%. Perde menos quando o rompimento falha; e stopada mais vezes."""
+    r = _ogro(G, i)
+    if not r:
+        return None
+    j, m, ab, ret = r
+    ent = G.acima(G.h[j] + G.tick)
+    curto = min(G.l[i], G.l[i - 1])
+    stop = G.abaixo(max(G.l[m], curto - 0.1 * G.atr[i]) - G.tick)
+    if not _risco_ok(G, i, ent, stop, 0.3, 1.2):
+        return None
+    alvos = (G.abaixo(G.l[m] + 0.618 * ab), G.abaixo(G.l[m] + ab), G.abaixo(G.l[m] + 1.618 * ab))
+    if alvos[0] <= ent + G.tick:
+        alvos = (G.abaixo(ent + (ent - stop)), alvos[1], alvos[2])
+    if alvos[1] - ent < 2.0 * (ent - stop):
+        return None
+    return dict(tipo="stop", gatilho=ent, stop=stop, validade=1, alvos=alvos, ret=round(ret, 4),
+                info="rompimento do pivô com stop curto (retração de %.0f%%)" % (100 * ret))
+
+
+def e15_atencao(G, i):
+    return _ogro(G, i) is not None and e15_pivo_curto(G, i) is None
+
+
 # ------------------------------------------------------------------------------------------ catalogo
 ESTRATEGIAS = {
     "E1": dict(nome="Halt na MM20", autor="Mario Pisani + Oliver Velez", fn=e1_halt_mm20, aten=e1_atencao,
@@ -940,6 +1012,29 @@ ESTRATEGIAS = {
                         "Três alvos ancorados na pernada: o topo B, 127,2% e 161,8% da pernada",
                         "Um terço em cada alvo; no alvo 1 o stop vai para a entrada, no alvo 2 vai para o alvo 1",
                         "As versões publicadas usam 61,8% (Golden Pocket) ou 70,5% (OTE); aqui o nível é 50%"]),
+    "E14": dict(nome="Fibo raso: stop curto na correção", autor="Gatilho de Fibonacci (Pisani) aperfeiçoado: continuação rasa com médias alinhadas",
+                fn=e14_fibo_raso, aten=e14_atencao, gestao="fibo3", saida=None, intraday=False, sem_ntsl=True,
+                aguardando="correção rasa (até 50%) acima da MM20, esperando o candle que fecha acima da máxima anterior",
+                ideal="60 min em tendência limpa. No nosso teste (135 operações em 11 ativos, com custos) NÃO superou a E2: perdeu em média "
+                      "0,39R por operação (60 min: 0,18R). Arma pouco, porque exige risco curto e alvo de pelo menos 2:1",
+                regras=["Médias simples alinhadas: MM9 > MM20 > MM200 e MM20 subindo (venda: o inverso)",
+                        "Impulso de pelo menos 1,5 ATR; correção de 2 a 9 candles entre 23,6% e 50%, sem fechar abaixo dos 50% nem furar a MM20",
+                        "Gatilho: candle de alta que fecha acima da máxima do candle anterior; compra 1 tick acima dele (vale 3 candles)",
+                        "Stop CURTO: logo abaixo do fundo da correção (0,1 ATR + 1 tick), e não no início da pernada. Risco entre 0,3 e 1 ATR",
+                        "Três alvos: o topo do impulso, 127,2% e 161,8% da pernada. Só arma se o alvo 2 pagar pelo menos 2 vezes o risco",
+                        "Um terço em cada alvo; no alvo 1 o stop vai para a entrada, no alvo 2 vai para o alvo 1",
+                        "Perde pouco por operação, mas é stopada mais vezes: o stop fica perto do preço"]),
+    "E15": dict(nome="Pivô com stop curto", autor="OGRO (pivô + Fibonacci) aperfeiçoado: mesmo rompimento, stop mais perto",
+                fn=e15_pivo_curto, aten=e15_atencao, gestao="fibo3", saida=None, intraday=False, sem_ntsl=True,
+                aguardando="correção de até 50% formada, esperando o rompimento do topo da pernada",
+                ideal="60 min e WIN. No nosso teste (159 operações em 11 ativos, com custos) perdeu em média 0,26R por operação, contra "
+                      "0,17R da E9; no WIN e WDO ficou perto do zero, mas com só 13 operações (amostra pequena demais)",
+                regras=["Mesma leitura do OGRO: MM9 > MM20 > MM200, pernada de pelo menos 2 ATR e correção de 23,6% a 50%",
+                        "Compra no rompimento do pivô (1 tick acima do topo da pernada), valendo 1 candle",
+                        "Stop CURTO: abaixo da mínima dos 2 últimos candles antes do rompimento (nunca abaixo do fundo da correção). Risco de 0,3 a 1,2 ATR",
+                        "Três alvos na projeção de Fibonacci a partir do fundo da correção: 61,8%, 100% e 161,8%",
+                        "Só arma se o alvo 2 pagar pelo menos 2 vezes o risco",
+                        "Um terço em cada alvo; no alvo 1 o stop vai para a entrada, no alvo 2 vai para o alvo 1"]),
 }
 
 GESTOES = {
@@ -951,10 +1046,12 @@ GESTOES = {
     "conducao": "Condução: metade no 1:1, stop no 0x0, resto carregado pela MM9",
     "trail_atr": "Trailing stop: sem alvo, o stop sobe 2 ATR atrás do melhor preço",
     "trail_r": "Trailing em degraus: sem alvo, a cada 1R a favor o stop sobe 1R",
+    "esc3": "Escalonada 3: com 3 contratos, 2 saem no alvo 1, stop no 0x0 e o último segue por trailing",
+    "esc4": "Escalonada 4: com 4 contratos, 2 saem no alvo 1, 1 no alvo 2 e o último é carregado no 0x0 e por trailing",
 }
 # nome curto (botoes da tela) e o que cada gestao faz, em uma frase
 GESTOES_CURTO = {"padrao": "Padrão", "alvo2": "2:1", "alvo3": "3:1", "alvo4": "4:1", "parcial": "Parcial", "conducao": "Condução",
-                 "trail_atr": "Trailing ATR", "trail_r": "Trailing degraus"}
+                 "trail_atr": "Trailing ATR", "trail_r": "Trailing degraus", "esc3": "Escalonada 3", "esc4": "Escalonada 4"}
 
 
 def avaliar(Gs, cod, i):

@@ -1,0 +1,94 @@
+/* ROBÔ APEX — VOLUME POR PREÇO (perfil.js): a escadinha de preços por cima do lado direito do gráfico, colada na
+   escala de preço. As linhas ficam na altura do preço delas (o perfil.js põe top/height); sem alinhamento, vira lista. */
+.perfil { --pf-c: #26a69a; --pf-v: #ef5350; --pf-poc: #ffd23f; --pf-va: #7cc0ff; --pf-ec: #22d3ee; --pf-ev: #e056fd;
+  position: absolute; top: 34px; right: 62px; bottom: 26px; width: 244px; z-index: 5; display: flex; flex-direction: column;
+  background: rgba(11,14,20,.82); border: 1px solid var(--linha); border-right: 0; border-radius: 10px 0 0 10px;
+  font-size: 11px; line-height: 1.3; color: var(--txt); font-variant-numeric: tabular-nums; overflow: hidden; }
+.perfil em { font-style: normal; }
+
+/* cabeçalho */
+.pf-cab { flex: none; padding: 6px 8px 5px; background: #121823; border-bottom: 1px solid var(--linha); }
+.pf-tit { display: flex; align-items: center; gap: 4px; }
+.pf-tit b { font-size: 10.5px; font-weight: 700; letter-spacing: 1.1px; color: #9aa8bd; }
+.pf-x { margin-left: auto; width: 20px; height: 20px; padding: 0; line-height: 1; font-size: 15px; color: var(--txt2); background: transparent; border-color: transparent; }
+.pf-x:hover { color: #fff; }
+.pf-op { display: flex; align-items: center; gap: 6px; margin-top: 5px; }
+.pf-op .seg { flex: 1; }
+.pf-op .seg button { flex: 1; padding: 2px 4px; }
+.pf-mini { padding: 2px 7px; font-size: 11px; font-weight: 600; color: var(--txt2); }
+.pf-mini.on { color: var(--txt); border-color: var(--linha2); background: var(--bg4); }
+.pf-sub { margin-top: 5px; font-size: 10.5px; color: var(--txt2); }
+.pf-sub.pf-aviso { color: var(--laranja); }
+
+/* resumo: níveis e principais pontos */
+.pf-resumo { flex: none; padding: 5px 8px 6px; background: #121823f2; border-bottom: 1px solid var(--linha); }
+.pf-niveis { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 4px; }
+.pf-niveis span { cursor: help; white-space: nowrap; }
+.pf-niveis em { font-size: 9.5px; font-weight: 700; letter-spacing: .4px; }
+.pf-n-poc em { color: var(--pf-poc); } .pf-n-va em { color: var(--pf-va); }
+.pf-rot { display: flex; align-items: center; gap: 4px; margin-top: 3px; font-size: 9.5px; font-weight: 700; letter-spacing: .8px; color: #9aa8bd; }
+.pf-rot small { font-size: 9.5px; font-weight: 500; letter-spacing: 0; color: var(--txt2); }
+.pf-rot .q { margin-left: auto; }
+.pf-p, .pf-agora { display: grid; grid-template-columns: 28px 1fr auto 52px; align-items: center; gap: 4px; height: 15px; cursor: help; }
+.pf-p .pf-pr, .pf-agora .pf-pr { text-align: left; }
+.pf-dist { color: var(--txt); text-align: right; white-space: nowrap; }
+.pf-pct { color: var(--txt2); text-align: right; white-space: nowrap; }
+.pf-agora { grid-template-columns: 28px 1fr auto; margin: 3px 0 1px; padding: 1px 0; border-top: 1px dashed var(--linha2); border-bottom: 1px dashed var(--linha2); }
+.pf-agora .pf-dist { color: var(--txt2); }
+.pf-nada { color: var(--txt2); font-size: 10.5px; padding: 1px 0; }
+
+/* título das colunas */
+.pf-colunas, .pf-l { display: grid; grid-template-columns: 32px 60px 1fr 46px 32px 40px; align-items: center; column-gap: 3px; padding: 0 6px 0 4px; }
+.pf-colunas { flex: none; height: 15px; font-size: 9px; letter-spacing: .5px; text-transform: uppercase; color: var(--txt2); background: #121823f2; border-bottom: 1px solid var(--linha); }
+.pf-colunas span:nth-child(2), .pf-colunas span:nth-child(4), .pf-colunas span:nth-child(5), .pf-colunas span:nth-child(6) { text-align: right; }
+
+/* linhas de preço */
+.pf-corpo { flex: 1; position: relative; min-height: 0; overflow: hidden; }
+.pf-l { position: absolute; left: 0; right: 0; overflow: hidden; white-space: nowrap; cursor: help; border-top: 1px solid #ffffff08; padding-bottom: 4px; line-height: 12px; }
+.pf-l:hover { background: #ffffff10; }
+.pf-l.pf-dentro { background: #7cc0ff0d; box-shadow: inset 2px 0 0 #7cc0ff66; }
+.pf-l.pf-epoc { background: #ffd23f1a; box-shadow: inset 2px 0 0 var(--pf-poc); }
+.pf-l.pf-atual { background: #1e7bff38; outline: 1px solid var(--acento2); outline-offset: -1px; }
+.pf-l.pf-atual .pf-pr { color: #fff; font-weight: 700; }
+.pf-l.pf-fina > span:not(.pf-bar) { visibility: hidden; }       /* linha baixa demais para texto: fica a barra; o resto vai na dica */
+.pf-l.pf-fina { padding-bottom: 0; }
+.pf-l.pf-fina .pf-bar { bottom: calc(50% - 2px); }
+.pf-tag { font-size: 9px; font-weight: 800; letter-spacing: .2px; text-align: left; color: var(--txt2); }
+.pf-t-poc { color: var(--pf-poc); } .pf-t-va { color: var(--pf-va); } .pf-t-atual { color: var(--acento2); }
+.pf-t-c { color: var(--verde2); } .pf-t-v { color: #ff8d99; }
+.pf-pr { text-align: right; color: var(--txt); overflow: hidden; text-overflow: clip; }
+/* a barra do volume corre por baixo do texto, na largura inteira da linha: comprimento = volume da faixa ÷ o maior volume */
+.pf-bar { position: absolute; left: 4px; right: 6px; bottom: 1px; height: 3px; display: flex; align-items: stretch; gap: 1px; pointer-events: none; }
+.pf-bar i { display: block; min-width: 2px; border-radius: 2px; flex: none; }
+.pf-bar i.pf-c, .pf-leg i.pf-c { background: var(--pf-c); }
+.pf-bar i.pf-v, .pf-leg i.pf-v { background: var(--pf-v); }
+.pf-vol { text-align: right; color: var(--txt); }
+.pf-dom { text-align: right; font-size: 10px; font-weight: 700; }
+.pf-tc { color: #5fd0c4; } .pf-tv { color: #ff8f8c; }
+.pf-ent { display: flex; justify-content: flex-end; align-items: center; gap: 2px; font-size: 10px; }
+.pf-ent b { font-weight: 700; }
+.pf-ec { color: var(--pf-ec); } .pf-ev { color: var(--pf-ev); }
+.pf-pt { width: 5px; height: 5px; border-radius: 50%; flex: none; background: var(--txt2); }
+.pf-pt.pf-r-g { background: var(--verde2); } .pf-pt.pf-r-p { background: var(--verm); }
+.pf-pt.pf-r-ab { background: transparent; border: 1px solid var(--txt2); }
+.pf-vazio { padding: 14px 10px; color: var(--txt2); text-align: center; }
+
+/* sem alinhamento com a escala: lista simples, do preço mais alto para o mais baixo, com rolagem própria */
+.pf-corpo.pf-lista { overflow-y: auto; }
+.pf-corpo.pf-lista .pf-l { position: relative; height: 19px; }
+
+/* rodapé */
+.pf-pe { flex: none; padding: 4px 8px 5px; background: #121823; border-top: 1px solid var(--linha); }
+.pf-leg { display: flex; flex-wrap: wrap; gap: 2px 9px; font-size: 10px; color: var(--txt); }
+.pf-leg span { display: inline-flex; align-items: center; gap: 4px; cursor: help; white-space: nowrap; }
+.pf-leg i { display: inline-block; width: 12px; height: 4px; border-radius: 2px; }
+.pf-leg i.pf-poc { background: var(--pf-poc); } .pf-leg i.pf-va { background: var(--pf-va); }
+.pf-nota { margin-top: 3px; font-size: 10px; color: var(--txt2); }
+
+#btPerfil.on { border-color: var(--acento); color: #fff; }
+
+@media (max-width: 760px) {
+  .perfil { width: 214px; }
+  .pf-colunas, .pf-l { grid-template-columns: 30px 56px 1fr 42px 30px 0; }
+  .pf-ent, .pf-colunas span:nth-child(6) { display: none; }
+}

@@ -16,7 +16,7 @@
   const PADRAO = { ativo: "WIN", tf: 5, est: "TODAS", ultEst: "E1", gestao: "padrao", contratos: 1, capital: 10000, maxstops: 2,
     som: true, auto: true, per: "1m", de: "", ate: "", larg: {}, ind: null, opsVista: "per",
     tam: "fixo", risco: 1, lossDia: 0, metaDia: 0, seletivo: false, metaMes: 0, quedaMax: 0,     // aba Plano
-    criptos: [], criptoSeg: "memes", criptoAviso: false,
+    criptos: [], prot: [],
     candles: { alta: "#26a69a", baixa: "#ef5350", tipo: "cheio", tendencia: false }, notificar: false };
   const lerLS = (k) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } };
   // A tela só sabe quem entrou depois da primeira resposta do servidor; por isso guarda o último usuário deste navegador.
@@ -231,17 +231,20 @@
   // antes disso, e sem teste, as da estratégia no período. Ver ops.js.
   AX.fonteOps = (D) => { const v = AX.testes ? AX.testes.vivo(D) : null; return v ? v.ops : D; };
   function marcadores(D, k) {
-    const m = [], F = AX.fonteOps(D);      // seta = entrada (azul compra, rosa venda); ponto = saída (verde ganho, vermelho perda)
-    for (const t of F.trades) {
-      if (t.i_ent > k) continue;
+    const m = [], F = AX.fonteOps(D);      // seta = entrada (azul compra, rosa venda); quadrado = saída (verde ganho, vermelho perda)
+    // As últimas operações levam o texto na própria marca: "COMPRA 128.450" na entrada e "SAÍDA 128.900 +2,0R" na saída.
+    // As mais antigas ficam só com a marca, para o gráfico não virar um mar de letras.
+    const vistas = F.trades.filter((t) => t.i_ent <= k), comTexto = new Set(vistas.slice(-12));
+    for (const t of vistas) {
+      const txt = comTexto.has(t);
       m.push({ time: D.t[t.i_ent], position: t.dir > 0 ? "belowBar" : "aboveBar", color: t.dir > 0 ? COR.compra : COR.venda,
-        shape: t.dir > 0 ? "arrowUp" : "arrowDown", size: 0.8 });
+        shape: t.dir > 0 ? "arrowUp" : "arrowDown", size: txt ? 1.3 : 0.8, text: txt ? (t.dir > 0 ? "COMPRA " : "VENDA ") + AX.fmt(t.ent) : undefined });
       if (t.i_sai <= k) m.push({ time: D.t[t.i_sai], position: t.dir > 0 ? "aboveBar" : "belowBar", color: t.R > 0 ? COR.ganho : COR.perda,
-        shape: "circle", size: 0.6 });
+        shape: "square", size: txt ? 1 : 0.6, text: txt ? "SAÍDA " + AX.fmt(t.sai) + " " + AX.R(t.R, 1) : undefined });
     }
     for (const a of F.abertas) if (a.i_ent <= k && k === D.meta.iFim)
       m.push({ time: D.t[a.i_ent], position: a.dir > 0 ? "belowBar" : "aboveBar", color: a.dir > 0 ? COR.compra : COR.venda,
-        shape: a.dir > 0 ? "arrowUp" : "arrowDown", size: 0.8 });
+        shape: a.dir > 0 ? "arrowUp" : "arrowDown", size: 1.6, text: (a.dir > 0 ? "COMPRA " : "VENDA ") + AX.fmt(a.ent) + " · ABERTA" });
     m.sort((a, b) => a.time - b.time);
     return m;
   }
@@ -584,6 +587,7 @@
     if (p.lossDia > 0) o.lossDia = p.lossDia;
     if (p.metaDia > 0) o.metaDia = p.metaDia;
     if (p.seletivo) o.seletivo = 1;
+    if (Array.isArray(p.prot) && p.prot.length) o.prot = p.prot.join(",");      // proteções do stop (aba Plano)
     return o;
   };
   // nome da gestão de uma operação: as do menu e as internas (saída/alvos da própria estratégia)
@@ -693,7 +697,9 @@
   }
   function ligarTopo() {
     const sa = $("ativo"), st = $("tf"), sg = $("gestao"), sc = $("contratos");
-    AX.pref.criptos = AX.pref.criptos.filter((x) => x && AX.ehCripto(x.chave)).slice(0, 12);
+    AX.pref.criptos = [];                                  // o mercado de cripto saiu do robô na versão 2.1
+    if (AX.ehCripto(AX.pref.ativo) || AX.pref.ativo === "BTCUSD") AX.pref.ativo = "WIN";
+    if (!Array.isArray(AX.pref.prot)) AX.pref.prot = [];
     if (AX.ehCripto(AX.pref.ativo) && !AX.pref.criptos.some((x) => x.chave === AX.pref.ativo))
       AX.pref.criptos.unshift({ chave: AX.pref.ativo, nome: AX.nomeCripto(AX.pref.ativo), fracionado: true, cripto: true });
     st.innerHTML = AX.cfg.tempos.map((t) => `<option value="${t.tf}">${t.nome}</option>`).join("");
@@ -881,6 +887,29 @@
   }
 
   // status no topo: ao vivo / histórico, e um alerta se os dados pararam de chegar
+  // Painel AO VIVO em cima do gráfico: o que o robô está fazendo agora, com entrada, stop, alvo e resultado escritos,
+  // o preço atual e há quanto tempo chegou o último dado (para ninguém ficar na dúvida se está andando).
+  function hudVivo() {
+    const el = $("hudVivo"), D = V.D;
+    if (!el) return;
+    if (!D || AX.graficoMostra() !== D || !ABAS_VIVAS.includes(AX.aba)) { el.classList.add("oculto"); return; }
+    const m = D.meta, k = m.iFim, e = AX.estadoEm(D, k), f = (v) => AX.fmt(v);
+    const seg = V.ok ? Math.max(0, Math.round((Date.now() - V.ok) / 1000)) : null;
+    const atraso = /atraso/.test(m.fonte || "") ? " · fonte com ~15 min de atraso" : "";
+    let est;
+    if (e.pos) {
+      const p = e.pos, alvos = AX.alvosDe(p).map(([pr, nm]) => nm.toLowerCase() + " " + f(pr)).join(" · ");
+      est = `<b class="${p.dir > 0 ? "cmp" : "vnd"}">${p.dir > 0 ? "COMPRADO" : "VENDIDO"}</b> ${AX.esc(p.est)} · entrada <b>${f(p.ent)}</b>${p.t_ent != null ? " às " + AX.quandoT(p.t_ent, m.intraday).slice(-5) : ""} · stop <b>${f(p.stopAgora ?? p.stop)}</b>${alvos ? " · " + alvos : ""} · agora <b class="${AX.cls(p.Ragora)}">${AX.R(p.Ragora)}</b>`;
+    } else if (e.pend.length) {
+      const o = e.pend[e.pend.length - 1];
+      est = `<b class="${o.dir > 0 ? "cmp" : "vnd"}">${o.dir > 0 ? "COMPRA" : "VENDA"} ARMADA</b> ${AX.esc(o.est)} · entra ${o.gatilho == null ? "a mercado no próximo candle" : (o.tipo === "limite" ? "no limite " : o.dir > 0 ? "acima de " : "abaixo de ") + "<b>" + f(o.gatilho) + "</b>"} · stop <b>${f(o.stop)}</b>${o.alvo != null ? " · alvo <b>" + f(o.alvo) + "</b>" : ""}`;
+    } else est = `<span class="neutro">sem operação aberta: aguardando setup</span>`;
+    el.innerHTML = `<i class="luz ${m.aoVivo ? "vivo" : "hist"}"></i><span class="hud-preco">${f(D.c[k])}</span><span class="hud-est">${est}</span>
+      <span class="hud-tempo" data-dica="Há quanto tempo o robô respondeu pela última vez. A tela pergunta a cada 5 segundos; o candle de agora muda quando a fonte manda preço novo.">${m.aoVivo ? (seg == null ? "" : "atualizado há " + seg + " s") + atraso : "histórico"}</span>`;
+    el.classList.remove("oculto");
+  }
+  setInterval(hudVivo, 1000);
+  AX.on("dadosVivo", hudVivo);
   function statusDados(D, idade, semResposta = false) {
     if (!D) return;
     const m = D.meta, dt = AX.quando(D, m.ultimo);
@@ -978,7 +1007,7 @@
   // ---------------------------------------------------------------- abas
   AX.aba = "vivo";
   // largura do painel: arraste a divisória (cada tamanho de aba guarda a sua); duplo clique volta ao padrão
-  const classeLarg = () => (AX.aba === "cmp" ? "l" : AX.aba === "cripto" ? "c" : AX.aba === "sim" || AX.aba === "cal" ? "m" : "n");
+  const classeLarg = () => (AX.aba === "cmp" ? "l" : AX.aba === "opcoes" ? "c" : AX.aba === "sim" || AX.aba === "cal" ? "m" : "n");
   const limiteLarg = (w) => Math.round(Math.max(320, Math.min(window.innerWidth - 380, w)));
   function aplicarLargura() {
     const w = (AX.pref.larg || {})[classeLarg()];
@@ -1007,14 +1036,14 @@
   })();
   $("btCentro").onclick = () => AX.centralizar();
   $("btPeriodoTodo").onclick = () => AX.centralizar(true);
-  const ABAS_VIVAS = ["vivo", "ia", "cal", "plano", "cripto"];       // abas em que o gráfico mostra o "agora"
+  const ABAS_VIVAS = ["vivo", "ia", "cal", "plano", "opcoes"];       // abas em que o gráfico mostra o "agora"
   function trocarAba(nome) {
     AX.aba = nome;
     document.querySelectorAll(".abas button").forEach((b) => b.classList.toggle("on", b.dataset.aba === nome));
     document.querySelectorAll(".aba").forEach((s) => s.classList.toggle("on", s.id === "aba-" + nome));
     $("painel").classList.toggle("largo", nome === "cmp");
     $("painel").classList.toggle("medio", nome === "sim" || nome === "cal");
-    $("painel").classList.toggle("cripto", nome === "cripto");
+    $("painel").classList.toggle("cripto", nome === "opcoes");
     aplicarLargura();
     if (ABAS_VIVAS.includes(nome)) {
       if (V.D && !V.velho) { if (AX.graficoMostra() !== V.D) AX.mostrar(V.D, V.D.meta.iFim); if (nome === "vivo") renderVivo(V.D); }
@@ -1077,6 +1106,9 @@
       if (!(AX.pref.per in PERIODOS)) AX.pref.per = "1m";
       ligarTopo();
       aplicarLargura();
+      AX.json("/api/profit/estado").then((e) => {
+        $("profitEstado").innerHTML = `<b>Profit:</b> ${AX.esc(e.situacao)} · ordens em modo <b>simulador</b> (${e.ordens} registradas)${AX.q(e.falta + " Pasta: " + e.pasta + ". Enquanto isso o robô registra cada ordem armada dos testes ao vivo num arquivo, sem enviar nada à corretora.")}`;
+      }).catch(() => {});
       AX.json("/api/sons").then((j) => { AX.sons = j.sons || {}; AX.pastaSons = j.pasta; }).catch(() => {});
       AX.emit("config", AX.cfg);
       sp.passo("dados", "fazendo", `baixando ${AX.pref.ativo} em ${AX.pref.tf >= 1440 ? "diário" : AX.pref.tf + " min"}…`);
@@ -1099,7 +1131,7 @@
       if (u.get("pop") === "explica" && AX.explica) AX.explica.abrir(AX.pref.est);
       if (u.get("pop") === "gestoes") { GEST.aberto = true; if (V.D) renderVivo(V.D); }
       const aba = u.get("aba");
-      if (["sim", "cmp", "cal", "news", "plano", "cripto", "ia"].includes(aba)) trocarAba(aba);
+      if (["sim", "cmp", "cal", "news", "plano", "opcoes", "ia"].includes(aba)) trocarAba(aba);
       if (aba === "sim" && u.get("acao") && AX.simDemo) await AX.simDemo({ acao: u.get("acao"), passos: +u.get("passos") || 0 });
       if (aba === "cmp" && u.get("acao") === "comparar") $("btComparar").click();
       if (u.get("acao") === "robo") AX.emit("rodarRobo");

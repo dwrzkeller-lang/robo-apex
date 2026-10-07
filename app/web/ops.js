@@ -70,7 +70,14 @@
       if (Math.abs(y - yE) > 14 && (yA == null || Math.abs(y - yA) > 14)) etiqueta(ctx, `${nome} ${AX.fmt(p)}`, X, y, COR.ganho, al);
     }
     if (yA != null && Math.abs(yA - yE) > 14) etiqueta(ctx, `${parciais.length ? "ALVO " + (parciais.length + 1) : "ALVO"} ${AX.fmt(t.alvo)}`, X, yA, COR.ganho, al);
-    const fimTxt = aberta ? `agora ${AX.R((t.dir * (precoFim - t.ent)) / t.risco)}` : `SAÍDA ${AX.fmt(t.sai)} · ${AX.R(t.R)}`;
+    // linhas de prumo: uma no candle da entrada e outra no da saída, com o horário no pé do gráfico
+    const hora = (i2) => AX.quando(D, i2).slice(-5);
+    for (const [x, i2, c2, nome] of [[xe, ix.e, "#d9e0ea", "entrada "], aberta ? null : [x2, ix.x, cor, "saída "]].filter(Boolean)) {
+      ctx.strokeStyle = c2; ctx.globalAlpha = 0.35; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
+      ctx.beginPath(); ctx.moveTo(Math.round(x) + 0.5, 0); ctx.lineTo(Math.round(x) + 0.5, u.H); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+      if (D.meta.intraday) etiqueta(ctx, nome + hora(i2), x, u.H - 10, c2, "center");
+    }
+    const fimTxt = aberta ? `AGORA ${AX.fmt(precoFim)} · ${AX.R((t.dir * (precoFim - t.ent)) / t.risco)}` : `SAÍDA ${AX.fmt(t.sai)} · ${AX.R(t.R)}${t.dinheiro != null ? " · " + AX.dinheiro(t.dinheiro, D, true) : ""}`;
     const dir = x2 + 8 + 130 < u.W;
     etiqueta(ctx, fimTxt, dir ? x2 + 8 : x2 - 8, yX, cor, dir ? "left" : "right");
     if (xs != null) {                                      // triângulo amarelo no candle de sinal, do lado oposto ao da entrada
@@ -94,7 +101,10 @@
     for (const t of lista) {
       const sel = !!selAqui && chave(t) === selAqui.chave;
       if (sel) { achou = true; continue; }
-      if (modo !== "nada") desenhar(ctx, u, D, t, completo, false);
+      // a operação que está ABERTA agora aparece sempre completa (entrada, stop, alvos e resultado escritos), sem precisar clicar
+      const viva = !selAqui && t.i_sai == null && k === D.meta.iFim;
+      if (viva) desenhar(ctx, u, D, t, true, true);
+      else if (modo !== "nada") desenhar(ctx, u, D, t, completo, false);
     }
     if (selAqui) desenhar(ctx, u, D, achou ? lista.find((t) => chave(t) === selAqui.chave) : selAqui.tr, true, true);
   });
@@ -288,7 +298,7 @@
     if (bt) bt.disabled = true;
     try {
       await pedir({ acao: "ligar", ativo: p.ativo, tf: +p.tf, est: p.est, gestao: p.gestao, contratos: p.contratos, capital: p.capital, maxstops: p.maxstops,
-        tam: p.tam, risco: p.risco, lossDia: p.lossDia, metaDia: p.metaDia, seletivo: !!p.seletivo });      // o plano fica gravado no teste
+        tam: p.tam, risco: p.risco, lossDia: p.lossDia, metaDia: p.metaDia, seletivo: !!p.seletivo, prot: p.prot || [] });      // o plano fica gravado no teste
       AX.pref.opsVista = "teste"; AX.salvarPref();
       AX.som("ordem");
       AX.toast("Teste ao vivo ligado: o Sentinela registra as operações a partir do próximo candle, mesmo com esta tela fechada.", "ok");

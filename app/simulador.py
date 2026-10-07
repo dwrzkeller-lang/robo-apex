@@ -25,6 +25,10 @@ from estrategias import (AQUECIMENTO, ESTRATEGIAS, Grafico, atencao, avaliar, ef
                          passa_seletivo, tendencia_diaria)
 from ia import caracteristicas
 
+FOLGA_PCT = 0.00015        # folga atras do stop tecnico: 0,015% do preco (20 pontos com o indice em 130 mil)
+TOL_FRAC = 0.20            # tolerancia extra de stop quando o sinal e a favor do diario e limpo
+PROTECOES = {"folga": "Folga no stop (0,015% do preço atrás do stop técnico)", "tol": "Tolerância de +20% no stop em sinal forte",
+             "corte": "Corte antecipado em meia perda quando volta contra com força", "forca": "Stop para −20% ou 0x0 quando perde força"}
 TRAIL_ATR = 2.0            # trailing stop: distancia do stop ate o melhor preco, em ATR
 
 
@@ -69,6 +73,14 @@ def alvos_da_gestao(g, ent, risco, alvos_ordem):
         return ent + risco, ent + 2 * risco, "alvo 2:1", None
     if g == "conducao":
         return ent + risco, None, "", None
+    if g in ("esc3", "esc4"):
+        # escalonada: alvo 1 = o primeiro alvo da estrategia (ou 1:1); na de 4 ha tambem o alvo 2 (ou 2:1).
+        # O ultimo contrato nao tem alvo: segue com o stop no 0x0 e depois por trailing.
+        t1 = alvos_ordem[0] if alvos_ordem and alvos_ordem[0] is not None and alvos_ordem[0] > ent else ent + risco
+        t2 = None
+        if g == "esc4":
+            t2 = alvos_ordem[1] if alvos_ordem and len(alvos_ordem) > 1 and alvos_ordem[1] is not None and alvos_ordem[1] > t1 else max(t1 + risco, ent + 2 * risco)
+        return t1, None, "", t2
     if g == "fixo" and alvos_ordem:
         return None, alvos_ordem[1], "alvo da estratégia", None
     if g == "fibo" and alvos_ordem:
@@ -112,6 +124,7 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
     capital0 = float(pl.get("capital") or 0.0)
     loss_dia, meta_dia = float(pl.get("loss_dia") or 0.0), float(pl.get("meta_dia") or 0.0)
     seletivo = bool(pl.get("seletivo"))
+    prot = set(pl.get("prot") or ())                 # protecoes do plano: folga, tol, corte, forca (ver PROTECOES)
     h_ini, h_fim, h_zer = cfg["hora_inicio"], cfg["hora_fim"], cfg["hora_zeragem"]
     d, hm = G.d, G.hm
     codigos = [c for c in codigos if not (ESTRATEGIAS[c]["intraday"] and not G.intraday)]
@@ -182,6 +195,20 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
             t = math.floor(q / 3) / q
             return t, t
         return (0.5, 0.0) if q >= 2 else (0.0, 0.0)
+
+    def fracs_esc(g, q):
+        """Escalonada 3: dois tercos saem no alvo 1. Escalonada 4: metade no alvo 1 e um quarto no alvo 2. O resto e
+        carregado. Com contrato inteiro so sai o que da para dividir (com 1 contrato nada sai: so o stop sobe)."""
+        f1, f2 = (2.0 / 3.0, 0.0) if g == "esc3" else (0.5, 0.25)
+        if fracionado:
+            return f1, f2
+        n1 = math.floor(q * f1 + 1e-9)
+        n2 = math.floor(q * f2 + 1e-9)
+        if n1 + n2 >= q:                                 # sempre sobra pelo menos 1 contrato para carregar
+            n2 = max(0, q - n1 - 1)
+            if n1 + n2 >= q:
+                n1 = max(0, q - 1)
+        return n1 / q, n2 / q
 
     def tamanho(s, preco, risco, custo_p):
         """Quantidade da operacao. Por risco: quanto cabe em risco_pct% do capital atual, arredondado para baixo."""
@@ -257,7 +284,8 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
         risco = preco - stop_g
         g = gestao_de(od["est"], gestao)
         alvos_g = None if not od.get("alvos") else tuple(None if x is None else od["dir"] * x for x in od["alvos"])
-        alvo1, alvo, rot, alvo2 = alvos_da_gestao(g, preco, risco, alvos_g)
+        # os alvos saem do risco TECNICO (sem a folga/tolerancia do plano): alargar o stop nao empurra o alvo para longe
+        alvo1, alvo, rot, alvo2 = alvos_da_gestao(g, preco, max(tick, risco - od.get("extra", 0.0)), alvos_g)
         if od.get("alvo_manual") is not None:               # alvo movido na mao antes da entrada: vira o alvo unico
             alvo, rot, alvo2 = od["dir"] * od["alvo_manual"], "alvo ajustado na mão", None
             if alvo1 is not None and alvo1 >= alvo:
@@ -277,7 +305,9 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                       % ("%g" % pl["risco_pct"]).replace(".", ","), i_fim=i)
             s["pend"].remove(od)
             return False
-        if alvo2 is not None:                               # gestao de 3 alvos: um terco em cada um
+        if g in ("esc3", "esc4"):
+            fp1, fp2 = fracs_esc(g, q)
+        elif alvo2 is not None:                             # gestao de 3 alvos: um terco em cada um
             fp1, fp2 = fracs_3alvos(q)
         else:
             fp1, fp2 = frac_parcial(q), 0.0
@@ -364,6 +394,23 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                 return fechar(s, p, p["frac"], p["alvo"], i, p["rot"] or "alvo")
         if i == i_formando or so_preco:
             return
+        if prot and not p["sair"]:
+            fraco = c < o and c < Gp.mm9[i] if Gp.mm9[i] is not None else False     # candle contra, fechando alem da MM9
+            novo = None
+            if "forca" in prot and fraco:
+                # andou pelo menos 25% do caminho ate o alvo e perdeu forca: o stop vem para -20% do risco;
+                # se ja tinha andado metade, vem para a entrada (0x0)
+                dist = (p["alvo"] - ent) if p["alvo"] is not None else 2.0 * R
+                if dist > 0 and p["maxfav"] - ent >= 0.25 * dist:
+                    novo = ent if p["maxfav"] - ent >= 0.5 * dist else ent - 0.2 * R
+            if "corte" in prot and novo is None and fraco and c < ent - 0.25 * R and (c - l) <= (h - l) / 3.0:
+                novo = ent - 0.5 * R                       # voltou contra com forca logo depois da entrada: corta em meia perda
+            if novo is not None:
+                novo = Gp.abaixo(novo)
+                if c <= novo:
+                    p["sair"] = "saída antecipada (perdeu força)"
+                elif novo > p["stop"]:
+                    p["stop"] = novo
         if g == "trail_atr":                                # o stop acompanha o melhor preco a TRAIL_ATR x ATR, so sobe
             novo = Gp.abaixo(p["maxfav"] - TRAIL_ATR * Gp.atr[i])
             if novo > p["stop"]:
@@ -374,6 +421,10 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                 novo = Gp.abaixo(ent + (k - 1) * R)
                 if novo > p["stop"]:
                     p["stop"] = novo
+        elif g in ("esc3", "esc4") and p["parcial"]:        # depois do alvo 1 o que sobrou segue por trailing (2 ATR), nunca abaixo do 0x0
+            novo = Gp.abaixo(p["maxfav"] - TRAIL_ATR * Gp.atr[i])
+            if novo > p["stop"]:
+                p["stop"] = novo
         elif g == "conducao" and p["parcial"]:
             if c < Gp.mm9[i] and Gp.mm9[i] > ent:
                 p["sair"] = "fechou além da MM9 (condução)"
@@ -490,6 +541,17 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                     od["er"] = round(G.er[i], 2)
                     if seletivo and not passa_seletivo(G, cod, i, od["dir"]):
                         continue
+                    if "folga" in prot or "tol" in prot:
+                        ref0 = od["gatilho"] if od["gatilho"] is not None else G.c[i]
+                        tec = abs(ref0 - od["stop"])
+                        extra = 0.0
+                        if "folga" in prot:                    # folga fixa atras do stop tecnico (20 pontos no indice de 130 mil)
+                            extra += max(2 * tick, round(FOLGA_PCT * abs(ref0) / tick) * tick)
+                        if "tol" in prot and od["ctx"] > 0 and od["er"] >= 0.35:
+                            extra += round(TOL_FRAC * tec / tick) * tick      # sinal a favor do diario e limpo: tolera 20% a mais
+                        if extra > 0:
+                            od["stop"] = od["stop"] - od["dir"] * extra
+                            od["extra"] = extra
                     repetida = False
                     for velha in list(s["pend"]):
                         if (velha["est"] == cod and od["tipo"] == "limite" and velha["tipo"] == "limite" and velha["dir"] == od["dir"]
@@ -508,7 +570,7 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                     g = gestao_de(cod, gestao)
                     ref = od["gatilho"] if od["gatilho"] is not None else G.c[i]
                     sg = od["dir"]
-                    a1, a2, _, am = alvos_da_gestao(g, sg * ref, sg * (ref - od["stop"]),
+                    a1, a2, _, am = alvos_da_gestao(g, sg * ref, max(tick, sg * (ref - od["stop"]) - od.get("extra", 0.0)),
                                                     None if not od.get("alvos") else tuple(None if x is None else sg * x for x in od["alvos"]))
                     risco_prev = abs(ref - od["stop"])
                     od.update(status="pendente", motivo="", i_fim=None, gestao=g, slot=s["nome"],

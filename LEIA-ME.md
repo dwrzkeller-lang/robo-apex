@@ -3,7 +3,7 @@
 Robô **informativo** de day trade: mostra quando uma estratégia arma uma entrada (entrada, stop e alvos), simula com
 dados reais quanto ela teria ganhado ou perdido **depois dos custos**, vigia testes ao vivo mesmo com a tela fechada
 (**Sentinela**), aprende com as operações já feitas e diz, com a nota dela à vista, qual a chance de cada sinal
-(**IA**), ajuda a montar um **plano de risco**, acompanha **criptomoedas em tempo real** e traz as notícias e a agenda
+(**IA**), ajuda a montar um **plano de risco**, tem uma aba para estudar **opções da B3** e traz as notícias e a agenda
 econômica que mexem no mercado. **Não envia ordens para a corretora.**
 
 Núcleo: setups do **Mario Pisani** com os ideais do **Oliver Velez**, o modelo **OGRO** (pivô + Fibonacci, no estilo
@@ -14,6 +14,42 @@ Zarattini & Aziz, fechamento de gap e o momentum intraday da "faixa de ruído").
 ![Robô Apex em ação](prints/00_ROBO_APEX_em_acao.gif)
 
 ---
+
+## Novidades da versão 2.1
+
+- **Entrada e saída escritas no gráfico:** as últimas operações levam o texto na própria marca ("COMPRA 128.450",
+  "SAÍDA 128.900 +2,0R"); a operação aberta aparece sempre completa, com o horário de entrada e de saída.
+- **Painel AO VIVO sobre o gráfico:** preço atual, o que o robô está fazendo (entrada, stop, alvos, resultado) e há
+  quantos segundos chegou o último dado. No WIN e no WDO ele avisa do atraso de cerca de 15 min da fonte gratuita.
+- **Volume por preço** (botão no gráfico), estilo Profit: volume em cada faixa de preço, POC, área de valor, os três
+  principais pontos de compra e de venda e quantas entradas das estratégias aconteceram em cada lugar. É uma
+  estimativa feita com os candles (no WIN e no WDO, que não trazem volume, vira "tempo no preço"); livro de ofertas e
+  times & trades de verdade só com a conexão do Profit.
+- **Aba Opções da B3** (no lugar da Cripto): grade de calls e puts com dados oficiais da B3, gregas e volatilidade
+  implícita calculadas aqui, cinco estruturas clássicas com gráfico de ganho e perda (lançamento coberto, venda de put
+  com caixa, trava de alta, trava de baixa e collar), montador de estruturas, triagem de oportunidades e glossário.
+  Para aprender: grade de fim de dia + cotação com cerca de 15 min de atraso, preços de último negócio.
+- **Gestões Escalonada 3 e Escalonada 4:** com 3 contratos, 2 saem no alvo 1, o stop vai para o 0x0 e o último segue
+  por trailing; com 4, saem 2 no alvo 1 e 1 no alvo 2.
+- **Proteções do stop** (aba Plano): corte antecipado em meia perda, stop para −20% ou 0x0 quando perde força, folga
+  atrás do stop técnico (20 pontos com o índice em 130 mil) e tolerância de +20% em sinal forte. Cada uma mostra o
+  "com × sem" no seu período.
+- **E14 e E15:** versões da E2 (Gatilho de Fibonacci) e da E9 (pivô + Fibonacci) com stop curto. As originais não
+  mudaram em nada.
+- **Ajuste pela IA** (aba IA): testa 60 combinações de gestão e proteções na estratégia escolhida; escolhe usando só
+  a primeira metade do histórico e só sugere se passar também na segunda.
+- **Profit:** a ponte está estruturada (`app/profit.py`) e registra em arquivo cada ordem armada dos testes ao vivo,
+  em modo simulador. A ligação de verdade (tempo real e ordens) depende da ProfitDLL, vendida à parte pela Nelogica.
+- O mercado de **cripto** saiu do robô.
+
+**O que os testes da 2.1 mostraram** (11 ativos, 5, 15 e 60 min, com custos): E14 −0,39R por operação (135 operações)
+contra −0,20R da E2; E15 −0,26R (159) contra −0,17R da E9; Escalonada 3 e 4 sobem o acerto de 38% para 44%, mas a média
+fica em −0,20R e −0,22R; as proteções do stop diminuem a perda média em cerca de 15% e aumentam o número de perdas, sem
+mudar o saldo. Nada disso é "ganhador" nesses dados: são opções para testar no seu ativo, com o número à vista.
+
+![Volume por preço](prints/20_VOLUME_POR_PRECO.png)
+
+![Opções da B3](prints/21_OPCOES_B3.png)
 
 ## Novidades da versão 2.0
 
@@ -66,7 +102,7 @@ minutos. O robô só atende pedidos feitos neste computador.
 
 ![Painel Ao vivo](prints/02_AO_VIVO_painel.png)
 
-**Topo (uma linha só):** ativo · tempo gráfico · **estratégia** (menu com as 13, ou **▶ Todas**) · **período** ·
+**Topo (uma linha só):** ativo · tempo gráfico · **estratégia** (menu com as 15, ou **▶ Todas**) · **período** ·
 contratos · **⚙** (gestão, capital, stops por dia, sons, aviso do Windows) · **⚡ RODAR ROBÔ** · luz verde = ao vivo ·
 **conta**.
 
@@ -74,7 +110,7 @@ contratos · **⚙** (gestão, capital, stops por dia, sons, aviso do Windows) �
 todos os números (resultado, acerto, pior queda, calendário, simulação, comparação, plano) passam a ser daquele período.
 Escolhendo datas no passado, o cartão mostra a situação no fim do período (luz laranja = histórico).
 
-**▶ Todas:** as 13 estratégias procuram entrada ao mesmo tempo, com **uma operação por vez** (a primeira ordem que
+**▶ Todas:** as 15 estratégias procuram entrada ao mesmo tempo, com **uma operação por vez** (a primeira ordem que
 executar vale; as outras são canceladas). Clique de novo para voltar à estratégia anterior.
 
 **⚡ RODAR ROBÔ:** testa todas as estratégias em 5, 15 e 60 min no ativo e abre uma janela com a **estratégia do
@@ -90,9 +126,9 @@ tiver histórico positivo com pelo menos 20 operações, ele diz **FICAR DE FORA
 | **Plano** | As regras de risco do robô inteiro, o estado do dia, a calculadora de tamanho, o efeito de cada regra e a conta meta × realidade. |
 | **Simulação** | Resultado do período com curva do capital, resultado por mês e cada operação (CSV). **Assistir candle a candle** faz o gráfico andar como se fosse ao vivo. |
 | **Calendário** | Resultado de cada dia; clique no dia para ver cada operação. Com Todas dá para ver cada estratégia sozinha. |
-| **Comparar** | As 13 estratégias + Todas em todos os ativos, no período escolhido, colorido pelo veredito. |
+| **Comparar** | As 15 estratégias + Todas em todos os ativos, no período escolhido, colorido pelo veredito. |
 | **Notícias** | **Agenda econômica** da semana e as notícias (Banco Central, Valor, InfoMoney, Money Times, g1, E-Investidor, Investing e Google Notícias), com o impacto estimado. |
-| **Cripto** | Memes, maiores moedas e tokens novos em tempo real, com checagem de golpe. |
+| **Opções** | Grade de opções da B3, gregas, volatilidade e cinco estruturas com gráfico de ganho e perda. |
 
 **"?" e dicas:** passe o mouse num botão para ler o que ele faz; os pontinhos **?** ao lado dos rótulos e dos números
 explicam o que aquilo quer dizer (clique também abre, para quem usa toque).
@@ -190,20 +226,6 @@ O que vale aqui vale para o robô inteiro: ao vivo, simulação, calendário, co
   **meta × realidade** (4.000 meses sorteados com os dias reais da estratégia; só calcula com pelo menos 20 pregões e
   20 operações).
 
-### Aba Cripto
-
-![Aba Cripto](prints/13_CRIPTO_memes_em_tempo_real.png)
-
-- **Memes** (todas as que a Binance marca como meme, à vista e no futuro perpétuo) e **Maiores** (as 15 de maior
-  volume). Preço pelo WebSocket da Binance; variação em 5 min, 1 h e 24 h; volume da última hora contra o normal;
-  quanto do volume foi compra a mercado; e a etiqueta de **onda** (*rompendo*, *esquentando*, *esticada*, *despencando*).
-- **O que veio depois:** o robô refaz o estudo sozinho (a cada 12 h) e mostra, para cada etiqueta, quantas vezes a
-  moeda fechou em alta nas 4 h e nas 24 h seguintes e a chance de +20%, +50%, −10% e −20%.
-- **Clique numa moeda** para abrir no gráfico: as 13 estratégias, a simulação, o plano, a IA e o teste ao vivo
-  funcionam nela, com a taxa da corretora nas contas. A caixa de busca abre qualquer par em USDT da Binance.
-- **Novas (DEX):** os tokens em alta nas corretoras descentralizadas (GeckoTerminal) e o botão **Checar golpe**
-  (RugCheck na Solana; honeypot.is e GoPlus nas redes EVM). O robô não traça gráfico nem estratégia para esses tokens.
-
 ### Gráfico
 
 **Desenhos** (barra à esquerda, em grupos; o triângulo no canto do botão abre as outras ferramentas do grupo):
@@ -249,18 +271,16 @@ depois de um evento de impacto alto, o cartão "o que fazer agora" avisa.
 | EUR/USD, GBP/USD, USD/JPY, AUD/USD, **XAU/USD** | Dukascopy (feed ECN, candles de 1 min) + hoje pelo Yahoo, com nível ajustado | 5 meses |
 | **USTEC** (Nasdaq 100, horário de Nova York) | Dukascopy + hoje pelo Yahoo | 5 meses |
 | **JP225** (Nikkei 225, horário de Tóquio) | Dukascopy + hoje pelo Yahoo | 5 meses |
-| **BTC/USD** (24 h) | Binance (1 min, tempo real) | 5 meses |
-| **Cripto da aba Cripto** (memes, maiores, qualquer par em USDT) | Binance à vista e futuro perpétuo: candles pela API pública e preço pelo WebSocket | 5 min: 60 dias · 15 min: 4 meses · 60 min: mais de 1 ano |
 | WIN, WDO (substitutos: Ibovespa à vista e USD/BRL), prata, petróleo | Yahoo, **com cerca de 15 min de atraso** | 60 dias, e cresce: cada download fica guardado |
 | Qualquer ativo | CSV exportado do Profit/MetaTrader na pasta `dados` | o que você exportar |
 
 O diário vem do Yahoo (10 anos). A **base de 5 meses** é baixada uma vez e depois só completa os dias novos (a
 Dukascopy limita pedidos, então a primeira vez leva algumas horas em segundo plano; o rodapé mostra o andamento). Os
-candles de hoje são renovados em segundo plano: cripto a cada ~6 s, o Yahoo a cada ~20 s (o robô limita os pedidos por
+candles de hoje são renovados em segundo plano: o Yahoo a cada ~20 s (o robô limita os pedidos por
 minuto para não ser bloqueado). Para o WIN e o WDO **reais e em tempo real**, use os scripts no Profit (abaixo) ou
 exporte o gráfico do Profit em CSV: nenhuma fonte gratuita entrega o mini-índice e o mini-dólar ao vivo.
 
-## As 13 estratégias
+## As 15 estratégias
 
 | | Estratégia | Autor / fonte | Regras (compra; a venda é o espelho exato) | Onde se encaixa |
 |---|---|---|---|---|
@@ -294,7 +314,7 @@ depois de N stops (padrão 2).
 - Saídas por fechamento (MM9, RSI-2, faixa de ruído) executam na abertura do candle seguinte. O trailing ATR é
   recalculado no fechamento de cada candle e vale a partir do seguinte.
 - Custos por lado: WIN 5 pts + R$ 0,30 · WDO 0,5 pt + R$ 1,20 · forex 0,6–0,8 pip + US$ 3,50 · ouro 0,20 ·
-  USTEC 1 pt · JP225 5 pts · BTC US$ 10 · cripto da Binance 1 tick + **0,10%** do valor (à vista) ou **0,05%** (futuro).
+  USTEC 1 pt · JP225 5 pts.
 - **Tamanho pelo risco** e **limites do dia** como descrito na aba Plano.
 - **Ajustes na mão (teste ao vivo):** nunca valem para trás. Stop e alvo movidos valem do candle seguinte em diante;
   sair e entrar usam o preço do instante do clique.
@@ -386,7 +406,8 @@ app/auth.py          usuários, senhas (PBKDF2), sessões, bloqueio por tentativ
 app/avisos.py        avisos dos sinais pelo Telegram
 app/plano.py         meta × realidade: sorteio de dias inteiros, margem de erro, teto de Kelly
 app/radar.py         "RODAR ROBÔ": estratégia do momento e projeção (Monte Carlo)
-app/cripto.py        Binance (candles, universo de memes, painel, estudo das ondas), GeckoTerminal e checagem de golpe
+app/opcoes.py        opções da B3: grade oficial, Black-Scholes, gregas, volatilidade implícita e as cinco estruturas
+app/profit.py        ponte com o Profit (estrutura pronta; ordens só em modo simulador)
 app/agenda.py        agenda econômica (ForexFactory, IBGE, Copom)
 app/noticias.py      notícias (RSS/Atom) com classificação de impacto
 app/historico.py     base de 5 meses (Dukascopy e Binance)
@@ -394,10 +415,10 @@ app/dados_fonte.py   fontes, fusos, custos por ativo, CSV do Profit e os dados "
                      segundo plano, só o trecho novo)
 app/robo_apex.py     servidor local: acesso, /api/sim (completo ou só o trecho novo), Sentinela (/api/testes,
                      /api/teste), /api/ia, /api/gestoes, /api/metas, /api/radar, /api/comparar, /api/noticias,
-                     /api/agenda, /api/cripto/..., /api/admin/...
+                     /api/agenda, /api/opcoes/..., /api/ajuste, /api/profit/estado, /api/admin/...
 app/web/             tela: entrar.html/js (login), app.js (núcleo), ops.js (operações, teste ao vivo, central de
                      sinais), ia.js, desenho.js, explica.js (minijanelas), conta.js (conta e administração),
-                     dicas.js, ind.js, plano.js, cripto.js, sim.js, radar.js, calendario.js, comparar.js, noticias.js
+                     dicas.js, ind.js, plano.js, opcoes.js, perfil.js, sim.js, radar.js, calendario.js, comparar.js, noticias.js
 ferramentas/backtest.py       relatório no terminal:  python ferramentas/backtest.py WIN --tf 15
 ferramentas/gerar_ntsl.py     gera a pasta ntsl a partir das mesmas regras
 ferramentas/conferir_ntsl.py  confere o NTSL contra o simulador
@@ -440,11 +461,6 @@ Opções da linha de comando: `--porta N`, `--sem-janela`, `--sem-base`, `--base
   [resumo da FGV](https://eesp.fgv.br/noticia/quer-viver-especulando-na-bolsa-chance-de-enriquecer-e-minima-diz-estudo).
 - Solidus Labs (2025), tokens do pump.fun — [relatório](https://www.soliduslabs.com/reports/solana-rug-pulls-pump-dumps-crypto-compliance);
   carteiras no prejuízo — [CoinJournal](https://coinjournal.net/news/over-60-of-pump-fun-wallets-lost-money-report/).
-- Dados de cripto: [API pública](https://developers.binance.com/docs/binance-spot-api-docs/rest-api/market-data-endpoints) e
-  [WebSocket](https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams) da Binance,
-  [futuros](https://developers.binance.com/docs/derivatives/usds-margined-futures/general-info);
-  [GeckoTerminal](https://www.geckoterminal.com/dex-api). Checagem de golpe: [RugCheck](https://api.rugcheck.xyz/swagger/index.html),
-  [honeypot.is](https://docs.honeypot.is/ishoneypot), [GoPlus](https://docs.gopluslabs.io/reference/tokensecurityusingget_1).
 - Agenda: [ForexFactory](https://www.forexfactory.com/calendar), [calendário do IBGE](https://servicodados.ibge.gov.br/api/docs/calendario?versao=3)
   e as reuniões do Copom de 2026 ([InfoMoney](https://www.infomoney.com.br/mercados/banco-central-divulga-calendario-das-reunioes-do-copom-para-2026/),
   [B3 Bora Investir](https://borainvestir.b3.com.br/noticias/copom-tera-8-reunioes-em-2026-veja-calendario-e-projecao-para-a-selic/)).

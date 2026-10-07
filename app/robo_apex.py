@@ -40,6 +40,8 @@ import agenda
 import auth
 import avisos
 import cripto
+import opcoes
+import profit
 import dados_fonte as df
 import historico
 import ia
@@ -47,9 +49,9 @@ import noticias
 import plano as plano_mod
 import radar
 from estrategias import AQUECIMENTO, ESTRATEGIAS, GESTOES, GESTOES_CURTO, atencao
-from simulador import atualizar_ultimo, estatisticas, preparar, simular
+from simulador import PROTECOES, atualizar_ultimo, estatisticas, preparar, simular
 
-VERSAO = "2.0"
+VERSAO = "2.1"
 ARGS = sys.argv[1:]
 
 
@@ -316,7 +318,8 @@ def _plano(q, capital):
     """Regras do plano de trade que vem da tela (aba Plano): tamanho por risco, limite de perda e meta do dia, modo seletivo."""
     return dict(tam="risco" if q.get("tam", ["fixo"])[0] == "risco" else "fixo", risco_pct=_float(q, "risco", 1.0, 0.05, 20.0),
                 capital=capital, loss_dia=_float(q, "lossDia", 0.0, 0.0, 1e9), meta_dia=_float(q, "metaDia", 0.0, 0.0, 1e9),
-                seletivo=q.get("seletivo", ["0"])[0] == "1")
+                seletivo=q.get("seletivo", ["0"])[0] == "1",
+                prot=tuple(sorted(x for x in q.get("prot", [""])[0].split(",") if x in PROTECOES)))
 
 
 def _pedido(q):
@@ -560,7 +563,7 @@ def api_sim(q):
                 est=est, gestao=gestao, contratos=contratos, capital=capital, maxStops=max_stops, per=per,
                 aoVivo=vivo, formando=aberto and vivo, temVolume=any(vol[-400:]),
                 tam=pl["tam"], riscoPct=pl["risco_pct"], lossDia=pl["loss_dia"], metaDia=pl["meta_dia"], seletivo=pl["seletivo"],
-                custoPct=sc.get("custo_pct", 0.0), cripto=bool(cfg.get("cripto")), curto=cfg.get("curto"),
+                custoPct=sc.get("custo_pct", 0.0), cripto=bool(cfg.get("cripto")), curto=cfg.get("curto"), prot=list(pl["prot"]),
                 dia=r["dia"], ctx=ctx_ult,
                 foraDoPlano=sum(1 for o in r["ordens"] if o["status"] == "cancelada" and o["motivo"].startswith("risco acima do plano")),
                 iIni=r["ini"], iFim=r["fim"], dataIni=d[r["ini"]], dataFim=d[r["fim"]],
@@ -616,6 +619,52 @@ def api_gestoes(q):
                 contratos=contratos, fracionado=sc["fracionado"])
 
 
+# ------------------------------------------------------------------------------------------ ajuste (aba IA)
+AJUSTE_PROT = ((), ("corte",), ("forca",), ("corte", "forca"), ("folga",), ("corte", "folga", "forca"))
+
+
+def api_ajuste(q):
+    """Procura a combinacao de gestao + protecoes do stop que mais rendeu nesta estrategia, neste ativo e tempo. Para nao
+    escolher por sorte, a escolha e feita so com a PRIMEIRA metade do historico e depois conferida na SEGUNDA metade,
+    que ela nao viu. So vira sugestao se ganhar da configuracao atual tambem na segunda metade."""
+    P = _pedido(q)
+    B, fonte, cfg = carregar(P["chave"], P["tf"])
+    tf = B.get("tf", P["tf"])
+    sc = df.sessao_cfg(cfg)
+    contratos = P["contratos"] if cfg.get("fracionado") else max(1.0, round(P["contratos"]))
+    d = B["d"]
+    n = len(d)
+    meio = AQUECIMENTO + (n - AQUECIMENTO) // 2
+    codigos = list(ESTRATEGIAS) if P["todas"] else [P["est"]]
+
+    def medir(g, prot, a, b):
+        pl = dict(P["plano"], prot=prot)
+        with TRAVA:
+            Gs = graficos(P["chave"], tf, B, sc, False)
+            r = simular_c(P["chave"], tf, B, Gs, sc, codigos, a, b, False, gestao=g, contratos=contratos, max_stops=P["max_stops"],
+                          juntas=P["todas"], plano=pl)
+        st = estatisticas(r["trades"], P["capital"], lambda i: d[i])
+        return dict(n=st["n"], total=st.get("total", 0.0), media=st.get("mediaDin"), acerto=st.get("acerto"), ddMax=st.get("ddMax", 0.0))
+    linhas = []
+    for g in GESTOES:
+        for prot in AJUSTE_PROT:
+            linhas.append(dict(gestao=g, nome=GESTOES_CURTO.get(g, g), prot=list(prot), treino=medir(g, prot, None, meio - 1)))
+    atual_prot = tuple(P["plano"]["prot"])
+    atual = dict(gestao=P["gestao"], nome=GESTOES_CURTO.get(P["gestao"], P["gestao"]), prot=list(atual_prot),
+                 treino=medir(P["gestao"], atual_prot, None, meio - 1), prova=medir(P["gestao"], atual_prot, meio, n - 2))
+    validas = [x for x in linhas if x["treino"]["n"] >= 15]
+    validas.sort(key=lambda x: -(x["treino"]["media"] or -1e18))
+    melhores = validas[:3]
+    for x in melhores:
+        x["prova"] = medir(x["gestao"], tuple(x["prot"]), meio, n - 2)
+    top = melhores[0] if melhores else None
+    aprovada = bool(top and top["prova"]["n"] >= 15 and (top["prova"]["media"] or 0) > 0
+                    and (top["prova"]["media"] or 0) > (atual["prova"]["media"] or 0))
+    return dict(atual=atual, melhores=melhores, aprovada=aprovada, testadas=len(linhas), moeda=cfg.get("moeda", "R$"),
+                dataMeio=d[meio], dataIni=d[AQUECIMENTO], dataFim=d[-1], est=P["est"], protecoes=PROTECOES,
+                nomeTf=df.NOME_TEMPO.get(tf, "%d min" % tf))
+
+
 # ------------------------------------------------------------------------------------------ testes ao vivo (Sentinela)
 def pasta_de(uid):
     """Pasta dos arquivos de um usuario. O administrador principal usa a propria pasta de dados (o que ja existia e dele)."""
@@ -645,7 +694,7 @@ def _gravar_json(arq, obj):
     os.replace(arq + ".tmp", arq)
 
 
-CAMPOS_TESTE = ("ativo", "tf", "est", "gestao", "contratos", "capital", "maxstops", "tam", "risco", "lossDia", "metaDia", "seletivo")
+CAMPOS_TESTE = ("ativo", "tf", "est", "gestao", "contratos", "capital", "maxstops", "tam", "risco", "lossDia", "metaDia", "seletivo", "prot")
 
 
 def _calc_teste(x, B, fonte, cfg):
@@ -660,7 +709,8 @@ def _calc_teste(x, B, fonte, cfg):
         contratos = max(1.0, round(contratos))
     capital = float(x.get("capital") or 10000.0)
     pl = dict(tam="risco" if x.get("tam") == "risco" else "fixo", risco_pct=float(x.get("risco") or 1.0), capital=capital,
-              loss_dia=float(x.get("lossDia") or 0.0), meta_dia=float(x.get("metaDia") or 0.0), seletivo=bool(x.get("seletivo")))
+              loss_dia=float(x.get("lossDia") or 0.0), meta_dia=float(x.get("metaDia") or 0.0), seletivo=bool(x.get("seletivo")),
+              prot=tuple(sorted(p for p in (x.get("prot") or []) if p in PROTECOES)))
     t, d = B["t"], B["d"]
     n = len(t)
     desde, ate = int(x["desde"]), int(x.get("ate") or 0)
@@ -673,7 +723,7 @@ def _calc_teste(x, B, fonte, cfg):
                 valorPonto=sc["valor_ponto"], custo=sc["custo"], custoPct=sc.get("custo_pct", 0.0), fracionado=sc["fracionado"],
                 intraday=tf < 1440, desde=desde, ultimoT=t[k], preco=B["c"][k], candles=max(0, i_fim - i_ini + 1), formando=aberto,
                 fonte=fonte, tam=pl["tam"], riscoPct=pl["risco_pct"], lossDia=pl["loss_dia"], metaDia=pl["meta_dia"],
-                seletivo=pl["seletivo"], capital=capital, sid=B.get("sid"))
+                seletivo=pl["seletivo"], capital=capital, sid=B.get("sid"), prot=list(pl["prot"]))
     if i_ini > i_fim:
         return dict(meta=meta, trades=[], abertas=[], pend=[], ajPend=[], stats=estatisticas([], capital, lambda i: d[i]))
     ajustes = [a for a in (x.get("ajustes") or []) if isinstance(a, dict)]
@@ -826,7 +876,7 @@ class Sentinela:
                  maxstops=max(1, min(50, int(p.get("maxstops") or 2))), desde=B["t"][-1], criado=int(time.time() * 1000), ate=0,
                  tam="risco" if p.get("tam") == "risco" else "fixo", risco=max(0.05, min(20.0, float(p.get("risco") or 1))),
                  lossDia=max(0.0, float(p.get("lossDia") or 0)), metaDia=max(0.0, float(p.get("metaDia") or 0)),
-                 seletivo=bool(p.get("seletivo")), ajustes=[])
+                 seletivo=bool(p.get("seletivo")), prot=[z for z in (p.get("prot") or []) if z in PROTECOES], ajustes=[])
         with self.trava:
             l = self.lista(uid)
             if len([y for y in l if not y.get("ate")]) >= 30:
@@ -962,6 +1012,12 @@ class Sentinela:
                       iaOk=bool((meta.get("ia") or {}).get("comprovada")))
             if tipo == "ordem":
                 ev.update(gatilho=o.get("gatilho"), ordem=o.get("tipo"))
+                try:                                           # ponte com o Profit em modo simulador: a ordem fica so registrada
+                    profit.Roteador(df.pasta_dados(BASE)).enviar(profit.Ordem(
+                        x["ativo"], o["dir"], "mercado" if o.get("gatilho") is None else ("limite" if o.get("tipo") == "limite" else "stop"),
+                        o.get("gatilho"), o.get("stop"), o.get("alvo"), o.get("q") or x.get("contratos") or 1, "%s teste %s" % (o["est"], x["id"])))
+                except (OSError, ValueError):
+                    pass
             else:
                 ev.update(ent=o.get("ent"))
             if tipo == "saida":
@@ -1104,6 +1160,10 @@ def api_metas(q):
                               dias_mes=30 if cfg.get("fim_de_semana") else 21)
     efeitos = [dict(regra="seletivo", ligado=pl["seletivo"], com=atual if pl["seletivo"] else medir(dict(pl, seletivo=True)),
                     sem=medir(dict(pl, seletivo=False)) if pl["seletivo"] else atual)]
+    for nome in PROTECOES:                               # cada protecao do stop: a mesma simulacao com e sem ela
+        tem = nome in pl["prot"]
+        outro = medir(dict(pl, prot=tuple(sorted(set(pl["prot"]) ^ {nome}))))
+        efeitos.append(dict(regra="prot_" + nome, ligado=tem, com=atual if tem else outro, sem=outro if tem else atual))
     if pl["tam"] == "risco":
         efeitos.append(dict(regra="tam", ligado=True, com=atual, sem=medir(dict(pl, tam="fixo"))))
     if pl["loss_dia"] > 0 and tf < 1440:
@@ -1194,13 +1254,13 @@ def _comparar(pedido):
 
 def config(usuario=None):
     ativos = [dict(chave=k, nome=v["nome"], moeda=v["moeda"], lote=v["lote"], fracionado=v.get("fracionado", False))
-              for k, v in df.ATIVOS.items()]
+              for k, v in df.ATIVOS.items() if k not in historico.BINANCE]         # o mercado de cripto saiu da tela
     ativos += [dict(chave="CSV:" + n, nome="Arquivo: " + n, moeda="R$", lote="contrato", fracionado=False) for n in df.listar_csv(BASE)]
     ests = [dict(cod=k, nome=v["nome"], autor=v["autor"], regras=v["regras"], aguardando=v["aguardando"],
                  intraday=v["intraday"], gestao=v["gestao"], ideal=v.get("ideal", ""), semNtsl=bool(v.get("sem_ntsl")))
             for k, v in ESTRATEGIAS.items()]
     tempos = [dict(tf=k, nome=df.NOME_TEMPO[k], periodo="10 anos" if k >= 1440 else "") for k in df.TEMPOS]
-    return dict(ativos=ativos, estrategias=ests, gestoes=GESTOES, gestoesCurto=GESTOES_CURTO, tempos=tempos,
+    return dict(ativos=ativos, estrategias=ests, gestoes=GESTOES, gestoesCurto=GESTOES_CURTO, tempos=tempos, protecoes=PROTECOES,
                 pastaDados=df.pasta_dados(BASE), usuario=usuario, versao=VERSAO)
 
 
@@ -1348,6 +1408,9 @@ class Handler(BaseHTTPRequestHandler):
                 cfg = TESTES.gravar_avisos(uid, p)
                 ACESSOS.registrar("avisos_configurados", u["email"], "Telegram %s" % ("ligado" if cfg["telegram"]["ligado"] else "desligado"), ip)
                 return self._json(dict(ok=True, avisos=avisos.publico(cfg)))
+            if cam == "/api/opcoes/simular":
+                p = self._corpo(20000)
+                return self._json(opcoes.simular(BASE, p.get("pernas") or [], p.get("ativo"), p.get("venc")))
             if cam == "/api/avisos/teste":
                 cfg = TESTES.avisos_de(uid)
                 tg = cfg["telegram"]
@@ -1466,16 +1529,26 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(dict(avisos=avisos.publico(TESTES.avisos_de(uid))))
             if cam == "/api/ia":
                 return self._json(api_ia(q))
+            if cam == "/api/ajuste":
+                return self._json(api_ajuste(q))
             if cam == "/api/gestoes":
                 return self._json(api_gestoes(q))
             if cam == "/api/metas":
                 return self._json(api_metas(q))
             if cam == "/api/agenda":
                 return self._json(agenda.buscar())
-            if cam == "/api/cripto/painel":
-                return self._json(cripto.painel(BASE))
-            if cam == "/api/cripto/dex":
-                return self._json(cripto.dex(BASE))
+            if cam == "/api/profit/estado":
+                e = profit.estado(df.pasta_dados(BASE))
+                e["ultimas"] = profit.ordens(df.pasta_dados(BASE), 20) if u["papel"] == "admin" else []
+                return self._json(e)
+            if cam == "/api/opcoes/painel":
+                return self._json(opcoes.painel(BASE, q.get("ativo", ["PETR4"])[0]))
+            if cam == "/api/opcoes/grade":
+                return self._json(opcoes.grade(BASE, q.get("ativo", ["PETR4"])[0], q.get("venc", [""])[0]))
+            if cam == "/api/opcoes/estruturas":
+                return self._json(opcoes.estruturas(BASE, q.get("ativo", ["PETR4"])[0], q.get("venc", [""])[0]))
+            if cam == "/api/opcoes/oportunidades":
+                return self._json(opcoes.oportunidades(BASE))
             if cam == "/api/cripto/info":
                 mercado, sym = cripto.separar(q.get("chave", [""])[0])
                 inf = cripto.info(mercado, sym)
@@ -1483,8 +1556,6 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("moeda fora de negociação na Binance")
                 return self._json(dict(chave="%s:%s" % (mercado, sym),
                                        nome="%s/%s%s" % (inf["moeda"], inf["cotacao"], " (futuro)" if mercado == "BF" else "")))
-            if cam == "/api/cripto/seguranca":
-                return self._json(cripto.seguranca(q.get("rede", [""])[0], q.get("token", [""])[0]))
             if cam == "/api/sons":
                 return self._json(dict(sons=sons_proprios(), pasta=os.path.join(df.pasta_dados(BASE), "sons")))
             if cam == "/api/radar":

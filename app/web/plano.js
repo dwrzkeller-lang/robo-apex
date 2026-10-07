@@ -30,6 +30,14 @@
   $("plLoss").onchange = (e) => { AX.pref.lossDia = num(e.target, 0, 0); mudou(); };
   $("plMeta").onchange = (e) => { AX.pref.metaDia = num(e.target, 0, 0); mudou(); };
   $("plSeletivo").onchange = (e) => { AX.pref.seletivo = e.target.checked; mudou(); };
+  document.querySelectorAll("#aba-plano input[data-prot]").forEach((c) => {
+    c.checked = (AX.pref.prot || []).includes(c.dataset.prot);
+    c.onchange = () => {
+      const s = new Set(AX.pref.prot || []);
+      if (c.checked) s.add(c.dataset.prot); else s.delete(c.dataset.prot);
+      AX.pref.prot = [...s].sort(); mudou();
+    };
+  });
   document.querySelectorAll("#plTam button").forEach((b) => (b.onclick = () => { if (AX.pref.tam !== b.dataset.v) { AX.pref.tam = b.dataset.v; mudou(); } }));
   // a meta do mês e a perda aceita não mudam as operações: só refazem a conta de baixo
   $("plMetaMes").onchange = (e) => { AX.pref.metaMes = num(e.target, 0, 0); AX.salvarPref(); carregar(); };
@@ -92,12 +100,13 @@
     $("plEnt").oninput = $("plStop").oninput = contaTam; contaTam();
 
     // ---- o que cada regra fez
-    const NOMES = { seletivo: "Modo seletivo", tam: "Tamanho pelo risco", lossDia: "Parar o dia na perda", metaDia: "Parar o dia no ganho" };
+    const NOMES = { seletivo: "Modo seletivo", tam: "Tamanho pelo risco", lossDia: "Parar o dia na perda", metaDia: "Parar o dia no ganho",
+      prot_corte: "Corte antecipado", prot_forca: "Perdeu força", prot_folga: "Folga no stop", prot_tol: "Tolerância de +20%" };
     const cel = (x) => `<td class="n">${x.n}</td><td class="n ${AX.cls(x.total)}">${din(x.total, true)}</td><td class="n ruim">${din(-x.ddMax)}</td>`;
     let e = `<div class="rot">O QUE CADA REGRA FEZ NO PERÍODO</div>
       <table class="tab"><tr><th>Regra</th><th></th><th class="n">Ops</th><th class="n">Resultado</th><th class="n">Pior queda</th></tr>`;
     for (const x of d.efeitos) {
-      e += `<tr><td rowspan="2"><b>${NOMES[x.regra] || x.regra}</b>${x.regra === "seletivo" ? `<br><small class="${x.ligado ? "bom" : "neutro"}">${x.ligado ? "ligado" : "desligado"}</small>` : ""}</td><td>com</td>${cel(x.com)}</tr><tr><td>sem</td>${cel(x.sem)}</tr>`;
+      e += `<tr><td rowspan="2"><b>${NOMES[x.regra] || x.regra}</b>${x.regra === "seletivo" || x.regra.startsWith("prot_") ? `<br><small class="${x.ligado ? "bom" : "neutro"}">${x.ligado ? "ligado" : "desligado"}</small>` : ""}</td><td>com</td>${cel(x.com)}</tr><tr><td>sem</td>${cel(x.sem)}</tr>`;
     }
     e += `</table>`;
     const sel = d.efeitos.find((x) => x.regra === "seletivo");
