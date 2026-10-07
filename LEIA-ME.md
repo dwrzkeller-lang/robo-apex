@@ -15,6 +15,18 @@ Zarattini & Aziz, fechamento de gap e o momentum intraday da "faixa de ruído").
 
 ---
 
+## Novidades da versão 2.3
+
+- **Replay da entrada:** clique numa operação da lista e em **▶ Replay da entrada**: o gráfico toca candle a candle,
+  de antes do sinal até a saída, dizendo em que etapa está (sinal, ordem armada, entrada, stop e alvos, saída), com
+  pausa e velocidade de 1x a 10x.
+- **E se…:** refaz a mesma entrada com outro stop e outro alvo nos candles reais e aplica o mesmo ajuste a todas as
+  operações da estratégia no período, para mostrar se a correção vale no geral ou só naquela operação.
+- **Suas lições** (aba IA): os ajustes salvos, o ajuste médio por estratégia e o efeito dele no conjunto. O ajuste
+  ainda não entra sozinho nos sinais ao vivo.
+
+![Replay da entrada](prints/23_REPLAY_DA_ENTRADA.png)
+
 ## Novidades da versão 2.2
 
 - **Operações legíveis no próprio gráfico:** cada operação tem uma caixa na cor do resultado, a placa de **entrada**

@@ -591,3 +591,14 @@ table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nu
 
 .titulo .versao { font-size: 10px; font-weight: 700; letter-spacing: .3px; margin-left: 5px; padding: 1px 5px; border-radius: 5px;
   background: #1e7bff33; border: 1px solid #1e7bff; color: #9fd0ff; -webkit-text-fill-color: #9fd0ff; vertical-align: middle; }
+
+/* ---------------- replay da entrada e "e se…" ---------------- */
+.rp-op { position: absolute; left: 50%; top: 44px; transform: translateX(-50%); z-index: 7; max-width: calc(100% - 40px); display: flex; align-items: center;
+  flex-wrap: wrap; gap: 6px 12px; padding: 8px 12px; border-radius: 10px; background: rgba(13,19,32,.96); border: 1px solid var(--amar); box-shadow: 0 8px 26px #000a; font-size: 13px; }
+.rp-op .rp-etapa { color: var(--amar); white-space: nowrap; }
+.rp-op .rp-fala { flex: 1; min-width: 220px; }
+.rp-op .rp-ctl { display: flex; align-items: center; gap: 5px; }
+.rp-op button { padding: 3px 9px; }
+.op-acoes { margin: 0 0 8px; }
+.ese { margin-bottom: 8px; padding: 8px; border: 1px solid var(--linha2); border-radius: 8px; background: #10151e; }
+.ese .nota { line-height: 1.5; }

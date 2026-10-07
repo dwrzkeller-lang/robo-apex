@@ -822,7 +822,8 @@
       const retratoAntes = antes ? retrato(antes) : null, tAntes = antes ? antes.t[antes.meta.ultimo] : 0, metaAntes = antes && antes.meta;
       const D = X.delta && base ? fundir(base, X) : X;
       V.D = D; V.velho = false; V.consulta = consulta;
-      if (ABAS_VIVAS.includes(AX.aba) || !AX.graficoMostra()) {
+      if (AX.emReplay) { /* replay de uma operação tocando: o gráfico não é mexido pelo ao vivo */ }
+      else if (ABAS_VIVAS.includes(AX.aba) || !AX.graficoMostra()) {
         if (X.delta && base) AX.atualizar(D, base, n0 - 1);
         else AX.mostrar(D, D.meta.iFim, { manterZoom: silencioso });
       }

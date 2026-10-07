@@ -187,12 +187,15 @@
     ];
     if (t.ia) linhas.push(["IA", `quando o sinal apareceu, dava <b>${AX.num(100 * t.ia[0], 0)}%</b> de chance de ganho (esperado <span class="${AX.cls(t.ia[1])}">${AX.R(t.ia[1])}</span>). Nota de um modelo que ainda não conhecia esta operação.`]);
     if (NA_MAO[t.manual]) linhas.push(["✋ Na mão", NA_MAO[t.manual] + ": esta operação não é a estratégia pura."]);
-    return `<div class="op-det">${linhas.map(([a, b]) => `<div><span>${a}</span><p>${b}</p></div>`).join("")}
+    return `<div class="op-det"><div class="botoes finos op-acoes"><button id="opReplay" class="primario" data-dica="Toca esta operação candle a candle: antes do sinal, o sinal, a ordem armada, a entrada, o stop e os alvos, até a saída. Dá para pausar e acelerar até 10x.">▶ Replay da entrada</button><button id="opEse" data-dica="Refaz esta entrada com outro stop e outro alvo, mostra o que teria acontecido e testa o mesmo ajuste nas outras operações da estratégia. Dá para salvar como lição.">✎ E se…</button></div><div id="opEseBox"></div>${linhas.map(([a, b]) => `<div><span>${a}</span><p>${b}</p></div>`).join("")}
       ${!aberta && t.maxR != null ? `<div class="nota">Chegou a andar ${AX.R(Math.max(0, t.maxR))} a favor. Resultado já com custos e escorregamento.</div>` : ""}</div>`;
   }
   function renderOps() {
     const el = $("cardOps"), D = AX.vivo.D;
     if (!D) return;
+    const foco = document.activeElement;
+    if (foco && foco.tagName === "INPUT" && el.contains(foco)) return;      // digitando no "e se…": não refaz a lista por baixo
+    if ($("eseStop") || (AX.replay && AX.replay.ativo())) return;         // resultado do "e se…" na tela ou replay tocando
     const x = T.atual(), r = x && T.det && T.det.id === x.id ? T.det : null;
     const vista = AX.pref.opsVista === "teste" && r ? "teste" : "per";
     const fonte = vista === "teste" ? r : D, meta = fonte.meta;
@@ -221,6 +224,12 @@
     el.querySelectorAll(".op").forEach((d) => (d.onclick = () => selecionar(linhas[+d.dataset.j][0], meta, "alternar")));
     const det = el.querySelector(".op-det");
     if (det) det.scrollIntoView({ block: "nearest" });
+    const escolhida = linhas.find(([t]) => chave(t) === selAqui);
+    if (escolhida && AX.replay) {
+      const br = $("opReplay"), be = $("opEse");
+      if (br) br.onclick = (e) => { e.stopPropagation(); AX.replay.tocar(escolhida[0], meta); };
+      if (be) be.onclick = (e) => { e.stopPropagation(); AX.replay.painelEse(escolhida[0], meta, $("opEseBox")); };
+    }
     el.querySelectorAll("#opsVista button").forEach((b) => (b.onclick = () => { AX.pref.opsVista = b.dataset.v; AX.salvarPref(); renderOps(); }));
   }
 
