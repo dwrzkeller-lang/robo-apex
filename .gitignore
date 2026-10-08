@@ -6,4 +6,4 @@ __pycache__/
 *.exe
 build/
 dist/
-*.spec
+# (o RoboApex.spec fica no repositorio: e a receita do executavel)
