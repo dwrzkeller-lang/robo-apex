@@ -15,6 +15,29 @@ Zarattini & Aziz, fechamento de gap e o momentum intraday da "faixa de ruído").
 
 ---
 
+## Novidades da versão 2.5
+
+- **3 estratégias novas (E16, E17 e E18)**, todas na leitura de **fundos ascendentes + perna do pivô + projeção de
+  Fibonacci em cima do topo**, sempre a favor da tendência (venda: o espelho). Os alvos são B + 61,8%, B + 100% e
+  B + 161,8% da perna, com um terço da posição em cada um.
+  - **E16 · Pivô de fundos ascendentes:** compra no rompimento do topo da perna, stop abaixo do fundo da correção.
+  - **E17 · Gatilho no fundo ascendente:** entra antes, no candle de alta colado no fundo da correção (stop curto).
+  - **E18 · Rompimento e reteste do pivô:** espera o topo rompido ser testado por cima e entra no candle de alta.
+  - **O teste, sem enfeite** (11 ativos, 5/15/60 min, com custos): E16 −0,15R por operação (60 min: +0,01R), E17
+    −0,18R, E18 −0,27R. Nenhuma mostrou vantagem comprovada; a E16 empata com a E9. Servem para estudar e comparar.
+- **Auditoria das estratégias:** todas as 18 foram conferidas candle a candle para garantir que nenhuma usa informação
+  do futuro. Foi achado e corrigido um erro na **VWAP**: nos primeiros candles do dia sem volume, o teste no passado
+  via um valor diferente do ao vivo (afetava E3, E10 e E11; E2 e E9 não usam VWAP e não mudaram). Entradas a mercado
+  com o stop colado no preço (risco menor que o dobro dos custos) deixam de ser abertas.
+- **E se… salva a edição:** a última edição de cada operação fica guardada. Ao reabrir o editor ela volta como você
+  deixou, e a lista mostra o resultado editado (✎) ao lado do original. As estatísticas continuam as originais.
+  Corrigido: no "Teste ao vivo" o quadro do conjunto aparecia com 0 operações.
+- **Ativos carregados já na abertura:** o robô começa a baixar todos os ativos na tela de carregamento, e a troca de
+  ativo fica imediata. Corrigido: se o robô abria num momento sem internet, ele seguia mostrando o arquivo antigo e só
+  completava o dia de hoje; agora ele refaz a carga completa assim que a internet volta.
+
+![E16 no gráfico](prints/25_E16_PIVO_DE_FUNDOS_ASCENDENTES.png)
+
 ## Novidades da versão 2.4
 
 - **E se… direto no gráfico:** abra uma operação, clique em **✎ E se…** e **arraste as linhas ⇕ STOP e ⇕ ALVO** no
@@ -144,7 +167,7 @@ contratos · **⚙** (gestão, capital, stops por dia, sons, aviso do Windows) �
 todos os números (resultado, acerto, pior queda, calendário, simulação, comparação, plano) passam a ser daquele período.
 Escolhendo datas no passado, o cartão mostra a situação no fim do período (luz laranja = histórico).
 
-**▶ Todas:** as 15 estratégias procuram entrada ao mesmo tempo, com **uma operação por vez** (a primeira ordem que
+**▶ Todas:** as 18 estratégias procuram entrada ao mesmo tempo, com **uma operação por vez** (a primeira ordem que
 executar vale; as outras são canceladas). Clique de novo para voltar à estratégia anterior.
 
 **⚡ RODAR ROBÔ:** testa todas as estratégias em 5, 15 e 60 min no ativo e abre uma janela com a **estratégia do
@@ -160,7 +183,7 @@ tiver histórico positivo com pelo menos 20 operações, ele diz **FICAR DE FORA
 | **Plano** | As regras de risco do robô inteiro, o estado do dia, a calculadora de tamanho, o efeito de cada regra e a conta meta × realidade. |
 | **Simulação** | Resultado do período com curva do capital, resultado por mês e cada operação (CSV). **Assistir candle a candle** faz o gráfico andar como se fosse ao vivo. |
 | **Calendário** | Resultado de cada dia; clique no dia para ver cada operação. Com Todas dá para ver cada estratégia sozinha. |
-| **Comparar** | As 15 estratégias + Todas em todos os ativos, no período escolhido, colorido pelo veredito. |
+| **Comparar** | As 18 estratégias + Todas em todos os ativos, no período escolhido, colorido pelo veredito. |
 | **Notícias** | **Agenda econômica** da semana e as notícias (Banco Central, Valor, InfoMoney, Money Times, g1, E-Investidor, Investing e Google Notícias), com o impacto estimado. |
 | **Opções** | Grade de opções da B3, gregas, volatilidade e cinco estruturas com gráfico de ganho e perda. |
 
@@ -314,7 +337,7 @@ candles de hoje são renovados em segundo plano: o Yahoo a cada ~20 s (o robô l
 minuto para não ser bloqueado). Para o WIN e o WDO **reais e em tempo real**, use os scripts no Profit (abaixo) ou
 exporte o gráfico do Profit em CSV: nenhuma fonte gratuita entrega o mini-índice e o mini-dólar ao vivo.
 
-## As 15 estratégias
+## As 18 estratégias
 
 | | Estratégia | Autor / fonte | Regras (compra; a venda é o espelho exato) | Onde se encaixa |
 |---|---|---|---|---|
@@ -331,9 +354,14 @@ exporte o gráfico do Profit em CSV: nenhuma fonte gratuita entrega o mini-índi
 | E11 | **Momentum do dia (faixa de ruído)** | Zarattini, Aziz & Barbon (2024) | Compra quando o candle fecha acima de max(abertura de hoje, fechamento de ontem) + a faixa de ruído **e** acima da VWAP; decide nas horas cheias e meias horas; sai quando fecha de volta abaixo do maior entre a faixa e a VWAP, ou na zeragem. Stop de proteção a 1 ATR | 60 min, WIN e Nasdaq |
 | E12 | **Fibo ABC: 3 alvos projetados** | Projeção de Fibonacci A-B-C (a ferramenta *Trend-Based Fib Extension* do TradingView) | MM9 > MM20 > MM200 e MM20 subindo; pernada A→B ≥ 2 ATR com o topo B confirmado; correção até C que busca 38,2% e **não passa de 50%**; candle de reversão colado em C: compra 1 tick acima dele; **stop 1 tick abaixo de A**; **três alvos** projetados a partir de C: 61,8%, 100% e 161,8% (um terço em cada; no alvo 1 o stop vai para a entrada, no 2 vai para o alvo 1) | 60 min, ativos em tendência |
 | E13 | **Fibo 50: ordem limitada na pernada** | Entrada na zona de retração (família *Golden Pocket* / OTE, com o nível nos 50%) | MM20 e preço acima da MM200, médias alinhadas no topo; pernada A→B ≥ 2,5 ATR; **compra limitada nos 50%** da pernada, parada esperando o preço recuar (vale até 20 candles, enquanto não houver topo novo); **stop 1 tick abaixo de A**; alvos: o topo B, 127,2% e 161,8% da pernada | 60 min, ativos de custo baixo |
+| E14 | **Fibo raso: stop curto na correção** | Gatilho de Fibonacci (Pisani) com stop curto | Médias alinhadas; correção rasa de 23,6% a 50%; candle que fecha acima da máxima anterior; stop logo abaixo do fundo da correção; alvos no topo, 127,2% e 161,8% | 60 min; no teste não superou a E2 |
+| E15 | **Pivô com stop curto** | OGRO com o stop mais perto | Mesma leitura da E9; compra no rompimento do topo; stop na mínima dos 2 últimos candles; alvos 61,8%, 100% e 161,8% a partir do fundo | 60 min e WIN; no teste não superou a E9 |
+| E16 | **Pivô de fundos ascendentes** | Estrutura (fundos e topos ascendentes) + projeção de Fibonacci em cima do topo | Preço e MM20 acima da MM200; fundo A mais alto que o anterior e perna A→B que superou o topo anterior; correção de 23,6% a 61,8%; compra 1 tick acima de B; stop abaixo do fundo da correção; alvos B + 61,8%, B + 100% e B + 161,8% da perna | 60 min; no teste empatou com a E9 (−0,15R; 60 min no zero) |
+| E17 | **Gatilho no fundo ascendente** | Mesma estrutura, entrada antecipada | Correção de 38,2% a 61,8% da perna; candle de alta que fecha acima da máxima anterior, colado no fundo; stop curto abaixo do fundo; mesmos alvos em cima de B; só arma se o alvo 1 pagar 1,5 vez o risco | 60 min; no teste −0,18R (acerta 34%, ganha +1,4R quando acerta) |
+| E18 | **Rompimento e reteste do pivô** | Rompimento e reteste, com os alvos da projeção | Topo B rompido por fechamento; em até 15 candles o preço volta a encostar em B sem fechar abaixo; candle de alta acima de B; stop abaixo do reteste; mesmos alvos | 15 e 60 min; no teste foi a mais fraca (−0,27R) |
 
-"Onde se encaixa" é o ponto de partida; o **⚡ RODAR ROBÔ** mede isso de novo com os dados de hoje. A E11, a E12 e a
-E13 existem só no aplicativo (sem script do Profit).
+"Onde se encaixa" é o ponto de partida; o **⚡ RODAR ROBÔ** mede isso de novo com os dados de hoje. Da E11 à E18, as
+estratégias existem só no aplicativo (sem script do Profit).
 
 Filtros comuns: risco entre 0,3 e 2,5 ATR nas estratégias de Pisani/Velez, no OGRO e no Keltner (a E6, a E7, a E8, a
 E11, a E12 e a E13 têm regra de stop própria; nas duas de Fibonacci o stop fica abaixo da pernada e pode ser largo:

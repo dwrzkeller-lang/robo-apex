@@ -172,7 +172,7 @@
     AX.redesenhar(); renderOps();
     if (editava && SEL && $("opEse")) $("opEse").click();
   }
-  AX.ops = { selecionar: (tr, meta) => selecionar(tr, meta, true), limpar: () => { if (SEL) { SEL = null; AX.redesenhar(); renderOps(); } },
+  AX.ops = { atualizar: () => renderOps(), selecionar: (tr, meta) => selecionar(tr, meta, true), limpar: () => { if (SEL) { SEL = null; AX.redesenhar(); renderOps(); } },
     abrir: (n) => { const d = document.querySelectorAll("#cardOps .op")[n - 1]; if (d) d.click(); } };      // link direto: ?op=2
 
   // ================================================================ 2. lista de operações + "como foi feita"
@@ -216,10 +216,11 @@
     const linha = ([t, aberta], j) => {
       const sel = chave(t) === selAqui;
       const din = aberta ? t.R * t.risco * meta.valorPonto * (t.q != null ? t.q : meta.contratos) : t.dinheiro;
+      const ed = !aberta && AX.replay && AX.replay.edicao ? AX.replay.edicao(t, meta) : null;
       return `<div class="op${sel ? " sel" : ""}" data-j="${j}">
           <span class="op-h">${AX.quandoT(t.t_ent, meta.intraday)}</span><span class="op-e">${t.est}</span>
           <span class="${t.dir > 0 ? "bom" : "ruim"}">${t.dir > 0 ? "C" : "V"}</span>
-          <span class="op-m">${aberta ? '<i class="luz vivo"></i> aberta' : AX.esc(t.motivo)}${t.manual ? " ✋" : ""}</span>
+          <span class="op-m">${ed ? `<span class="op-ed ${AX.cls(ed.R)}" data-dica="Sua última edição no E se…: com o stop e o alvo que você escolheu, esta operação daria ${AX.R(ed.R)}. O resultado original (à direita) e as estatísticas não mudam.">✎ ${AX.R(ed.R, 1)}</span> ` : ""}${aberta ? '<i class="luz vivo"></i> aberta' : AX.esc(t.motivo)}${t.manual ? " ✋" : ""}</span>
           <b class="${AX.cls(t.R)}">${AX.R(t.R, 1)}</b><b class="op-d ${AX.cls(din)}">${AX.dinheiro(din, { meta }, true)}</b>
         </div>${sel ? comoFoi(t, meta, aberta) : ""}`;
     };
@@ -235,7 +236,7 @@
     if (escolhida && AX.replay) {
       const br = $("opReplay"), be = $("opEse");
       if (br) br.onclick = (e) => { e.stopPropagation(); AX.replay.tocar(escolhida[0], meta); };
-      if (be) be.onclick = (e) => { e.stopPropagation(); AX.replay.painelEse(escolhida[0], meta, $("opEseBox")); };
+      if (be) be.onclick = (e) => { e.stopPropagation(); AX.replay.painelEse(escolhida[0], meta, $("opEseBox"), fechadas); };
     }
     el.querySelectorAll("#opsVista button").forEach((b) => (b.onclick = () => { AX.pref.opsVista = b.dataset.v; AX.salvarPref(); renderOps(); }));
   }

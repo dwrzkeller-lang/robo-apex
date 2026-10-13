@@ -299,6 +299,11 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
         if alvo2 is not None and alvo2 <= preco + tick:
             alvo2 = None
         custo_p = custo_pts + 2.0 * custo_pct * abs(preco)
+        if od["tipo"] == "abertura" and risco < 2.0 * (2.0 * slip + custo_p):
+            # entrada a mercado com o stop colado no preco: os custos de ida e volta passariam da metade do risco
+            od.update(status="cancelada", motivo="risco menor que o dobro dos custos", i_fim=i)
+            s["pend"].remove(od)
+            return False
         q = tamanho(s, preco, risco, custo_p)
         if q <= 0:
             od.update(status="cancelada", motivo="risco acima do plano (o lote mínimo arrisca mais que %s%% do capital)"

@@ -51,7 +51,7 @@ import radar
 from estrategias import AQUECIMENTO, ESTRATEGIAS, GESTOES, GESTOES_CURTO, atencao
 from simulador import PROTECOES, atualizar_ultimo, estatisticas, preparar, simular
 
-VERSAO = "2.4"
+VERSAO = "2.5"
 ARGS = sys.argv[1:]
 
 
@@ -1643,6 +1643,34 @@ class Servidor(ThreadingHTTPServer):
             super().handle_error(request, client_address)
 
 
+_aquecido = threading.Event()
+
+
+def aquecer():
+    """Carrega os candles de todos os ativos assim que o robo abre (ainda na tela de abertura), para a tela ja encontrar
+    tudo atualizado e a troca de ativo ser imediata. Primeiro os 5 min de todos, depois 15 e 60 min, sem pressa: o Yahoo
+    tem limite de pedidos por minuto e a tela tem prioridade."""
+    chaves = [c for c in df.ATIVOS if not cripto.eh_cripto(c)]
+
+    def um(chave, tf):
+        try:
+            carregar(chave, tf)
+        except Exception:
+            pass                                               # sem internet ou ativo sem dados: a tela avisa quando ele for aberto
+        _aquecido.set()
+
+    filas = [chaves[k::3] for k in range(3)]                   # os 5 min de todos, de 3 em 3
+    ts = [threading.Thread(target=lambda f=f: [um(c, 5) for c in f], daemon=True) for f in filas]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    for tf in (15, 60):
+        for chave in chaves:
+            um(chave, tf)
+            time.sleep(1.0)
+
+
 def main():
     global ACESSOS, PORTA
     try:
@@ -1666,6 +1694,10 @@ def main():
     print(" Feche esta janela para encerrar o robo.")
     print("=" * 66)
     threading.Thread(target=TESTES.laco, daemon=True, name="sentinela").start()
+    if "--sem-base" not in ARGS:
+        _splash("Carregando os ativos…")
+        threading.Thread(target=aquecer, daemon=True, name="aquecer").start()
+        _aquecido.wait(4.0)                                    # o primeiro ativo costuma chegar em 1 a 2 segundos
     if "--sem-janela" not in ARGS:
         _splash("Abrindo a janela…")
         abrir_janela(url)                                      # o servidor ja escuta: a pagina espera o serve_forever

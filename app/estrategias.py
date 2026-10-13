@@ -92,13 +92,16 @@ def vwap_dia(h, l, c, v, d):
         j = i
         while j < n and d[j] == d[i]:
             j += 1
-        usa_vol = any(v[k] for k in range(i, j))
-        sp = sv = 0.0
+        # Cada candle so usa o que ja aconteceu no dia: enquanto nao apareceu volume, vale a media simples do preco tipico;
+        # depois do primeiro candle com volume, a media ponderada. (Antes a escolha olhava o dia inteiro, e o teste no
+        # passado via uma VWAP diferente da do ao vivo nos primeiros candles sem volume.)
+        sp = sv = s1 = 0.0
         for k in range(i, j):
-            peso = v[k] if usa_vol else 1.0
-            sp += (h[k] + l[k] + c[k]) / 3.0 * peso
-            sv += peso
-            out[k] = sp / sv if sv > 0 else c[k]
+            tp = (h[k] + l[k] + c[k]) / 3.0
+            sp += tp * (v[k] or 0.0)
+            sv += v[k] or 0.0
+            s1 += tp
+            out[k] = sp / sv if sv > 0 else s1 / (k - i + 1)
         i = j
     return out
 
@@ -231,7 +234,7 @@ def eficiencia(c, p=ER_PERIODO):
 
 
 # Modo seletivo (opcional): menos operacoes, so no contexto que se saiu melhor nos testes com 41 mil operacoes em 12 ativos
-SELETIVO_TENDENCIA = ("E1", "E2", "E3", "E4", "E5", "E9", "E12", "E13", "E14", "E15")   # correcao/rompimento: a favor do diario E tendencia limpa
+SELETIVO_TENDENCIA = ("E1", "E2", "E3", "E4", "E5", "E9", "E12", "E13", "E14", "E15", "E16", "E17", "E18")   # correcao/rompimento: a favor do diario E tendencia limpa
 SELETIVO_DIRECAO = ("E7", "E11")                              # momentum do dia: so a favor do diario
 
 
@@ -886,6 +889,183 @@ def e15_atencao(G, i):
     return _ogro(G, i) is not None and e15_pivo_curto(G, i) is None
 
 
+# ------------------------------------------------------------------------------------------ E16, E17 e E18
+# Fundos ascendentes + perna do pivo + projecao de Fibonacci a partir do topo (a leitura que o Diego faz na mao):
+# o mercado faz fundo mais alto que o anterior (A0 < A) e a perna A->B rompe o topo anterior; a projecao de Fibonacci da
+# perna e colocada em cima do topo B e os alvos ficam em B + 61,8%, B + 100% e B + 161,8% da perna. So a favor da tendencia.
+PV_N = 3                             # um pivo so vale depois de 3 candles confirmando de cada lado
+PV_JANELA = 120                      # ate onde a estrutura e procurada para tras
+PV_PERNA_ATR = 1.5                   # a perna A->B precisa ter pelo menos 1,5 ATR
+PV_ALVOS = (0.618, 1.0, 1.618)       # projecao em cima do topo B
+F16_ZONA = (0.236, 0.618)            # E16: correcao de 23,6% a 61,8% antes do rompimento
+F17_ZONA = (0.382, 0.66)             # E17: gatilho dentro da correcao de 38,2% a 61,8% (tolerancia ate 66%)
+F18_ESPERA = 15                      # E18: o reteste precisa vir em ate 15 candles depois do rompimento
+
+
+def _eh_pivo(G, k, n=PV_N):
+    """(e fundo, e topo) do candle k, com n candles de cada lado. Guarda o resultado dos candles que nao mudam mais."""
+    if k < n or k + n > G.n - 1:
+        return False, False
+    memo = G.__dict__.setdefault("_pv", {})
+    fixo = k + n <= G.n - 2                                    # o ultimo candle (aberto) nao participa: pode guardar
+    if fixo and k in memo:
+        return memo[k]
+    l, h = G.l, G.h
+    fundo = l[k] < min(l[k - n:k]) and l[k] <= min(l[k + 1:k + n + 1])
+    topo = h[k] > max(h[k - n:k]) and h[k] >= max(h[k + 1:k + n + 1])
+    if fixo:
+        memo[k] = (fundo, topo)
+    return fundo, topo
+
+
+def _perna_do_pivo(G, i, rompida=False):
+    """Estrutura de alta ja CONFIRMADA no candle i: fundo A0, topo anterior P, fundo A mais alto que A0 e topo B mais alto
+    que P. rompida=False: B ainda e o maior topo desde A (pivo armado). rompida=True: B ja foi rompido por um fechamento
+    (para o reteste). Devolve (a0, p, a, b, AB) ou None. Nao olha o futuro: um pivo so entra PV_N candles depois dele."""
+    fim = i - PV_N
+    ini = max(PV_N, i - PV_JANELA)
+    topos, fundos = [], []
+    for k in range(fim, ini - 1, -1):                          # do mais recente para o mais antigo
+        f, t = _eh_pivo(G, k)
+        if t:
+            topos.append(k)
+        if f:
+            fundos.append(k)
+    for b in topos[:3]:
+        maior_depois = max(G.h[b + 1:i + 1]) if b < i else G.h[b]
+        if (maior_depois > G.h[b]) != rompida:
+            if not rompida:
+                return None                                    # o topo mais recente ja foi superado: nao ha pivo armado
+            continue
+        a = next((k for k in fundos if k < b), None)
+        if a is None or b - a < 2 or min(G.l[a:b + 1]) < G.l[a]:
+            continue
+        p = next((k for k in topos if k < a), None)
+        if p is None:
+            continue
+        a0 = next((k for k in fundos if k < p), None)
+        if a0 is None or not (G.l[a] > G.l[a0] and G.h[b] > G.h[p]):
+            continue                                           # fundo ascendente e topo ascendente
+        ab = G.h[b] - G.l[a]
+        if ab < PV_PERNA_ATR * G.atr[i]:
+            continue
+        return a0, p, a, b, ab
+    return None
+
+
+def _alvos_do_topo(G, b, ab):
+    return tuple(G.abaixo(G.h[b] + r * ab) for r in PV_ALVOS)
+
+
+def _tendencia_ok(G, i):
+    return G.c[i] > G.mm200[i] and G.mm20[i] > G.mm200[i]      # so a favor da tendencia maior
+
+
+def e16_pivo_projecao(G, i):
+    """Rompimento do pivo de fundos ascendentes: compra 1 tick acima do topo B, stop abaixo do fundo da correcao (C),
+    alvos na projecao de Fibonacci colocada em cima de B."""
+    if not _tendencia_ok(G, i):
+        return None
+    r = _perna_do_pivo(G, i)
+    if not r:
+        return None
+    a0, p, a, b, ab = r
+    fundo = min(G.l[b + 1:i + 1])
+    ret = (G.h[b] - fundo) / ab
+    if not F16_ZONA[0] <= ret <= F16_ZONA[1]:
+        return None
+    ent = G.acima(G.h[b] + G.tick)
+    stop = G.abaixo(fundo - G.tick)
+    if not _risco_ok(G, i, ent, stop, 0.3, 2.5):
+        return None
+    return dict(tipo="stop", gatilho=ent, stop=stop, validade=1, alvos=_alvos_do_topo(G, b, ab), ret=round(ret, 4),
+                info="pivô de fundos ascendentes: correção de %s%% da perna" % _br(100 * ret, 0))
+
+
+def e16_atencao(G, i):
+    return _tendencia_ok(G, i) and _perna_do_pivo(G, i) is not None and e16_pivo_projecao(G, i) is None
+
+
+def e17_gatilho_no_fundo(G, i):
+    """Mesma estrutura, entrada ANTES do rompimento: candle de alta que fecha acima da maxima anterior, colado no fundo da
+    correcao (38,2% a 61,8% da perna). Stop curto abaixo desse fundo; alvos na projecao em cima de B."""
+    if not _tendencia_ok(G, i):
+        return None
+    r = _perna_do_pivo(G, i)
+    if not r:
+        return None
+    a0, p, a, b, ab = r
+    m = b + 1
+    for k in range(b + 1, i + 1):
+        if G.l[k] <= G.l[m]:
+            m = k
+    ret = (G.h[b] - G.l[m]) / ab
+    if not F17_ZONA[0] <= ret <= F17_ZONA[1] or i - m > 2:
+        return None                                            # fundo mais alto que A, na zona, e o gatilho colado nele
+    if not (G.c[i] > G.o[i] and G.c[i] > G.h[i - 1]):
+        return None
+    ent = G.acima(G.h[i] + G.tick)
+    stop = G.abaixo(G.l[m] - G.tick)
+    if ent >= G.h[b] or not _risco_ok(G, i, ent, stop, 0.3, 2.0):
+        return None
+    alvos = _alvos_do_topo(G, b, ab)
+    if alvos[0] - ent < 1.5 * (ent - stop):
+        return None                                            # o primeiro alvo precisa pagar 1,5 vez o risco
+    return dict(tipo="stop", gatilho=ent, stop=stop, validade=2, alvos=alvos, ret=round(ret, 4),
+                info="gatilho no fundo ascendente: correção de %s%% da perna" % _br(100 * ret, 0))
+
+
+def e17_atencao(G, i):
+    if not _tendencia_ok(G, i):
+        return False
+    r = _perna_do_pivo(G, i)
+    if not r:
+        return False
+    ret = (G.h[r[3]] - min(G.l[r[3] + 1:i + 1])) / r[4]
+    return 0.3 <= ret <= F17_ZONA[1] and e17_gatilho_no_fundo(G, i) is None
+
+
+def e18_reteste(G, i):
+    """Rompimento e reteste: o topo B ja foi rompido por um fechamento e o preco voltou para testar B por cima (o topo vira
+    suporte). Gatilho: candle de alta que fecha acima da maxima anterior, colado no reteste. Stop abaixo do reteste."""
+    if not _tendencia_ok(G, i):
+        return None
+    r = _perna_do_pivo(G, i, rompida=True)
+    if not r:
+        return None
+    a0, p, a, b, ab = r
+    at, topo = G.atr[i], G.h[b]
+    x = next((k for k in range(b + 1, i + 1) if G.c[k] > topo), None)      # candle que rompeu fechando acima de B
+    if x is None or x >= i or i - x > F18_ESPERA:
+        return None
+    m = x + 1
+    for k in range(x + 1, i + 1):
+        if G.l[k] <= G.l[m]:
+            m = k
+    if i - m > 2 or G.l[m] > topo + 0.3 * at or G.l[m] < topo - 0.6 * at:
+        return None                                            # o reteste encosta em B (nem longe, nem afundando demais)
+    if any(G.c[k] < topo - 0.3 * at for k in range(x + 1, i + 1)):
+        return None                                            # fechou de volta abaixo de B: rompimento falso
+    if not (G.c[i] > G.o[i] and G.c[i] > G.h[i - 1] and G.c[i] > topo):
+        return None
+    ent = G.acima(G.h[i] + G.tick)
+    stop = G.abaixo(G.l[m] - 0.1 * at - G.tick)
+    if not _risco_ok(G, i, ent, stop, 0.3, 2.0):
+        return None
+    alvos = _alvos_do_topo(G, b, ab)
+    if alvos[0] - ent < 1.0 * (ent - stop):
+        return None
+    return dict(tipo="stop", gatilho=ent, stop=stop, validade=2, alvos=alvos, ret=0.0,
+                info="reteste do topo rompido (%s)" % _br(G.sinal * topo, 0 if abs(topo) > 1000 else 4))
+
+
+def e18_atencao(G, i):
+    if not _tendencia_ok(G, i):
+        return False
+    r = _perna_do_pivo(G, i, rompida=True)
+    return bool(r) and G.l[i] <= G.h[r[3]] + 0.5 * G.atr[i] and G.c[i] > G.h[r[3]] - 0.3 * G.atr[i] and e18_reteste(G, i) is None
+
+
 # ------------------------------------------------------------------------------------------ catalogo
 ESTRATEGIAS = {
     "E1": dict(nome="Halt na MM20", autor="Mario Pisani + Oliver Velez", fn=e1_halt_mm20, aten=e1_atencao,
@@ -1034,6 +1214,41 @@ ESTRATEGIAS = {
                         "Stop CURTO: abaixo da mínima dos 2 últimos candles antes do rompimento (nunca abaixo do fundo da correção). Risco de 0,3 a 1,2 ATR",
                         "Três alvos na projeção de Fibonacci a partir do fundo da correção: 61,8%, 100% e 161,8%",
                         "Só arma se o alvo 2 pagar pelo menos 2 vezes o risco",
+                        "Um terço em cada alvo; no alvo 1 o stop vai para a entrada, no alvo 2 vai para o alvo 1"]),
+    "E16": dict(nome="Pivô de fundos ascendentes", autor="Leitura de estrutura (fundos e topos ascendentes) + projeção de Fibonacci em cima do topo",
+                fn=e16_pivo_projecao, aten=e16_atencao, gestao="fibo3", saida=None, intraday=False, sem_ntsl=True,
+                aguardando="pivô armado (fundo mais alto + correção), esperando romper o topo da perna",
+                ideal="60 min. No nosso teste (834 operações em 11 ativos, com custos) perdeu em média 0,15R por operação; em 60 min ficou no "
+                      "zero (+0,01R em 357 operações). Resultado parecido com o da E9: não mostrou vantagem comprovada",
+                regras=["Tendência a favor: preço e MM20 acima da MM200 (venda: o inverso)",
+                        "Estrutura confirmada: fundo A mais alto que o fundo anterior e perna A→B que superou o topo anterior (cada pivô vale depois de 3 candles)",
+                        "Perna A→B de pelo menos 1,5 ATR; correção de 23,6% a 61,8% da perna, sem perder o fundo A",
+                        "Compra 1 tick acima do topo B (rompimento do pivô), valendo 1 candle; stop 1 tick abaixo do fundo da correção",
+                        "Alvos: a projeção de Fibonacci da perna colocada em cima de B: B + 61,8%, B + 100% e B + 161,8% da perna",
+                        "Um terço em cada alvo; no alvo 1 o stop vai para a entrada, no alvo 2 vai para o alvo 1"]),
+    "E17": dict(nome="Gatilho no fundo ascendente", autor="Mesma estrutura da E16, com entrada antecipada na correção (stop curto)",
+                fn=e17_gatilho_no_fundo, aten=e17_atencao, gestao="fibo3", saida=None, intraday=False, sem_ntsl=True,
+                aguardando="correção entre 38,2% e 61,8% da perna, esperando o candle de alta que fecha acima da máxima anterior",
+                ideal="60 min. No nosso teste (757 operações em 11 ativos, com custos) perdeu em média 0,18R por operação (60 min: 0,05R). "
+                      "Acerta pouco (34%) e ganha mais quando acerta (+1,4R em média), mas não o bastante para pagar as perdas e os custos",
+                regras=["Tendência a favor: preço e MM20 acima da MM200 (venda: o inverso)",
+                        "Mesma estrutura da E16: fundos e topos ascendentes confirmados, perna A→B de pelo menos 1,5 ATR",
+                        "A correção busca de 38,2% a 61,8% da perna e faz um fundo acima de A",
+                        "Gatilho: candle de alta que fecha acima da máxima do anterior, colado no fundo; compra 1 tick acima dele (vale 2 candles), ainda abaixo de B",
+                        "Stop CURTO: 1 tick abaixo do fundo da correção",
+                        "Alvos na projeção em cima de B: B + 61,8%, B + 100% e B + 161,8%. Só arma se o alvo 1 pagar 1,5 vez o risco",
+                        "Um terço em cada alvo; no alvo 1 o stop vai para a entrada, no alvo 2 vai para o alvo 1"]),
+    "E18": dict(nome="Rompimento e reteste do pivô", autor="Rompimento e reteste (o topo rompido vira suporte), com os alvos da projeção de Fibonacci",
+                fn=e18_reteste, aten=e18_atencao, gestao="fibo3", saida=None, intraday=False, sem_ntsl=True,
+                aguardando="topo rompido, esperando o preço voltar para testá-lo por cima",
+                ideal="15 e 60 min. No nosso teste (344 operações em 11 ativos, com custos) perdeu em média 0,27R por operação: foi a mais "
+                      "fraca das três. Fica no robô para estudo do reteste, não como recomendação",
+                regras=["Tendência a favor: preço e MM20 acima da MM200 (venda: o inverso)",
+                        "Mesma estrutura da E16, mas o topo B JÁ foi rompido por um candle que fechou acima dele",
+                        "Em até 15 candles o preço volta e encosta em B (de 0,3 ATR acima a 0,6 ATR abaixo), sem fechar de volta abaixo dele",
+                        "Gatilho: candle de alta que fecha acima da máxima do anterior e acima de B; compra 1 tick acima dele (vale 2 candles)",
+                        "Stop logo abaixo do fundo do reteste (0,1 ATR + 1 tick)",
+                        "Alvos na projeção em cima de B: B + 61,8%, B + 100% e B + 161,8%. Só arma se o alvo 1 pagar pelo menos o risco",
                         "Um terço em cada alvo; no alvo 1 o stop vai para a entrada, no alvo 2 vai para o alvo 1"]),
 }
 

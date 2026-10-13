@@ -613,3 +613,5 @@ table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nu
 .ese-res small { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .4px; color: var(--txt2); white-space: normal; }
 .ese-res b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
 .ese-res em { display: block; font-style: normal; font-size: 11px; color: var(--txt2); white-space: normal; }
+
+.op .op-ed { font-weight: 700; border: 1px solid currentColor; border-radius: 5px; padding: 0 4px; margin-right: 2px; }

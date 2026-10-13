@@ -360,6 +360,7 @@ def carregar_yahoo(base, chave, tf=5, guardar=True, max_idade=None):
             # carga completa: na 1a vez, depois de muito tempo parado (o trecho curto deixaria buraco) e de 6 em 6 horas
             completa = ant_b is None or tf >= 1440 or agora - st["completo"] > 6 * 3600 or agora - st["ok"] > 12 * 3600
             if completa:
+                offline = False
                 try:
                     js = _baixar_yahoo(cfg["yahoo"], intervalo, periodo)
                     if not (js.get("chart") or {}).get("result"):
@@ -379,6 +380,7 @@ def carregar_yahoo(base, chave, tf=5, guardar=True, max_idade=None):
                         js = json.load(f)
                     fonte = "OFFLINE - ultimo download salvo em %s" % datetime.fromtimestamp(
                         os.path.getmtime(arq_cache)).strftime("%d/%m %H:%M")
+                    offline = True
                 b = _yahoo_para_barras(js, cfg, tf=tf)
                 if guardar and tf < 1440 and b["t"]:
                     # acumula: o Yahoo so da 60 dias em 2-30 min, mas o que ja foi baixado fica guardado
@@ -394,7 +396,11 @@ def carregar_yahoo(base, chave, tf=5, guardar=True, max_idade=None):
                     except (KeyError, TypeError):
                         pass
                     gravar_hist(b)
-                st["completo"] = agora
+                if not offline:
+                    # Abriu sem internet e mostrou o arquivo salvo: a proxima renovacao tenta a carga completa de novo.
+                    # (Antes isto contava como carga feita; o robo so buscava o trecho de hoje e os dias parados ficavam
+                    # faltando, com o grafico parecendo desatualizado.)
+                    st["completo"] = agora
             else:
                 curto = "1d" if tf < 60 else "5d"              # so o trecho recente: poucos KB em vez dos 60 dias
                 js = _baixar_yahoo(cfg["yahoo"], intervalo, curto, esperar=False)
