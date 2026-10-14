@@ -51,7 +51,7 @@ import radar
 from estrategias import AQUECIMENTO, ESTRATEGIAS, GESTOES, GESTOES_CURTO, atencao
 from simulador import PROTECOES, atualizar_ultimo, estatisticas, preparar, simular
 
-VERSAO = "2.5"
+VERSAO = "2.6"
 ARGS = sys.argv[1:]
 
 
@@ -335,9 +335,27 @@ def _pedido(q):
     if gestao not in GESTOES:
         gestao = "padrao"
     capital = _float(q, "capital", 10000.0, 1.0, 1e9)
+    pl = _plano(q, capital)
+    cambio = None
+    if q.get("brl", [""])[0] == "1" and df.ATIVOS.get(chave, {}).get("moeda") == "US$":
+        # conta em reais num ativo cotado em dolar: o capital e os limites do dia (digitados em R$) sao convertidos para
+        # a moeda do ativo; a tela converte os resultados de volta com o mesmo cambio
+        cambio = _usdbrl()
+        if cambio:
+            capital = capital / cambio
+            pl = dict(pl, capital=capital, loss_dia=pl["loss_dia"] / cambio, meta_dia=pl["meta_dia"] / cambio)
     return dict(chave=chave, tf=tf, est=est, todas=est == "TODAS", gestao=gestao, capital=capital,
                 contratos=_float(q, "contratos", 1.0, 0.01, 1e7), max_stops=int(_float(q, "maxstops", 2, 1, 50)),
-                plano=_plano(q, capital))
+                plano=pl, cambio=cambio)
+
+
+def _usdbrl():
+    """Dolar em reais (ultimo preco do USD/BRL que o robo ja acompanha), com 2 casas; None se nao houver."""
+    try:
+        x = carregar("WDO", 5)[0]["c"][-1] / 1000.0
+        return round(x, 2) if 3.0 < x < 15.0 else None
+    except Exception:
+        return None
 
 
 # ------------------------------------------------------------------------------------------ IA (em segundo plano)
@@ -564,6 +582,7 @@ def api_sim(q):
                 aoVivo=vivo, formando=aberto and vivo, temVolume=any(vol[-400:]),
                 tam=pl["tam"], riscoPct=pl["risco_pct"], lossDia=pl["loss_dia"], metaDia=pl["meta_dia"], seletivo=pl["seletivo"],
                 custoPct=sc.get("custo_pct", 0.0), cripto=bool(cfg.get("cripto")), curto=cfg.get("curto"), prot=list(pl["prot"]),
+                usdbrl=P.get("cambio"),
                 dia=r["dia"], ctx=ctx_ult,
                 foraDoPlano=sum(1 for o in r["ordens"] if o["status"] == "cancelada" and o["motivo"].startswith("risco acima do plano")),
                 iIni=r["ini"], iFim=r["fim"], dataIni=d[r["ini"]], dataFim=d[r["fim"]],
@@ -593,6 +612,7 @@ def IA_estado(chave, tf, gestao, contratos):
 
 
 # ------------------------------------------------------------------------------------------ gestoes lado a lado
+STOPS_LADO = (("base", ()), ("curto", ("curto",)), ("be20", ("be20",)), ("curto+be20", ("be20", "curto")))
 def api_gestoes(q):
     """A mesma estrategia, no mesmo periodo, com cada gestao (alvo fixo, parcial, conducao, trailing...)."""
     P = _pedido(q)
@@ -606,16 +626,30 @@ def api_gestoes(q):
     codigos = list(ESTRATEGIAS) if P["todas"] else [P["est"]]
     aberto = formando(B, cfg, P["chave"])
     linhas = []
+    # cada gestao (o que fazer com o ganho) com cada jeito de stop: o da estrategia, curto (1 ATR), 0x0 aos 20% e os dois
+    outras = tuple(x for x in P["plano"]["prot"] if x not in ("curto", "be20"))
+    com_stops = q.get("stops", ["0"])[0] == "1"
     for g in GESTOES:
-        with TRAVA:
-            Gs = graficos(P["chave"], tf, B, sc, aberto)
-            r = simular_c(P["chave"], tf, B, Gs, sc, codigos, i_ini, i_fim, aberto, gestao=g, contratos=contratos,
-                          max_stops=P["max_stops"], juntas=P["todas"], plano=P["plano"])
-        st = estatisticas(r["trades"], P["capital"], lambda i: d[i])
-        linhas.append(dict(gestao=g, nome=GESTOES_CURTO.get(g, g), n=st["n"], total=st.get("total", 0.0), media=st.get("mediaDin"),
-                           expR=st.get("expR"), acerto=st.get("acerto"), ddMax=st.get("ddMax", 0.0), maiorR=max([x["R"] for x in r["trades"]], default=None),
-                           veredito=st.get("veredito"), cor=st.get("cor")))
-    return dict(linhas=linhas, atual=P["gestao"], moeda=cfg.get("moeda", "R$"), est=P["est"], dataIni=d[max(AQUECIMENTO, i_ini)], dataFim=d[i_fim],
+        linha = None
+        for nome_s, extra in STOPS_LADO if com_stops else (("plano", None),):
+            pl = P["plano"] if extra is None else dict(P["plano"], prot=tuple(sorted(outras + extra)))
+            with TRAVA:
+                Gs = graficos(P["chave"], tf, B, sc, aberto)
+                r = simular_c(P["chave"], tf, B, Gs, sc, codigos, i_ini, i_fim, aberto, gestao=g, contratos=contratos,
+                              max_stops=P["max_stops"], juntas=P["todas"], plano=pl)
+            st = estatisticas(r["trades"], P["capital"], lambda i: d[i])
+            perdas = [x["dinheiro"] for x in r["trades"] if x["dinheiro"] < 0]
+            cel = dict(n=st["n"], total=st.get("total", 0.0), acerto=st.get("acerto"), ddMax=st.get("ddMax", 0.0),
+                       perdaMedia=(sum(perdas) / len(perdas)) if perdas else 0.0)
+            atual_s = extra is None or tuple(sorted(extra)) == tuple(x for x in P["plano"]["prot"] if x in ("curto", "be20"))
+            if linha is None or atual_s:
+                base = dict(n=st["n"], total=st.get("total", 0.0), media=st.get("mediaDin"), expR=st.get("expR"), acerto=st.get("acerto"),
+                            ddMax=st.get("ddMax", 0.0), maiorR=max([x["R"] for x in r["trades"]], default=None),
+                            veredito=st.get("veredito"), cor=st.get("cor"))
+                linha = dict(linha or {}, gestao=g, nome=GESTOES_CURTO.get(g, g), **base)
+            linha.setdefault("stops", {})[nome_s] = cel
+        linhas.append(linha)
+    return dict(linhas=linhas, atual=P["gestao"], comStops=com_stops, stopAtual="+".join(x for x in ("curto", "be20") if x in P["plano"]["prot"]) or "base", moeda=cfg.get("moeda", "R$"), est=P["est"], dataIni=d[max(AQUECIMENTO, i_ini)], dataFim=d[i_fim],
                 contratos=contratos, fracionado=sc["fracionado"])
 
 

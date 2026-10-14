@@ -1101,6 +1101,10 @@
   const tentar = (f) => { try { f(); } catch (e) { console.error(e); } };
   function redesenhar() {
     geo.clear(); medirPainel();
+    // A escala é reposta a CADA quadro. O navegador pode recriar a tela de desenho sozinho (computador que voltou do
+    // descanso, placa de vídeo reiniciada, janela muito tempo em segundo plano) e nesse caso ela volta sem a escala: em
+    // monitor com zoom de 110%, 125%… as marcações das operações ficavam deslocadas e "encolhidas" em relação aos candles.
+    ctx.setTransform(dpr || 1, 0, 0, dpr || 1, 0, 0);
     ctx.clearRect(0, 0, largCss, altCss);
     ctx.save();
     try {
@@ -1126,10 +1130,16 @@
   if (window.ResizeObserver) new window.ResizeObserver((es) => { const r = es[es.length - 1].contentRect; medir(r.width, r.height); }).observe(area);
   else window.addEventListener("resize", () => medir(area.clientWidth, area.clientHeight));
   medir(area.clientWidth, area.clientHeight);
+  cv.addEventListener("contextrestored", () => { medidaNova = true; });
+  let quadros = 0;
   // redesenha só quando algo mudou (zoom, rolagem, escala de preço, tamanho, candle novo ou os próprios desenhos)
   function laco() {
     requestAnimationFrame(laco);                     // agenda antes: um erro num quadro não pode parar os seguintes
     try {
+      if (++quadros % 90 === 0) {                     // conferência de segurança (a cada ~1,5 s): tamanho real da área e da tela de desenho
+        medir(area.clientWidth, area.clientHeight);
+        if (cv.width !== Math.round(largCss * (window.devicePixelRatio || 1))) medidaNova = true;
+      }
       if (medidaNova || dpr !== (window.devicePixelRatio || 1)) ajustarTamanho();
       if (!temDados()) {
         if (assinatura !== "-") { assinatura = "-"; ctx.clearRect(0, 0, largCss, altCss); barra.classList.add("oculto"); barraOn = false; }

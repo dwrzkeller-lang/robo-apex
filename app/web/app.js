@@ -17,7 +17,9 @@
     som: true, auto: true, per: "1m", de: "", ate: "", larg: {}, ind: null, opsVista: "per",
     tam: "fixo", risco: 1, lossDia: 0, metaDia: 0, seletivo: false, metaMes: 0, quedaMax: 0,     // aba Plano
     criptos: [], prot: [],
-    candles: { alta: "#26a69a", baixa: "#ef5350", tipo: "cheio", tendencia: false }, notificar: false };
+    candles: { alta: "#26a69a", baixa: "#ef5350", tipo: "cheio", tendencia: false }, notificar: false,
+    unidade: "reais", emReais: true,                     // resultados em dinheiro (ou em R) e dólar convertido para reais
+    graf: { fundo: "#0b0e14", gradeV: true, gradeH: true, mira: false, linhaPreco: true } };      // aparência (botão direito no gráfico)
   const lerLS = (k) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } };
   // A tela só sabe quem entrou depois da primeira resposta do servidor; por isso guarda o último usuário deste navegador.
   // Se quem entrou for outro, as preferências dele são carregadas e a página recomeça (ver `identificar`).
@@ -41,6 +43,9 @@
   if (AX.pref.tam !== "risco") AX.pref.tam = "fixo";
   const corOk = (c) => /^#[0-9a-f]{6}$/i.test(c || "");
   const pc = AX.pref.candles || {};
+  { const g = AX.pref.graf || {}, pg = PADRAO.graf;
+    AX.pref.graf = { fundo: corOk(g.fundo) ? g.fundo : pg.fundo, gradeV: g.gradeV !== false, gradeH: g.gradeH !== false, mira: !!g.mira, linhaPreco: g.linhaPreco !== false };
+    if (AX.pref.unidade !== "R") AX.pref.unidade = "reais"; }
   AX.pref.candles = { alta: corOk(pc.alta) ? pc.alta : PADRAO.candles.alta, baixa: corOk(pc.baixa) ? pc.baixa : PADRAO.candles.baixa,
     tipo: pc.tipo === "vazado" ? "vazado" : "cheio", tendencia: !!pc.tendencia };
 
@@ -73,17 +78,27 @@
   AX.fmt = (v, d) => (v == null || isNaN(v) ? "—" : Number(v).toLocaleString("pt-BR", nf(d ?? AX.dec())));
   AX.num = (v, d = 1) => (v == null || isNaN(v) ? "—" : Number(v).toLocaleString("pt-BR", nf(d)));
   AX.pct = (v, d = 1) => (v == null || isNaN(v) ? "—" : AX.num(v, d) + "%");
+  // "R" = quantas vezes o risco da operação. Por padrão a tela mostra DINHEIRO; onde só existe o múltiplo (uma média, uma
+  // estimativa) ele aparece por extenso ("1,5× o risco"). Quem prefere R troca no botão direito do gráfico.
+  AX.emR = () => AX.pref.unidade === "R";
   AX.R = (v, d = 2) => {                     // o sinal vem do valor já arredondado: nada de "−0,00R"
     if (v == null || isNaN(v)) return "—";
     const p = Math.pow(10, d), r = Math.round(v * p) / p;
-    return (r > 0 ? "+" : r < 0 ? "−" : "") + AX.num(Math.abs(r), d) + "R";
+    return (r > 0 ? "+" : r < 0 ? "−" : "") + AX.num(Math.abs(r), d) + (AX.emR() ? "R" : "× o risco");
   };
   AX.moeda = (D) => ((D || AX.D) ? (D || AX.D).meta.moeda : "R$");
+  AX.usdbrl = 0;                             // dólar em reais usado pelo servidor na última resposta (0 = sem conversão)
   AX.dinheiro = (v, D, sinal = false) => {
     if (v == null || isNaN(v)) return "—";
+    let m = AX.moeda(D);
+    if (m === "US$" && AX.usdbrl > 0 && AX.pref.emReais !== false) { v *= AX.usdbrl; m = "R$"; }      // conta em reais
     const s = v < 0 ? "−" : sinal && v > 0 ? "+" : "";
-    return s + AX.moeda(D) + " " + Math.abs(v).toLocaleString("pt-BR", nf(2));
+    return s + m + " " + Math.abs(v).toLocaleString("pt-BR", nf(2));
   };
+  // resultado de uma operação: em dinheiro (padrão) ou em R; "res2" mostra os dois quando a tela está em R
+  AX.res = (R, din, D) => (AX.emR() || din == null || isNaN(din) ? AX.R(R) : AX.dinheiro(din, D, true));
+  AX.res2 = (R, din, D) => (din == null || isNaN(din) ? AX.R(R) : AX.emR() ? AX.R(R) + " = " + AX.dinheiro(din, D, true) : AX.dinheiro(din, D, true));
+  AX.dinDeR = (t, meta, R) => (t && meta && t.risco > 0 ? R * t.risco * meta.valorPonto * (t.q != null ? t.q : meta.contratos || 1) : NaN);
   AX.reais = (v) => AX.dinheiro(v);                    // usado pela régua de desenho
   AX.valorPontoR = () => (AX.D ? AX.D.meta.valorPonto : 1);
   AX.cls = (v) => (v > 0 ? "bom" : v < 0 ? "ruim" : "neutro");
@@ -209,6 +224,65 @@
   S.ancora = chart.addLineSeries({ visible: false, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
     autoscaleInfoProvider: () => null });
   AX.chart = chart; AX.S = S; AX.COR = COR;
+
+  // ---- aparência (botão direito no gráfico): fundo, linhas de grade, mira, linha do preço; e a unidade dos resultados
+  const FUNDOS = [["Padrão", "#0b0e14"], ["Preto", "#000000"], ["Grafite", "#131722"], ["Azul-noite", "#0a1428"], ["Verde-escuro", "#0c1512"], ["Claro", "#ffffff"]];
+  function aplicarGrafico() {
+    const g = AX.pref.graf, n = parseInt(g.fundo.slice(1), 16), r = n >> 16, v = (n >> 8) & 255, b = n & 255;
+    const claro = 0.299 * r + 0.587 * v + 0.114 * b > 140, passo = claro ? -22 : 12;
+    const tom = (d) => "#" + [r, v, b].map((c) => Math.max(0, Math.min(255, c + d)).toString(16).padStart(2, "0")).join("");
+    chart.applyOptions({ layout: { background: { type: "solid", color: g.fundo }, textColor: claro ? "#3a4557" : "#8491a5" },
+      grid: { vertLines: { color: tom(passo), visible: g.gradeV }, horzLines: { color: tom(passo), visible: g.gradeH } },
+      rightPriceScale: { borderColor: tom(passo * 2) }, timeScale: { borderColor: tom(passo * 2) }, crosshair: { mode: g.mira ? 1 : 0 } });
+    S.candle.applyOptions({ priceLineVisible: g.linhaPreco });
+    $("areaGrafico").classList.toggle("fundo-claro", claro);
+    $("areaGrafico").style.background = g.fundo;
+  }
+  aplicarGrafico();
+  let menuGraf = null;
+  const fecharMenuGraf = () => { if (menuGraf) { menuGraf.remove(); menuGraf = null; } };
+  function abrirMenuGraf(x, y) {
+    fecharMenuGraf();
+    const g = AX.pref.graf, m = document.createElement("div");
+    m.className = "menu-graf";
+    const chk = (k, txt, v) => `<label class="chk"><input type="checkbox" data-k="${k}"${v ? " checked" : ""}> <span>${txt}</span></label>`;
+    m.innerHTML = `<div class="mg-tit">APARÊNCIA DO GRÁFICO</div>
+      <div class="mg-l"><span>Fundo</span><span class="mg-cores">${FUNDOS.map(([nome, c]) => `<button data-c="${c}" title="${nome}" class="${c === g.fundo ? "on" : ""}" style="background:${c}"></button>`).join("")}<input type="color" id="mgCor" value="${g.fundo}" title="Outra cor"></span></div>
+      ${chk("gradeV", "Linhas verticais", g.gradeV)}${chk("gradeH", "Linhas horizontais", g.gradeH)}
+      ${chk("mira", "Mira presa no candle (magnética)", g.mira)}${chk("linhaPreco", "Linha do preço atual", g.linhaPreco)}
+      <div class="mg-tit">RESULTADOS</div>
+      <div class="mg-l"><span>Mostrar em</span><span class="seg mini"><button data-u="reais" class="${AX.emR() ? "" : "on"}">Dinheiro</button><button data-u="R" class="${AX.emR() ? "on" : ""}">R (vezes o risco)</button></span></div>
+      <label class="chk"><input type="checkbox" data-p="emReais"${AX.pref.emReais !== false ? " checked" : ""}> <span>Conta em reais: converter ativos em dólar${AX.usdbrl ? " (dólar a R$ " + AX.num(AX.usdbrl, 2) + ")" : ""}</span></label>
+      <div class="mg-tit">GRÁFICO</div>
+      <button class="mg-b" data-a="centro">⌖ Centralizar no último candle</button>
+      <button class="mg-b" data-a="tudo">↔ Ver o período inteiro</button>
+      <button class="mg-b" data-a="padrao">↺ Restaurar a aparência padrão</button>`;
+    document.body.appendChild(m);
+    const w = m.offsetWidth, h = m.offsetHeight;
+    m.style.left = Math.max(6, Math.min(x, window.innerWidth - w - 6)) + "px";
+    m.style.top = Math.max(6, Math.min(y, window.innerHeight - h - 6)) + "px";
+    menuGraf = m;
+    const mudou = () => { aplicarGrafico(); AX.salvarPref(); AX.redesenhar(); };
+    m.addEventListener("click", (e) => {
+      const b = e.target.closest("button"); if (!b) return;
+      if (b.dataset.c) { g.fundo = b.dataset.c; mudou(); abrirMenuGraf(parseFloat(m.style.left), parseFloat(m.style.top)); return; }
+      if (b.dataset.u) { if ((b.dataset.u === "R") !== AX.emR()) { AX.pref.unidade = b.dataset.u; AX.salvarPref(); location.reload(); } return; }
+      const a = b.dataset.a;
+      if (a === "centro") AX.centralizar(); else if (a === "tudo") AX.centralizar(true);
+      else if (a === "padrao") { Object.assign(g, PADRAO.graf); mudou(); }
+      fecharMenuGraf();
+    });
+    m.addEventListener("change", (e) => {
+      const el = e.target;
+      if (el.id === "mgCor") { g.fundo = el.value; mudou(); }
+      else if (el.dataset.k) { g[el.dataset.k] = el.checked; mudou(); }
+      else if (el.dataset.p === "emReais") { AX.pref.emReais = el.checked; AX.salvarPref(); location.reload(); }
+    });
+  }
+  $("chart").addEventListener("contextmenu", (e) => { e.preventDefault(); abrirMenuGraf(e.clientX, e.clientY); });
+  document.addEventListener("pointerdown", (e) => { if (menuGraf && !menuGraf.contains(e.target)) fecharMenuGraf(); }, true);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") fecharMenuGraf(); });
+  AX.menuGrafico = abrirMenuGraf;
   AX.camadas = [];                            // funções que desenham por cima do gráfico (operações, painéis): ver desenho.js
   AX.redesenhar = () => {};
 
@@ -492,12 +566,12 @@
     const aviso = agora && AX.agendaAviso ? AX.agendaAviso(m.ativo) : "";
     let cls = "", html = "";
     const quem = (cod, extra = "") => `<div class="quem"><b>${AX.esc(cod)}</b> · ${AX.esc(AX.nomeEst(cod))}${extra}${hist ? `<span class="tag-hist">FIM DO PERÍODO · ${AX.quando(D, k, true)}</span>` : ""}${selo}</div>`;
-    const saiu = e.saidas.length ? `<div class="detalhe">Neste candle saiu: ${e.saidas.map((t) => `${t.est} ${AX.dirTxt(t.dir).toLowerCase()} <b class="${AX.cls(t.R)}">${AX.R(t.R)}</b> (${AX.esc(t.motivo)})`).join(" · ")}</div>` : "";
+    const saiu = e.saidas.length ? `<div class="detalhe">Neste candle saiu: ${e.saidas.map((t) => `${t.est} ${AX.dirTxt(t.dir).toLowerCase()} <b class="${AX.cls(t.R)}">${AX.res(t.R, t.dinheiro, D)}</b> (${AX.esc(t.motivo)})`).join(" · ")}</div>` : "";
     if (e.pos) {
       const p = e.pos, R = p.Ragora, q = qtd(p);
       const movido = p.stopAgora != null && p.stopAgora !== p.stop;      // stop já andou: o risco inicial não vale mais
       cls = "pos";
-      html = `<div class="estado">${p.dir > 0 ? "COMPRADO" : "VENDIDO"} <span class="${AX.cls(R)}">${AX.R(R)}</span></div>${quem(p.est, " · entrou em " + (p.t_ent != null ? AX.quandoT(p.t_ent, m.intraday) : AX.quando(D, p.i_ent)))}
+      html = `<div class="estado">${p.dir > 0 ? "COMPRADO" : "VENDIDO"} <span class="${AX.cls(R)}">${AX.res(R, AX.dinDeR(p, m, R), D)}</span></div>${quem(p.est, " · entrou em " + (p.t_ent != null ? AX.quandoT(p.t_ent, m.intraday) : AX.quando(D, p.i_ent)))}
         ${AX.medidor({ dir: p.dir, ent: p.ent, stop: p.stopAgora ?? p.stop, alvo: p.alvo, risco: p.risco, alvo1: p.parcial ? null : p.alvo1, alvo2: p.parcial2 ? null : p.alvo2 }, D.c[k], m.decimais)}
         <div class="mo-grade">${bloco("Entrada", AX.fmt(p.ent))}
           ${bloco(movido ? "Stop (movido)" : "Stop", AX.fmt(p.stopAgora ?? p.stop), movido ? "o inicial era " + AX.fmt(p.stop) : `${AX.fmt(p.risco)} pts = ${AX.dinheiro(perdaNoStop(p.risco, q, p.ent), D)}`)}
@@ -591,6 +665,7 @@
     if (p.lossDia > 0) o.lossDia = p.lossDia;
     if (p.metaDia > 0) o.metaDia = p.metaDia;
     if (p.seletivo) o.seletivo = 1;
+    if (p.emReais !== false) o.brl = 1;                                         // conta em reais: dólar convertido
     if (Array.isArray(p.prot) && p.prot.length) o.prot = p.prot.join(",");      // proteções do stop (aba Plano)
     return o;
   };
@@ -825,6 +900,8 @@
       const antes = V.D, n0 = base ? base.t.length : 0;
       const retratoAntes = antes ? retrato(antes) : null, tAntes = antes ? antes.t[antes.meta.ultimo] : 0, metaAntes = antes && antes.meta;
       const D = X.delta && base ? fundir(base, X) : X;
+      AX.usdbrl = D.meta.usdbrl || 0;
+      if (AX.replay && AX.replay.aplicarEdicoes) AX.replay.aplicarEdicoes(D);      // as edições do "e se…" valem nos resultados
       V.D = D; V.velho = false; V.consulta = consulta;
       if (AX.emReplay) { /* replay de uma operação tocando: o gráfico não é mexido pelo ao vivo */ }
       else if (ABAS_VIVAS.includes(AX.aba) || !AX.graficoMostra()) {
@@ -872,7 +949,7 @@
     const lado = o.dir > 0 ? "COMPRA" : "VENDA";
     const txt = top.tipo === "ordem" ? `${o.est}: ${lado} armada${o.gatilho != null ? (o.tipo === "limite" || o.ordem === "limite" ? " limitada em " : o.dir > 0 ? " acima de " : " abaixo de ") + f(o.gatilho) : " (a mercado no próximo candle)"}`
       : top.tipo === "entrada" ? `${o.est}: ${lado} executada a ${f(o.ent)}`
-        : `${o.est}: saiu (${o.motivo}) ${AX.R(o.R)} = ${AX.dinheiro(o.dinheiro, { meta }, true)}`;
+        : `${o.est}: saiu (${o.motivo}) ${AX.res2(o.R, o.dinheiro, { meta })}`;
     AX.som(top.tipo);
     AX.toast(prefixo + txt, top.tipo === "ganho" ? "ok" : top.tipo === "perda" ? "erro" : "");
     AX.notificar("Robô Apex · " + (meta.nome || meta.ativo || ""), prefixo + txt);
@@ -904,7 +981,7 @@
     let est;
     if (e.pos) {
       const p = e.pos, alvos = AX.alvosDe(p).map(([pr, nm]) => nm.toLowerCase() + " " + f(pr)).join(" · ");
-      est = `<b class="${p.dir > 0 ? "cmp" : "vnd"}">${p.dir > 0 ? "COMPRADO" : "VENDIDO"}</b> ${AX.esc(p.est)} · entrada <b>${f(p.ent)}</b>${p.t_ent != null ? " às " + AX.quandoT(p.t_ent, m.intraday).slice(-5) : ""} · stop <b>${f(p.stopAgora ?? p.stop)}</b>${alvos ? " · " + alvos : ""} · agora <b class="${AX.cls(p.Ragora)}">${AX.R(p.Ragora)}</b>`;
+      est = `<b class="${p.dir > 0 ? "cmp" : "vnd"}">${p.dir > 0 ? "COMPRADO" : "VENDIDO"}</b> ${AX.esc(p.est)} · entrada <b>${f(p.ent)}</b>${p.t_ent != null ? " às " + AX.quandoT(p.t_ent, m.intraday).slice(-5) : ""} · stop <b>${f(p.stopAgora ?? p.stop)}</b>${alvos ? " · " + alvos : ""} · agora <b class="${AX.cls(p.Ragora)}">${AX.res(p.Ragora, AX.dinDeR(p, m, p.Ragora), D)}</b>`;
     } else if (e.pend.length) {
       const o = e.pend[e.pend.length - 1];
       est = `<b class="${o.dir > 0 ? "cmp" : "vnd"}">${o.dir > 0 ? "COMPRA" : "VENDA"} ARMADA</b> ${AX.esc(o.est)} · entra ${o.gatilho == null ? "a mercado no próximo candle" : (o.tipo === "limite" ? "no limite " : o.dir > 0 ? "acima de " : "abaixo de ") + "<b>" + f(o.gatilho) + "</b>"} · stop <b>${f(o.stop)}</b>${o.alvo != null ? " · alvo <b>" + f(o.alvo) + "</b>" : ""}`;
@@ -934,16 +1011,39 @@
     const chave = AX.parametros();
     if (GEST.chave !== chave || !GEST.dados) {
       el.innerHTML = '<div class="nota">comparando as gestões neste período…</div>';
-      try { GEST.dados = await AX.json("/api/gestoes?" + chave); GEST.chave = chave; } catch (e) { el.innerHTML = `<div class="nota ruim">${AX.esc(e.message)}</div>`; return; }
+      try { GEST.dados = await AX.json("/api/gestoes?stops=1&" + chave); GEST.chave = chave; } catch (e) { el.innerHTML = `<div class="nota ruim">${AX.esc(e.message)}</div>`; return; }
       if (!$("gestLado")) return;
     }
     const g = GEST.dados, D = { meta: { moeda: g.moeda } }, max = Math.max(1, ...g.linhas.map((x) => Math.abs(x.total)));
-    $("gestLado").innerHTML = `<table class="tab gl"><tr><th>Gestão</th><th class="n">Ops</th><th class="n">Acerto</th><th class="n">Resultado</th><th></th><th class="n">Pior queda</th></tr>` +
-      g.linhas.map((x) => `<tr class="clic ${x.gestao === AX.pref.gestao ? "sel" : ""}" data-g="${x.gestao}"><td>${AX.esc(x.nome)}</td><td class="n">${x.n}</td><td class="n">${AX.pct(x.acerto, 0)}</td>
-        <td class="n ${AX.cls(x.total)}">${AX.dinheiro(x.total, D, true)}</td><td class="gl-b"><i class="${x.total >= 0 ? "bom" : "ruim"}" style="width:${Math.max(2, (46 * Math.abs(x.total)) / max)}px"></i></td>
-        <td class="n">${AX.dinheiro(-x.ddMax, D)}</td></tr>`).join("") + `</table>
-      <div class="nota">Mesma estratégia, mesmo período, mesmos custos: só muda a condução depois da entrada. Clique numa linha para usar aquela gestão. Período curto engana: confira também em “3 meses” e “Tudo”.</div>`;
-    $("gestLado").querySelectorAll("tr.clic").forEach((tr) => (tr.onclick = () => AX.escolherGestao(tr.dataset.g)));
+    // Gestão (o que fazer com o ganho) × stop (como limitar a perda): cada célula é o resultado do período naquela combinação.
+    const COLS = [["base", "Stop da estratégia", "O stop técnico de cada estratégia, sem mexer."], ["curto", "Stop curto", "Nenhuma operação arrisca mais que 1 ATR: o stop largo é encurtado."],
+      ["be20", "0x0 aos 20%", "O stop sobe para a entrada assim que o preço anda 20% do caminho até o alvo."], ["curto+be20", "Curto + 0x0", "As duas regras juntas."]];
+    const cambio = g.moeda === "US$" && AX.usdbrl > 0 && AX.pref.emReais !== false ? AX.usdbrl : 1;
+    const curto = (v) => (v < 0 ? "−" : v > 0 ? "+" : "") + Math.abs(Math.round(v * cambio)).toLocaleString("pt-BR");
+    const cels = []; g.linhas.forEach((x) => COLS.forEach(([k]) => { const c = (x.stops || {})[k]; if (c && c.n) cels.push([x.gestao, k, c]); }));
+    const melhor = cels.slice().sort((a, b) => b[2].total - a[2].total)[0];
+    const seguro = cels.filter((c) => c[2].total > 0).sort((a, b) => b[2].total / Math.max(1, b[2].ddMax) - a[2].total / Math.max(1, a[2].ddMax))[0];
+    const eh = (m, x, k) => m && m[0] === x.gestao && m[1] === k;
+    const stopAtual = g.stopAtual || "base";
+    $("gestLado").innerHTML = `<table class="tab gl gl-m"><tr><th>Gestão</th><th class="n" style="display:none">Ops</th>${COLS.map(([k, nome, dica]) => `<th class="n" data-dica="${dica}">${nome}</th>`).join("")}</tr>` +
+      g.linhas.map((x) => `<tr class="clic ${x.gestao === AX.pref.gestao ? "sel" : ""}" data-g="${x.gestao}"><td>${AX.esc(x.nome)}<small>${x.n} ops</small></td><td class="n" style="display:none">${x.n}</td>` +
+        COLS.map(([k]) => { const c = (x.stops || {})[k]; if (!c) return `<td class="n">—</td>`;
+          return `<td class="n gl-c ${x.gestao === AX.pref.gestao && k === stopAtual ? "atual" : ""}" data-s="${k}" data-dica="${AX.esc(x.nome)} com ${COLS.find((z) => z[0] === k)[1].toLowerCase()}: ${c.n} operações, acerto ${AX.pct(c.acerto, 0)}, resultado ${AX.dinheiro(c.total, D, true)}, pior queda ${AX.dinheiro(-c.ddMax, D)}, perda média ${AX.dinheiro(c.perdaMedia, D)}. Clique para usar.">
+            <b class="${AX.cls(c.total)}">${curto(c.total)}</b>${eh(melhor, x, k) ? '<i class="gl-e" title="maior resultado">★</i>' : ""}${eh(seguro, x, k) && !eh(melhor, x, k) ? '<i class="gl-e seg" title="melhor resultado para a queda que exige">◆</i>' : ""}<small>queda ${curto(-c.ddMax)}</small></td>`; }).join("") + `</tr>`).join("") + `</table>
+      <div class="nota">Valores em ${cambio !== 1 || g.moeda !== "US$" ? "R$" : "US$"}. Cada célula: resultado do período e, embaixo, a pior queda. <b>★</b> maior resultado · <b>◆</b> melhor resultado para a queda que exige. Clique numa célula para usar aquela gestão com aquele stop. Mesma estratégia, mesmo período, mesmos custos. Período curto engana: confira também em “3 meses” e “Tudo”.</div>`;
+    $("gestLado").querySelectorAll("tr.clic").forEach((tr) => (tr.onclick = (e) => {
+      const td = e.target.closest("td[data-s]");
+      if (td) {                                        // célula: a gestão da linha com o stop da coluna
+        const quer = td.dataset.s === "base" ? [] : td.dataset.s.split("+"), s2 = new Set((AX.pref.prot || []).filter((p) => p !== "curto" && p !== "be20"));
+        quer.forEach((p) => s2.add(p));
+        const novo = [...s2].sort(), mudouProt = novo.join(",") !== (AX.pref.prot || []).slice().sort().join(",");
+        AX.pref.prot = novo; AX.salvarPref();
+        document.querySelectorAll("#aba-plano input[data-prot]").forEach((c) => { c.checked = novo.includes(c.dataset.prot); });
+        if (tr.dataset.g !== AX.pref.gestao) AX.escolherGestao(tr.dataset.g); else if (mudouProt) AX.emit("mudou", "plano");
+        return;
+      }
+      AX.escolherGestao(tr.dataset.g);
+    }));
   }
   // abre a comparação das gestões no painel Ao vivo (chamado pela aba IA)
   AX.abrirGestoes = () => {
@@ -951,6 +1051,7 @@
     if (AX.aba !== "vivo") AX.trocarAba("vivo"); else if (V.D) renderVivo(V.D);
     setTimeout(() => { const g = $("btGestLado"); if (g) g.scrollIntoView({ block: "center", behavior: "smooth" }); }, 80);
   };
+  AX.rerenderVivo = () => { if (V.D) renderVivo(V.D); };
   function renderVivo(D) {
     const m = D.meta, st = D.stats, k = m.iFim;
     AX.cartaoMomento($("cardVivo"), D, k);
@@ -966,7 +1067,8 @@
     if (st.n) {
       const cr = st.custoR || 0;
       html += `<div class="resumo-topo"><div><div class="grande ${AX.cls(st.total)}">${AX.dinheiro(st.total, D, true)}</div>
-          <div class="sub">${st.n} operações · acerto ${AX.pct(st.acerto, 0)} (empata com ${AX.pct(st.empate, 0)}) · ${tamanho}</div></div>${AX.seloCurto(st)}</div>
+          <div class="sub">${st.n} operações · acerto ${AX.pct(st.acerto, 0)} (empata com ${AX.pct(st.empate, 0)}) · ${tamanho}</div>
+          ${D.edN ? `<div class="sub ed-linha" data-dica="Soma do período trocando o resultado das operações que você editou no E se… pelo resultado da sua edição. Atenção: as edições foram feitas depois de ver o que o preço fez; servem para aprender, não provam que a regra funciona daqui para a frente.">✎ ${D.edN === 1 ? "Com a sua edição" : "Com as suas " + D.edN + " edições"}: <b class="${AX.cls(st.total + D.edAjuste)}">${AX.dinheiro(st.total + D.edAjuste, D, true)}</b> <span class="neutro">(o robô sozinho: ${AX.dinheiro(st.total, D, true)})</span></div>` : ""}</div>${AX.seloCurto(st)}</div>
         <canvas class="spark" id="sparkVivo"></canvas>
         <div class="kpis">
           <div><small>Média por operação${AX.q("Resultado médio de cada operação, já com custos. O “±” é a margem de erro (95%): enquanto ela for maior que a média, o resultado ainda pode ser sorte.")}</small><b class="${AX.cls(st.mediaDin)}">${AX.dinheiro(st.mediaDin, D, true)}</b><em>± ${AX.dinheiro(st.icDin, D)}</em></div>

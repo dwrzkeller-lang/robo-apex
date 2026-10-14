@@ -13,6 +13,7 @@
   const chaveOrd = (o) => o.est + "|" + o.t_sinal + "|" + o.dir;      // a mesma chave que o servidor usa nos ajustes
   const pausa = (ms) => new Promise((ok) => setTimeout(ok, ms));
   let SEL = null;                     // operação clicada: { chave, tr, ativo, tf }
+  let rolarAteDet = false;            // só rola o painel até o detalhe no momento em que a operação é escolhida
 
   // ================================================================ 1. operações no gráfico
   function indices(D, t) {            // candles do sinal, da entrada e da saída no gráfico mostrado
@@ -95,8 +96,8 @@
     for (const [x, y, c] of [[xe, yE, corLado], [xf, yX, cor]]) { ctx.fillStyle = "#0b0e14"; ctx.beginPath(); ctx.arc(x, y, 4, 0, 7); ctx.fill(); ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.stroke(); }
     const f = (v) => AX.fmt(v), hora = (i2) => (D.meta.intraday ? " · " + AX.quando(D, i2).slice(-5) : "");
     placa(ctx, `${t.dir > 0 ? "▲ COMPRA" : "▼ VENDA"} ${f(t.ent)}${hora(ix.e)}`, x1 - 6, yE, corLado, TINTA, "right", true);
-    const res = aberta ? `AGORA ${f(precoFim)} · ${AX.R((t.dir * (precoFim - t.ent)) / t.risco)}`
-      : `${ganho ? "✔" : "✖"} SAÍDA ${f(t.sai)}${hora(ix.x)} · ${AX.R(t.R)}${t.dinheiro != null ? " · " + AX.dinheiro(t.dinheiro, D, true) : ""}`;
+    const res = aberta ? `AGORA ${f(precoFim)} · ${AX.res((t.dir * (precoFim - t.ent)) / t.risco, AX.dinDeR(t, D.meta, (t.dir * (precoFim - t.ent)) / t.risco), D)}`
+      : `${ganho ? "✔" : "✖"} SAÍDA ${f(t.sai)}${hora(ix.x)} · ${AX.res2(t.R, t.dinheiro, D)}`;
     placa(ctx, res, x2 + 6, yX, cor, TINTA, "left", true);
     if (nivel >= 2) {
       const stopAgora = aberta && t.stop != null && t.stop !== stop;
@@ -162,7 +163,7 @@
     const editava = AX.replay && AX.replay.editando && AX.replay.editando();
     if (AX.replay && (editava || AX.replay.ativo())) { AX.replay.fecharEse(); AX.replay.fechar(); }
     if (!tr || (SEL && SEL.chave === chave(tr) && SEL.ativo === meta.ativo && SEL.tf === meta.tf && focar === "alternar")) SEL = null;
-    else SEL = { chave: chave(tr), tr, ativo: meta.ativo, tf: meta.tf };
+    else { SEL = { chave: chave(tr), tr, ativo: meta.ativo, tf: meta.tf }; rolarAteDet = true; }
     const D = AX.graficoMostra();
     if (SEL && focar && D && D.meta.ativo === meta.ativo && D.meta.tf === meta.tf) {
       const ix = indices(D, tr);
@@ -189,13 +190,13 @@
       ["2 · Entrada", `${t.dir > 0 ? "compra" : "venda"} de ${AX.unidade(meta, q)} em ${hora(t.t_ent)} a <b>${f(t.ent)}</b>${t.ctx ? " · " + AX.ctxTxt(t.ctx, null) : ""}`],
       ["3 · Stop", `${f(stop)}${aberta && t.stop !== stop ? ` → movido para <b>${f(t.stop)}</b>` : ""} · risco ${f(t.risco)} pts = ${din(riscoDin)}`],
       ["4 · Alvo", t.alvo != null ? `${parciais.length ? parciais.join(", ") + ", final em " : ""}${f(t.alvo)}${razao ? ` · ${AX.num(razao, 1)} : 1` : ""}` : parciais.length ? `${parciais.join(", ")}; o resto ${semFixo}` : semFixo],
-      aberta ? ["5 · Agora", `aberta · <b class="${AX.cls(t.R)}">${AX.R(t.R)}</b>${t.parcial ? " · parcial feita, stop no 0x0" : ""}${t.sair ? " · sai na abertura do próximo candle (" + AX.esc(t.sair) + ")" : ""}`]
-        : ["5 · Saída", `${hora(t.t_sai)} a <b>${f(t.sai)}</b> · ${AX.esc(t.motivo)} → <b class="${AX.cls(t.R)}">${AX.R(t.R)} = ${AX.dinheiro(t.dinheiro, { meta }, true)}</b>${t.parcial ? " · com parcial" : ""}`],
+      aberta ? ["5 · Agora", `aberta · <b class="${AX.cls(t.R)}">${AX.res(t.R, AX.dinDeR(t, meta, t.R), { meta })}</b>${t.parcial ? " · parcial feita, stop no 0x0" : ""}${t.sair ? " · sai na abertura do próximo candle (" + AX.esc(t.sair) + ")" : ""}`]
+        : ["5 · Saída", `${hora(t.t_sai)} a <b>${f(t.sai)}</b> · ${AX.esc(t.motivo)} → <b class="${AX.cls(t.R)}">${AX.res2(t.R, t.dinheiro, { meta })}</b>${t.orig ? ` <span class="neutro">(✎ sua edição; o robô sozinho: ${AX.dinheiro(t.orig.dinheiro, { meta }, true)}, ${AX.esc(t.orig.motivo)})</span>` : ""}${t.parcial ? " · com parcial" : ""}`],
     ];
     if (t.ia) linhas.push(["IA", `quando o sinal apareceu, dava <b>${AX.num(100 * t.ia[0], 0)}%</b> de chance de ganho (esperado <span class="${AX.cls(t.ia[1])}">${AX.R(t.ia[1])}</span>). Nota de um modelo que ainda não conhecia esta operação.`]);
     if (NA_MAO[t.manual]) linhas.push(["✋ Na mão", NA_MAO[t.manual] + ": esta operação não é a estratégia pura."]);
     return `<div class="op-det"><div class="botoes finos op-acoes"><button id="opReplay" class="primario" data-dica="Toca esta operação candle a candle: antes do sinal, o sinal, a ordem armada, a entrada, o stop e os alvos, até a saída. Dá para pausar e acelerar até 10x.">▶ Replay da entrada</button><button id="opEse" data-dica="Refaz esta entrada com outro stop e outro alvo, mostra o que teria acontecido e testa o mesmo ajuste nas outras operações da estratégia. Dá para salvar como lição.">✎ E se…</button></div><div id="opEseBox"></div>${linhas.map(([a, b]) => `<div><span>${a}</span><p>${b}</p></div>`).join("")}
-      ${!aberta && t.maxR != null ? `<div class="nota">Chegou a andar ${AX.R(Math.max(0, t.maxR))} a favor. Resultado já com custos e escorregamento.</div>` : ""}</div>`;
+      ${!aberta && t.maxR != null ? `<div class="nota">Chegou a andar ${AX.res(Math.max(0, t.maxR), AX.dinDeR(t, meta, Math.max(0, t.maxR)), { meta })} a favor. Resultado já com custos e escorregamento.</div>` : ""}</div>`;
   }
   function renderOps() {
     const el = $("cardOps"), D = AX.vivo.D;
@@ -206,6 +207,7 @@
     const x = T.atual(), r = x && T.det && T.det.id === x.id ? T.det : null;
     const vista = AX.pref.opsVista === "teste" && r ? "teste" : "per";
     const fonte = vista === "teste" ? r : D, meta = fonte.meta;
+    if (fonte !== D && AX.replay && AX.replay.aplicarEdicoes) AX.replay.aplicarEdicoes(fonte);
     const abertas = fonte.abertas || [], fechadas = fonte.trades;
     if (!r && !fechadas.length && !abertas.length) { el.classList.add("oculto"); return; }
     el.classList.remove("oculto");
@@ -216,22 +218,24 @@
     const linha = ([t, aberta], j) => {
       const sel = chave(t) === selAqui;
       const din = aberta ? t.R * t.risco * meta.valorPonto * (t.q != null ? t.q : meta.contratos) : t.dinheiro;
-      const ed = !aberta && AX.replay && AX.replay.edicao ? AX.replay.edicao(t, meta) : null;
       return `<div class="op${sel ? " sel" : ""}" data-j="${j}">
           <span class="op-h">${AX.quandoT(t.t_ent, meta.intraday)}</span><span class="op-e">${t.est}</span>
           <span class="${t.dir > 0 ? "bom" : "ruim"}">${t.dir > 0 ? "C" : "V"}</span>
-          <span class="op-m">${ed ? `<span class="op-ed ${AX.cls(ed.R)}" data-dica="Sua última edição no E se…: com o stop e o alvo que você escolheu, esta operação daria ${AX.R(ed.R)}. O resultado original (à direita) e as estatísticas não mudam.">✎ ${AX.R(ed.R, 1)}</span> ` : ""}${aberta ? '<i class="luz vivo"></i> aberta' : AX.esc(t.motivo)}${t.manual ? " ✋" : ""}</span>
-          <b class="${AX.cls(t.R)}">${AX.R(t.R, 1)}</b><b class="op-d ${AX.cls(din)}">${AX.dinheiro(din, { meta }, true)}</b>
+          <span class="op-m">${t.orig ? `<span class="op-ed" data-dica="Operação editada por você no E se…. O resultado mostrado é o da sua edição; o robô sozinho fez ${AX.dinheiro(t.orig.dinheiro, { meta }, true)} (${AX.esc(t.orig.motivo)}).">✎</span> ` : ""}${aberta ? '<i class="luz vivo"></i> aberta' : AX.esc(t.motivo)}${t.manual ? " ✋" : ""}</span>
+          <b class="${AX.cls(t.R)}">${AX.emR() ? AX.R(t.R, 1) : ""}</b><b class="op-d ${AX.cls(din)}">${AX.dinheiro(din, { meta }, true)}</b>
         </div>${sel ? comoFoi(t, meta, aberta) : ""}`;
     };
     const total = fechadas.length + abertas.length;
+    const listaAnt = el.querySelector(".ops"), rolAnt = listaAnt ? listaAnt.scrollTop : 0;
     el.innerHTML = `<div class="rot"><svg class="ic" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>OPERAÇÕES${r ? `<span class="seg mini dir" id="opsVista"><button data-v="teste" class="${vista === "teste" ? "on" : ""}">Teste ao vivo (${r.trades.length + r.abertas.length})</button><button data-v="per" class="${vista === "per" ? "on" : ""}">Período (${D.trades.length + D.abertas.length})</button></span>`
       : `<span class="dir">${total} no período</span>`}</div>
       ${linhas.length ? `<div class="ops">${linhas.map(linha).join("")}</div>` : `<div class="nota">${vista !== "teste" ? "Nenhuma operação ainda." : x.ate ? "Este teste terminou sem nenhuma operação." : "Nenhuma operação ainda neste teste: o robô está esperando o setup."}</div>`}
       <div class="nota">${linhas.length ? "Clique numa operação para ver no gráfico como ela foi feita." : ""}${total > linhas.length ? ` Mostrando as ${linhas.length} mais recentes; todas estão na aba Simulação.` : ""}</div>`;
     el.querySelectorAll(".op").forEach((d) => (d.onclick = () => selecionar(linhas[+d.dataset.j][0], meta, "alternar")));
-    const det = el.querySelector(".op-det");
-    if (det) det.scrollIntoView({ block: "nearest" });
+    const det = el.querySelector(".op-det"), listaNova = el.querySelector(".ops");
+    if (listaNova) listaNova.scrollTop = rolAnt;             // refazer a lista (a cada atualização ao vivo) não mexe na rolagem
+    if (det && rolarAteDet) det.scrollIntoView({ block: "nearest" });
+    rolarAteDet = false;
     const escolhida = linhas.find(([t]) => chave(t) === selAqui);
     if (escolhida && AX.replay) {
       const br = $("opReplay"), be = $("opEse");
@@ -282,7 +286,7 @@
     const f = (v) => AX.fmt(v, ev.dec), lado = ev.dir > 0 ? "COMPRA" : "VENDA";
     if (ev.tipo === "ordem") return `${ev.est} · ${lado} armada ${ev.gatilho == null ? "a mercado no próximo candle" : (ev.ordem === "limite" ? "limitada em " : ev.dir > 0 ? "acima de " : "abaixo de ") + f(ev.gatilho)}`;
     if (ev.tipo === "entrada") return `${ev.est} · ${lado} executada a ${f(ev.ent)}`;
-    return `${ev.est} · saiu (${ev.motivo}) ${AX.R(ev.R)} = ${AX.dinheiro(ev.dinheiro, { meta: { moeda: ev.moeda } }, true)}`;
+    return `${ev.est} · saiu (${ev.motivo}) ${AX.res2(ev.R, ev.dinheiro, { meta: { moeda: ev.moeda } })}`;
   }
   function anunciar(novos) {
     const peso = { ordem: 1, entrada: 2, saida: 3 };
@@ -538,7 +542,7 @@
       const cls = ev.tipo === "saida" ? (ev.ganho ? "ganho" : "perda") : ev.tipo;
       const oque = ev.tipo === "ordem" ? `<b class="${ev.dir > 0 ? "cmp" : "vnd"}">${lado}</b> armada ${ev.gatilho == null ? "a mercado" : (ev.ordem === "limite" ? "limitada em " : ev.dir > 0 ? "acima de " : "abaixo de ") + f(ev.gatilho)}`
         : ev.tipo === "entrada" ? `<b class="${ev.dir > 0 ? "cmp" : "vnd"}">${lado}</b> executada a ${f(ev.ent)}`
-          : `saiu: ${AX.esc(ev.motivo || "")} <b class="${AX.cls(ev.R)}">${AX.R(ev.R)}</b> <span class="${AX.cls(ev.dinheiro)}">${AX.dinheiro(ev.dinheiro, { meta: { moeda: ev.moeda } }, true)}</span>`;
+          : `saiu: ${AX.esc(ev.motivo || "")} <b class="${AX.cls(ev.R)}">${AX.res2(ev.R, ev.dinheiro, { meta: { moeda: ev.moeda } })}</b>`;
       const ia = ev.ia && ev.tipo !== "saida" ? `<span class="sn-ia ${ev.iaOk ? "ok" : ""}" data-dica="Chance de ganho estimada pela IA quando o sinal apareceu${ev.iaOk ? " (modelo aprovado fora da amostra neste ativo)." : ". Neste ativo a IA ainda não acertou mais que o acaso: é só leitura."}">IA ${AX.num(100 * ev.ia[0], 0)}%</span>` : "";
       return `<div class="sn ${cls}${ev.seq > T.visto ? " novo" : ""}" data-j="${j}" data-dica="Abrir este ativo e este teste no gráfico">
         <i class="sn-p"></i><span class="sn-h">${dia === hoje ? "" : dia + " "}${AX.horaBR(ev.quando)}</span>
@@ -589,7 +593,8 @@
     if (!drag.ok) return `${nome} ${f} · ${a.tipo === "stop" ? "o stop não pode passar para o lado do ganho" : "o alvo não pode passar para o lado da perda"}`;
     if (a.pos && a.risco > 0) {
       const r = (a.dir * (preco - a.ent)) / a.risco;
-      return `${nome} ${f} · ${a.tipo === "stop" ? (r >= 0 ? "garante " : "perde ") + AX.R(r) : "ganha " + AX.R(r)} · solte para mover`;
+      const mm = AX.vivo.D && AX.vivo.D.meta, v = AX.emR() || !mm ? AX.R(Math.abs(r)).replace("+", "") : AX.dinheiro(Math.abs(AX.dinDeR(a, mm, r)), { meta: mm });
+      return `${nome} ${f} · ${a.tipo === "stop" ? (r >= 0 ? "garante " : "perde ") : "ganha "}${v} · solte para mover`;
     }
     return `${nome} ${f} · solte para mover`;
   }

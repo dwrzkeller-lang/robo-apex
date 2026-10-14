@@ -101,7 +101,7 @@
 
     // ---- o que cada regra fez
     const NOMES = { seletivo: "Modo seletivo", tam: "Tamanho pelo risco", lossDia: "Parar o dia na perda", metaDia: "Parar o dia no ganho",
-      prot_corte: "Corte antecipado", prot_forca: "Perdeu força", prot_folga: "Folga no stop", prot_tol: "Tolerância de +20%" };
+      prot_curto: "Stop curto (1 ATR)", prot_be20: "0x0 aos 20%", prot_corte: "Corte antecipado", prot_forca: "Perdeu força", prot_folga: "Folga no stop", prot_tol: "Tolerância de +20%" };
     const cel = (x) => `<td class="n">${x.n}</td><td class="n ${AX.cls(x.total)}">${din(x.total, true)}</td><td class="n ruim">${din(-x.ddMax)}</td>`;
     let e = `<div class="rot">O QUE CADA REGRA FEZ NO PERÍODO</div>
       <table class="tab"><tr><th>Regra</th><th></th><th class="n">Ops</th><th class="n">Resultado</th><th class="n">Pior queda</th></tr>`;

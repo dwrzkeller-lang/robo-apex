@@ -27,7 +27,11 @@ from ia import caracteristicas
 
 FOLGA_PCT = 0.00015        # folga atras do stop tecnico: 0,015% do preco (20 pontos com o indice em 130 mil)
 TOL_FRAC = 0.20            # tolerancia extra de stop quando o sinal e a favor do diario e limpo
-PROTECOES = {"folga": "Folga no stop (0,015% do preço atrás do stop técnico)", "tol": "Tolerância de +20% no stop em sinal forte",
+STOP_MAX_ATR = 1.0         # "stop curto": o risco de qualquer operacao fica limitado a 1 ATR
+STOP_MAX_MODO = "encurta"  # "encurta" = traz o stop para 1 ATR; "pula" = nao opera quando o stop tecnico passa disso
+BE_FRAC = 0.20             # "0x0 aos 20%": o stop vai para a entrada quando o preco anda 20% do caminho ate o alvo
+PROTECOES = {"curto": "Stop curto: risco de no máximo 1 ATR por operação (o stop largo é encurtado)",
+             "be20": "Stop na entrada (0x0) assim que o preço andar 20% do caminho até o alvo", "folga": "Folga no stop (0,015% do preço atrás do stop técnico)", "tol": "Tolerância de +20% no stop em sinal forte",
              "corte": "Corte antecipado em meia perda quando volta contra com força", "forca": "Stop para −20% ou 0x0 quando perde força"}
 TRAIL_ATR = 2.0            # trailing stop: distancia do stop ate o melhor preco, em ATR
 
@@ -410,10 +414,17 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                     novo = ent if p["maxfav"] - ent >= 0.5 * dist else ent - 0.2 * R
             if "corte" in prot and novo is None and fraco and c < ent - 0.25 * R and (c - l) <= (h - l) / 3.0:
                 novo = ent - 0.5 * R                       # voltou contra com forca logo depois da entrada: corta em meia perda
+            porque = "saída antecipada (perdeu força)"
+            if "be20" in prot and (novo is None or novo < ent):
+                # andou 20% do caminho ate o alvo (sem alvo fixo: 20% de 2 vezes o risco): o stop sobe para a entrada.
+                # Vale a partir do fechamento deste candle; se ele ja fechou de volta abaixo da entrada, sai no proximo.
+                dist = (p["alvo"] - ent) if p["alvo"] is not None else 2.0 * R
+                if dist > 0 and p["maxfav"] - ent >= BE_FRAC * dist:
+                    novo, porque = ent, "voltou à entrada depois de andar 20% do caminho"
             if novo is not None:
                 novo = Gp.abaixo(novo)
                 if c <= novo:
-                    p["sair"] = "saída antecipada (perdeu força)"
+                    p["sair"] = porque
                 elif novo > p["stop"]:
                     p["stop"] = novo
         if g == "trail_atr":                                # o stop acompanha o melhor preco a TRAIL_ATR x ATR, so sobe
@@ -546,6 +557,16 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                     od["er"] = round(G.er[i], 2)
                     if seletivo and not passa_seletivo(G, cod, i, od["dir"]):
                         continue
+                    if "curto" in prot and G.atr[i]:
+                        # limite de risco: nenhum stop fica a mais de 1 ATR da entrada. Os alvos em preco (Fibonacci, gap)
+                        # nao mudam; os alvos em multiplos do risco (2:1, 3:1...) passam a valer sobre o risco menor.
+                        ref0 = od["gatilho"] if od["gatilho"] is not None else G.c[i]
+                        teto = max(2 * tick, round(STOP_MAX_ATR * G.atr[i] / tick) * tick)
+                        if abs(ref0 - od["stop"]) > teto + tick / 2:
+                            if STOP_MAX_MODO == "pula":
+                                continue
+                            od["stop"] = ref0 - od["dir"] * teto
+                            od["info"] = (od.get("info") or "") + " · stop encurtado para 1 ATR"
                     if "folga" in prot or "tol" in prot:
                         ref0 = od["gatilho"] if od["gatilho"] is not None else G.c[i]
                         tec = abs(ref0 - od["stop"])

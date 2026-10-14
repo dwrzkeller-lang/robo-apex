@@ -157,6 +157,8 @@
         </div>
         <label class="chk" style="margin-top:10px"><input type="checkbox" id="plSeletivo"> <span><b>Modo seletivo</b>: só opera a favor da tendência do diário e, nas estratégias de correção, só com movimento limpo</span></label>
         <div class="campo" style="margin-top:10px"><span>Proteções do stop <i class="q" data-dica="Quatro regras para perder menos quando a operação dá errado. Cada uma muda o resultado: veja logo abaixo, em “O que cada regra fez”, a mesma simulação com e sem ela no período do topo. Nos testes com 48 mil operações elas diminuíram a perda média, mas também aumentaram o número de perdas; nenhuma virou o resultado sozinha."></i></span></div>
+        <label class="chk"><input type="checkbox" data-prot="curto"> <span><b>Stop curto</b>: nenhuma operação arrisca mais que 1 ATR (o movimento médio de um candle); o stop largo de uma estratégia é trazido para essa distância</span></label>
+        <label class="chk"><input type="checkbox" data-prot="be20"> <span><b>0x0 aos 20%</b>: o stop sobe para a entrada assim que o preço anda 20% do caminho até o alvo</span></label>
         <label class="chk"><input type="checkbox" data-prot="corte"> <span><b>Corte antecipado</b>: voltou contra com força logo depois da entrada, o stop vem para meia perda</span></label>
         <label class="chk"><input type="checkbox" data-prot="forca"> <span><b>Perdeu força</b>: andou 25% do caminho e enfraqueceu, o stop vem para −20%; se já andou metade, vai para a entrada (0x0)</span></label>
         <label class="chk"><input type="checkbox" data-prot="folga"> <span><b>Folga no stop</b>: 0,015% do preço atrás do stop técnico (20 pontos com o índice em 130 mil), para não ser tirado por um toque</span></label>

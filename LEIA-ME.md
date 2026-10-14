@@ -15,6 +15,33 @@ Zarattini & Aziz, fechamento de gap e o momentum intraday da "faixa de ruído").
 
 ---
 
+## Novidades da versão 2.6
+
+- **Tudo em reais:** os resultados aparecem em dinheiro (placas do gráfico, lista de operações, painel do momento,
+  replay e "E se…"), no lugar de "R". Ativos cotados em dólar são convertidos pelo dólar do dia, e o capital e os
+  limites do Plano valem em reais. Quem prefere ver em R troca no botão direito do gráfico.
+- **Botão direito no gráfico:** cor do fundo (6 prontas ou qualquer cor), linhas verticais e horizontais, mira presa no
+  candle, linha do preço atual, centralizar, ver o período inteiro e restaurar o padrão. Fica salvo por usuário.
+- **Gestão × stop:** em **comparar todas**, cada gestão aparece com quatro jeitos de stop: o da estratégia, **stop
+  curto** (risco de no máximo 1 ATR), **0x0 aos 20%** (o stop sobe para a entrada quando o preço anda 20% do caminho
+  até o alvo) e os dois juntos. Cada célula mostra o resultado do período e a pior queda; ★ marca o maior resultado e
+  ◆ o melhor resultado para a queda que exige. Clicar na célula liga aquela combinação. As duas regras também estão
+  na aba Plano.
+  - **O teste, sem enfeite** (18 estratégias, 11 ativos, 5/15/60 min, 39 mil operações, com custos): o stop curto
+    baixou a perda média em 17% e o acerto de 38% para 35%; o 0x0 aos 20% baixou a perda média em 26% e o acerto para
+    31%; os dois juntos, perda média 42% menor e acerto de 25%. **Em nenhum dos casos a soma melhorou**: perde-se
+    menos por operação, mas perde-se mais vezes. Por isso vêm desligadas: use a tabela para ver ativo por ativo.
+- **"E se…" entra nos resultados:** a operação editada passa a valer com o resultado da sua edição na lista, no
+  gráfico e num total à parte ("Com as suas edições"), ao lado do total do robô sozinho. Cada edição vira uma lição
+  automática na aba IA. Lembrete: a edição é feita depois de ver o que o preço fez; serve para aprender, não prova a regra.
+- **Corrigido: marcações fora do lugar.** Em monitores com escala diferente de 100%, as caixas e placas das operações
+  podiam aparecer deslocadas dos candles (o navegador recriava a camada de desenho sem a escala). Agora a escala é
+  reposta a cada quadro.
+- **Corrigido: painel lateral "pulando".** Com uma operação aberta, a lista voltava sozinha para ela a cada
+  atualização. Agora só rola no momento em que você escolhe a operação, e a lista mantém a posição.
+
+![Gestão e stops](prints/26_GESTAO_E_STOPS.png)
+
 ## Novidades da versão 2.5
 
 - **3 estratégias novas (E16, E17 e E18)**, todas na leitura de **fundos ascendentes + perna do pivô + projeção de

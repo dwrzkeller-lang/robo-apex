@@ -615,3 +615,31 @@ table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nu
 .ese-res em { display: block; font-style: normal; font-size: 11px; color: var(--txt2); white-space: normal; }
 
 .op .op-ed { font-weight: 700; border: 1px solid currentColor; border-radius: 5px; padding: 0 4px; margin-right: 2px; }
+
+/* menu do botão direito no gráfico */
+.menu-graf { position: fixed; z-index: 80; width: 290px; background: #101622; border: 1px solid var(--linha); border-radius: 10px; padding: 10px 12px;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .55); font-size: 12.5px; color: var(--txt); }
+.menu-graf .mg-tit { font-size: 10px; letter-spacing: .6px; color: var(--txt2); margin: 8px 0 5px; }
+.menu-graf .mg-tit:first-child { margin-top: 0; }
+.menu-graf .mg-l { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.menu-graf .mg-cores { display: flex; align-items: center; gap: 5px; }
+.menu-graf .mg-cores button { width: 20px; height: 20px; border-radius: 50%; border: 2px solid #3a4557; padding: 0; cursor: pointer; }
+.menu-graf .mg-cores button.on { border-color: var(--azul, #4795f1); box-shadow: 0 0 0 2px rgba(71, 149, 241, .35); }
+.menu-graf input[type=color] { width: 26px; height: 22px; padding: 0; border: 1px solid var(--linha); background: none; cursor: pointer; }
+.menu-graf .chk { display: flex; gap: 7px; align-items: flex-start; margin: 4px 0; cursor: pointer; }
+.menu-graf .mg-b { display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--txt); padding: 6px 6px; border-radius: 6px; cursor: pointer; font-size: 12.5px; }
+.menu-graf .mg-b:hover { background: #18202e; }
+/* fundo claro: a legenda por cima do gráfico escurece para continuar legível */
+.grafico.fundo-claro .legenda, .grafico.fundo-claro .legenda b { color: #1b2431; }
+.resumo-topo .ed-linha { margin-top: 4px; color: var(--txt); }
+.op .op-ed { color: #ffd166; }
+
+/* gestão × stop */
+.tab.gl-m td small, .tab.gl-m th small { display: block; font-size: 10px; color: var(--txt2); font-weight: 400; }
+.tab.gl-m th { font-size: 10.5px; white-space: normal; line-height: 1.15; vertical-align: bottom; }
+.tab.gl-m td.gl-c { cursor: pointer; border-radius: 6px; }
+.tab.gl-m td.gl-c:hover { background: #18202e; }
+.tab.gl-m td.gl-c.atual { outline: 1px solid var(--azul, #4795f1); outline-offset: -1px; }
+.tab.gl-m .gl-e { font-style: normal; color: #ffd166; margin-left: 2px; font-size: 11px; }
+.tab.gl-m .gl-e.seg { color: #5eead4; }
+.grafico.fundo-claro .legenda { background: rgba(255, 255, 255, .86); }

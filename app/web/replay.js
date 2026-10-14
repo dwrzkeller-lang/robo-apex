@@ -18,8 +18,8 @@
     if (k === R.is) return ["2 de 6", `SINAL: este candle fechou e a ${t.est} armou a ${lado}.`];
     if (k < R.ie) return ["3 de 6", `Ordem armada: ${lado} em ${AX.fmt(t.ent)}, stop em ${AX.fmt(t.stop_ini ?? t.stop)}${t.alvo != null ? ", alvo em " + AX.fmt(t.alvo) : ""}. Esperando o preço chegar.`];
     if (k === R.ie) return ["4 de 6", `ENTRADA executada a ${AX.fmt(t.ent)}. O stop já está colocado em ${AX.fmt(t.stop_ini ?? t.stop)}.`];
-    if (R.aberta || k < R.ix) return ["5 de 6", `Em andamento: ${AX.R((t.dir * (R.D.c[k] - t.ent)) / t.risco)} agora.`];
-    return ["6 de 6", `SAÍDA a ${AX.fmt(t.sai)} (${t.motivo}): ${AX.R(t.R)}${t.dinheiro != null ? " = " + AX.dinheiro(t.dinheiro, R.D, true) : ""}.`];
+    if (R.aberta || k < R.ix) return ["5 de 6", `Em andamento: ${AX.res((t.dir * (R.D.c[k] - t.ent)) / t.risco, AX.dinDeR(t, R.D.meta, (t.dir * (R.D.c[k] - t.ent)) / t.risco), R.D)} agora.`];
+    return ["6 de 6", `SAÍDA a ${AX.fmt(t.sai)} (${t.motivo}): ${AX.res2(t.R, t.dinheiro, R.D)}.`];
   }
   function pintarBarra() {
     if (!barra) return;
@@ -142,6 +142,7 @@
     return { R: pts / risco, pts, motivo, i_sai: i, sai, risco, dinheiro: pts * (m.valorPonto || 1) * (t.q != null ? t.q : m.contratos || 1) };
   }
   const L = { lista: null };
+  const O = (t) => t.orig || t;               // a operação como o robô fez (antes de uma edição do "e se…")
   async function licoes() {
     if (L.lista) return L.lista;
     try { const v = await AX.api.get("licoes"); L.lista = Array.isArray(v) ? v : []; } catch (e) { L.lista = []; }
@@ -152,9 +153,9 @@
     let n = 0, antes = 0, depois = 0, viraram = 0, pioraram = 0;
     for (const t of lista || D.trades) {
       if (t.est !== est) continue;
-      const s0 = t.stop_ini ?? t.stop, risco0 = Math.abs(t.ent - s0);
+      const o = O(t), s0 = o.stop_ini ?? o.stop, risco0 = Math.abs(t.ent - s0);
       const stop = t.ent - t.dir * risco0 * fs, alvo = ra > 0 ? t.ent + t.dir * risco0 * fs * ra : null;
-      const base = refazer(D, t, s0, t.alvo), novo = refazer(D, t, stop, alvo);
+      const base = refazer(D, t, s0, o.alvo), novo = refazer(D, t, stop, alvo);
       if (!base || !novo) continue;
       n++; antes += base.dinheiro; depois += novo.dinheiro;
       if (base.dinheiro <= 0 && novo.dinheiro > 0) viraram++;
@@ -169,6 +170,7 @@
   async function carregarEd() {
     if (ED.mapa) return;
     try { const v = await AX.api.get("edicoes"); ED.mapa = v && typeof v === "object" && !Array.isArray(v) ? v : {}; } catch (e) { ED.mapa = {}; }
+    refletir();
     if (AX.ops && AX.ops.atualizar) AX.ops.atualizar();
   }
   function gravarEd() {
@@ -179,10 +181,49 @@
       try { await AX.api.set("edicoes", ED.mapa); } catch (e) { AX.toast("Não consegui salvar a edição: " + e.message, "erro"); }
     }, 500);
   }
+  // Cada edição vira também uma lição automática (aba IA, "Suas lições"): é assim que o robô aprende com o que você muda.
+  const mesmaOp = (x, tr, meta) => x.auto && x.ativo === meta.ativo && +x.tf === +meta.tf && x.est === tr.est && x.t_ent === tr.t_ent;
+  async function licaoAuto(tr, meta, item) {
+    const lista = (await licoes()).filter((x) => !mesmaOp(x, tr, meta));
+    if (item) lista.push(item);
+    L.lista = lista.slice(-200);
+    try { await AX.api.set("licoes", L.lista); } catch (e) { /* a edição já foi salva; a lição tenta de novo na próxima */ }
+    if (AX.aba === "ia") renderLicoes();
+  }
+  function refletir() {                // os resultados da tela passam a contar com as edições
+    aplicarEdicoes(AX.vivo.D);
+    if (AX.rerenderVivo) AX.rerenderVivo();
+    AX.redesenhar();
+  }
   function salvarEd() {
     if (!E.tr || !E.res || !ED.mapa) return;
-    ED.mapa[chaveEd(E.tr, E.meta)] = { stop: E.stop, alvo: E.alvo, R: +E.res.R.toFixed(2), din: +E.res.dinheiro.toFixed(2), q: Date.now() };
-    gravarEd();
+    const tr = E.tr, meta = E.meta, r = E.res;
+    ED.mapa[chaveEd(tr, meta)] = { stop: E.stop, alvo: E.alvo, R: +r.R.toFixed(2), din: +r.dinheiro.toFixed(2), q: Date.now() };
+    gravarEd(); refletir();
+    if (E.g) licaoAuto(tr, meta, { quando: Date.now(), auto: true, ativo: meta.ativo, tf: +meta.tf, est: tr.est, dir: tr.dir, t_ent: tr.t_ent, fs: +E.fs.toFixed(3), ra: +E.ra.toFixed(2),
+      antes: +(+O(tr).R).toFixed(2), depois: +r.R.toFixed(2), nota: "", geral: { n: E.g.n, antes: Math.round(E.g.antes), depois: Math.round(E.g.depois) } });
+  }
+  // Troca, nas operações de F (o período na tela ou um teste ao vivo), o resultado das que têm edição salva pelo resultado
+  // da edição, refeito nos candles reais. O que o robô fez fica guardado em t.orig; F.edN e F.edAjuste dizem quantas
+  // foram trocadas e quanto isso muda a soma.
+  function aplicarEdicoes(F) {
+    if (!F || !F.trades || !ED.mapa) return;
+    const D = AX.vivo.D && AX.vivo.D.meta.ativo === F.meta.ativo && +AX.vivo.D.meta.tf === +F.meta.tf ? AX.vivo.D : (F.t ? F : null);
+    let n = 0, aj = 0;
+    for (const t of F.trades) {
+      const ed = ED.mapa[chaveEd(t, F.meta)];
+      const volta = () => { if (t.orig) { Object.assign(t, t.orig); delete t.orig; } };
+      if (!ed || !D) { volta(); continue; }
+      const o = t.orig || { R: t.R, dinheiro: t.dinheiro, sai: t.sai, motivo: t.motivo, t_sai: t.t_sai, i_sai: t.i_sai, stop: t.stop, stop_ini: t.stop_ini,
+        alvo: t.alvo, alvo1: t.alvo1, alvo2: t.alvo2, risco: t.risco, maxR: t.maxR };
+      const r = refazer(D, t, ed.stop, ed.alvo);
+      if (!r || r.motivo === "ainda aberta") { volta(); continue; }
+      const mesmoQuadro = t.i_ent != null && D.t[t.i_ent] === t.t_ent;
+      Object.assign(t, { orig: o, R: r.R, dinheiro: r.dinheiro, sai: r.sai, motivo: r.motivo, t_sai: D.t[r.i_sai], i_sai: mesmoQuadro ? r.i_sai : o.i_sai,
+        stop: ed.stop, stop_ini: ed.stop, alvo: ed.alvo, alvo1: null, alvo2: null, risco: r.risco, maxR: null });
+      n++; aj += r.dinheiro - o.dinheiro;
+    }
+    F.edN = n; F.edAjuste = aj;
   }
   // Hipótese em edição: a operação com o stop e o alvo que o usuário escolheu (arrastando no gráfico ou digitando).
   const E = { tr: null, meta: null, stop: null, alvo: null, res: null, hip: null, box: null, drag: null };
@@ -203,11 +244,11 @@
     if (document.activeElement !== $("eseAlvo")) $("eseAlvo").value = f(E.alvo);
     const r = E.res;
     if (!r) { el.innerHTML = '<span class="ruim">O stop tem de ficar do lado da perda e o alvo do lado do ganho.</span>'; AX.redesenhar(); return; }
-    const s0 = t.stop_ini ?? t.stop, fs = r.risco / Math.abs(t.ent - s0), ra = E.alvo != null ? Math.abs(E.alvo - t.ent) / r.risco : 0;
+    const o = O(t), s0 = o.stop_ini ?? o.stop, fs = r.risco / Math.abs(t.ent - s0), ra = E.alvo != null ? Math.abs(E.alvo - t.ent) / r.risco : 0;
     const g = generalizar(D, t.est, fs, ra, E.lista);
     E.fs = fs; E.ra = ra; E.g = g;
-    el.innerHTML = `<div class="ese-res"><div><small>Original</small><b class="${AX.cls(t.R)}">${AX.R(t.R)}</b><em>${AX.esc(t.motivo || "aberta")}</em></div>
-        <div><small>Com o seu ajuste</small><b class="${AX.cls(r.R)}">${AX.R(r.R)}</b><em>${AX.dinheiro(r.dinheiro, D, true)} · ${AX.esc(r.motivo)} em ${AX.quando(D, r.i_sai).slice(-5)}</em></div>
+    el.innerHTML = `<div class="ese-res"><div><small>O robô sozinho</small><b class="${AX.cls(o.R)}">${AX.res(o.R, o.dinheiro, D)}</b><em>${AX.esc(o.motivo || "aberta")}</em></div>
+        <div><small>Com o seu ajuste</small><b class="${AX.cls(r.R)}">${AX.res(r.R, r.dinheiro, D)}</b><em>${AX.emR() ? AX.dinheiro(r.dinheiro, D, true) + " · " : ""}${AX.esc(r.motivo)} em ${AX.quando(D, r.i_sai).slice(-5)}</em></div>
         <div><small>Nas ${g.n} operações da ${AX.esc(t.est)}</small><b class="${AX.cls(g.depois - g.antes)}">${AX.dinheiro(g.depois - g.antes, D, true)}</b><em>de ${AX.dinheiro(g.antes, D, true)} para ${AX.dinheiro(g.depois, D, true)}</em></div></div>
       <div class="nota">Stop a ${AX.num(fs, 2)}× a distância original${ra ? " · alvo a " + AX.num(ra, 1) + " : 1" : " · sem alvo"} · no conjunto, ${g.viraram} perda(s) viraram ganho e ${g.pioraram} ganho(s) viraram perda.
         <span class="${g.depois > g.antes ? "bom" : "alerta"}">${g.depois > g.antes ? "Melhorou o conjunto: vale testar como regra." : "No conjunto não melhorou: a correção só funciona olhando esta operação depois que ela aconteceu."}</span></div>`;
@@ -236,13 +277,13 @@
     const D = AX.vivo.D;
     if (!D || D.meta.ativo !== meta.ativo || +D.meta.tf !== +meta.tf || AX.idxT(D, tr.t_ent) < 0) return AX.toast("Abra este ativo e este tempo gráfico para editar a operação.", "aviso");
     if (R.on) fechar();
-    const s0 = tr.stop_ini ?? tr.stop, risco0 = Math.abs(tr.ent - s0);
-    Object.assign(E, { tr, meta, stop: s0, alvo: tr.alvo != null ? tr.alvo : tr.ent + tr.dir * 2 * risco0, box: alvoEl, lista: lista || null });
+    const s0 = O(tr).stop_ini ?? O(tr).stop, risco0 = Math.abs(tr.ent - s0);
+    Object.assign(E, { tr, meta, stop: s0, alvo: O(tr).alvo != null ? O(tr).alvo : tr.ent + tr.dir * 2 * risco0, box: alvoEl, lista: lista || null });
     const ed = ED.mapa && ED.mapa[chaveEd(tr, meta)];         // a última edição desta operação volta como foi deixada
     if (ed && ed.stop > 0 && tr.dir * (tr.ent - ed.stop) > 0 && (ed.alvo == null || tr.dir * (ed.alvo - tr.ent) > 0)) { E.stop = ed.stop; E.alvo = ed.alvo; }
     alvoEl.innerHTML = `<div class="ese"><div class="manual-tit">E SE… ${AX.q("Arraste no gráfico as linhas ⇕ STOP e ⇕ ALVO desta operação (ou digite os preços). O robô refaz a entrada nos candles reais, com os mesmos custos, e aplica o mesmo ajuste a todas as operações desta estratégia no período, para mostrar se a correção vale no geral ou só aqui.")}
         <span class="dir"><button id="eseFechar" class="mini-btn">✕ fechar</button></span></div>
-      <div class="nota" style="margin:0 0 6px"><b>Arraste no gráfico</b> as linhas ⇕ STOP e ⇕ ALVO, ou digite. A última edição fica salva nesta operação.</div>
+      <div class="nota" style="margin:0 0 6px"><b>Arraste no gráfico</b> as linhas ⇕ STOP e ⇕ ALVO, ou digite. A edição fica salva, entra nos resultados do período e vira lição para a IA.</div>
       <div class="ese-campos"><label class="campo"><span>Stop</span><input type="text" inputmode="decimal" id="eseStop" autocomplete="off"></label>
         <label class="campo"><span>Alvo</span><input type="text" inputmode="decimal" id="eseAlvo" autocomplete="off" placeholder="vazio = sem alvo"></label></div>
       <div id="eseRes"></div>
@@ -253,13 +294,13 @@
     const digitou = () => { const st = num("eseStop"), al = num("eseAlvo"); if (!(st > 0) || Number.isNaN(al)) return AX.toast("Não entendi o preço.", "aviso"); E.stop = st; E.alvo = al; montarHip(); pintarEse(); enquadrarEse(); salvarEd(); };
     for (const id of ["eseStop", "eseAlvo"]) { $(id).onchange = digitou; $(id).onkeydown = (e) => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); $(id).blur(); } }; }
     $("eseFechar").onclick = (e) => { e.stopPropagation(); fecharEse(); };
-    $("eseOrig").onclick = () => { E.stop = s0; E.alvo = tr.alvo != null ? tr.alvo : tr.ent + tr.dir * 2 * risco0; montarHip(); pintarEse(); enquadrarEse();
-      if (ED.mapa && ED.mapa[chaveEd(tr, meta)]) { delete ED.mapa[chaveEd(tr, meta)]; gravarEd(); } };
+    $("eseOrig").onclick = () => { E.stop = s0; E.alvo = O(tr).alvo != null ? O(tr).alvo : tr.ent + tr.dir * 2 * risco0; montarHip(); pintarEse(); enquadrarEse();
+      if (ED.mapa && ED.mapa[chaveEd(tr, meta)]) { delete ED.mapa[chaveEd(tr, meta)]; gravarEd(); refletir(); licaoAuto(tr, meta, null); } };
     $("eseReplay").onclick = () => { if (!E.hip) return AX.toast("Ajuste o stop e o alvo primeiro.", "aviso"); tocar(E.hip, meta); };
     $("eseSalvar").onclick = async () => {
       if (!E.res) return;
       const lista = await licoes(), r = E.res;
-      lista.push({ quando: Date.now(), ativo: meta.ativo, tf: +meta.tf, est: tr.est, dir: tr.dir, t_ent: tr.t_ent, fs: +E.fs.toFixed(3), ra: +E.ra.toFixed(2), antes: +(+tr.R).toFixed(2), depois: +r.R.toFixed(2),
+      lista.push({ quando: Date.now(), ativo: meta.ativo, tf: +meta.tf, est: tr.est, dir: tr.dir, t_ent: tr.t_ent, fs: +E.fs.toFixed(3), ra: +E.ra.toFixed(2), antes: +(+O(tr).R).toFixed(2), depois: +r.R.toFixed(2),
         nota: String($("eseNota").value || "").slice(0, 200), geral: { n: E.g.n, antes: Math.round(E.g.antes), depois: Math.round(E.g.depois) } });
       L.lista = lista.slice(-200);
       try { await AX.api.set("licoes", L.lista); AX.toast("Lição salva. Ela aparece na aba IA, em Suas lições.", "ok"); renderLicoes(); }
@@ -343,7 +384,7 @@
   }
 
   AX.replay = { tocar, fechar, ativo: () => R.on, painelEse, refazer, generalizar, hipotese: () => (E.tr && E.box ? E.hip : null), editando: () => !!(E.tr && E.box), fecharEse,
-    edicao: (tr, meta) => (ED.mapa && ED.mapa[chaveEd(tr, meta)]) || null };
+    edicao: (tr, meta) => (ED.mapa && ED.mapa[chaveEd(tr, meta)]) || null, aplicarEdicoes };
   AX.on("carregado", carregarEd);
   AX.on("aba", (n) => { if (n !== "vivo") fecharEse(); if (R.on && n !== "vivo") fechar(); if (n === "ia") renderLicoes(); });
   AX.on("mudou", () => { fecharEse(); fechar(); if (AX.aba === "ia") setTimeout(renderLicoes, 1500); });
