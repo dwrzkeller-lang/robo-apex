@@ -52,17 +52,25 @@
       <button data-p="hoje">Hoje</button><button data-p="5d">5 dias</button><button data-p="1m">1 mês</button>
       <button data-p="3m">3 meses</button><button data-p="tudo">Tudo</button><button data-p="custom" data-dica="Escolher as datas de início e fim">📅</button>
     </div>
+    <select id="periodoSel" class="periodo-sel" aria-label="Período"><option value="hoje">Hoje</option><option value="5d">5 dias</option><option value="1m">1 mês</option><option value="3m">3 meses</option><option value="tudo">Tudo</option><option value="custom">📅 Escolher datas…</option></select>
   </div>
   <label class="campo pequeno"><span><span id="rotContratos">Contratos</span> <i class="q" data-dica="Quantidade de cada operação nas contas (contratos na B3, lotes em forex). Com o “Tamanho pelo risco” ligado na aba Plano, o robô calcula a quantidade sozinho e este campo fica desligado."></i></span><input type="number" id="contratos" min="1" step="1" value="1"></label>
   <button id="btAjustes" class="bt-icone" data-dica="Ajustes: capital, quantos stops param o dia, atualização ao vivo e sons.">⚙</button>
   <div class="acoes-topo">
     <button id="btTestar" class="bt-testar" data-dica="Testar esta estratégia: roda a estratégia escolhida neste ativo, no período do topo, em 5, 15 e 60 minutos. Mostra quanto ganhou e perdeu, mês a mês e semana a semana, e deixa ligar o teste ao vivo.">▶ Testar<span class="lg"> estratégia</span></button>
     <button id="btMinhas" class="bt-minhas" data-dica="Minhas estratégias: escolha as suas favoritas e veja de uma vez como cada uma foi neste ativo e o que cada uma está fazendo agora.">★ Minhas<span class="lg"> estratégias</span></button>
+    <button id="btReplay" class="bt-replay" data-dica="Replay: escolha um dia e assista o pregão inteiro candle a candle, com a estratégia escolhida entrando e saindo na hora em que aconteceu. Você controla a velocidade, pausa e avança.">⏪ Replay</button>
   </div>
+  <div class="campo campo-vivo"><span>Ao vivo <i class="q" data-dica="Como estão os testes ao vivo que você ligou neste mercado: quantos estão rodando, quanto fizeram hoje e desde que foram ligados (simulado, sem dinheiro). Sem teste ligado fica em standby: nenhuma estratégia roda sozinha. Clique para ver cada um."></i></span>
+    <button id="btAoVivo" class="vivo-topo standby" type="button"><i class="vt-luz"></i><span class="vt-tit">standby</span><span class="vt-sub">nenhum teste ligado</span></button></div>
   <button id="btTutorial" class="bt-icone" data-dica="Tutorial: um passeio de 1 minuto pelo robô.">?</button>
   <div class="status" id="statusDados"><i class="luz"></i><span>carregando…</span></div>
   <button id="btConta" class="bt-conta" type="button" aria-label="Conta" data-dica="Sua conta: trocar a senha, avisos no celular, usuários e registro de acessos (administrador) e sair."></button>
 </header>
+
+<!-- testes ao vivo (botão do topo) -->
+<div class="popover oculto" id="popAoVivo"></div>
+<div class="popover oculto" id="popReplay"></div>
 
 <!-- escolher datas -->
 <div class="popover oculto" id="popDatas">
@@ -112,6 +120,7 @@
     <div class="popover oculto" id="popCandles"></div>
     <div class="aviso-carregando oculto" id="carregando">Carregando…</div>
     <div class="toast" id="toast"></div>
+    <div class="carga-meio oculto" id="cargaMeio" role="status" aria-live="polite"><i class="giro"></i><span>Carregando…</span></div>
   </section>
 
   <div class="divisor" id="divisor" data-dica="Arraste para ajustar a largura do painel. Duplo clique volta ao padrão."></div>
@@ -296,14 +305,18 @@
 <script src="sim.js"></script>
 <script src="calendario.js"></script>
 <script src="comparar.js"></script>
+<script src="curva.js"></script>
 <script src="testar.js"></script>
 <script src="noticias.js"></script>
 <script src="desenho.js"></script>
 <script src="ops.js"></script>
+<script src="aovivo.js"></script>
 <script src="plano.js"></script>
 <script src="opcoes.js"></script>
 <script src="perfil.js"></script>
+<script src="vela_viva.js"></script>
 <script src="replay.js"></script>
+<script src="replay_dia.js"></script>
 <script src="ia.js"></script>
 <script src="explica.js"></script>
 <script src="conta.js"></script>

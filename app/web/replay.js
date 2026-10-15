@@ -1,6 +1,6 @@
 /* ROBÔ APEX: replay da entrada e "e se…".
    (1) REPLAY DA ENTRADA: toca uma operação da lista candle a candle, de antes do sinal até depois da saída, com as
-       etapas escritas (antes do sinal, sinal, ordem armada, entrada, em andamento, saída) e velocidade 1x a 10x.
+       etapas escritas (antes do sinal, sinal, ordem armada, entrada, em andamento, saída) e velocidade de 0,5x a 16x.
    (2) E SE…: refaz a mesma entrada com outro stop e outro alvo e mostra o que teria acontecido nos candles reais.
    (3) LIÇÕES: o ajuste pode ser salvo com uma anotação. O robô então aplica o mesmo ajuste a TODAS as operações daquela
        estratégia no período e mostra se ele melhora o conjunto ou só aquela operação (é assim que ele "aprende" sem
@@ -32,31 +32,19 @@
   function passo() {
     if (!R.on || R.pausa) return;
     if (R.k >= R.fim) { R.pausa = true; pintarBarra(); return; }
-    const i = R.k + 1, D = R.D, dur = 650 / R.vel;
-    // o candle "se forma" na tela (abertura, um extremo, o outro, fechamento) em vez de aparecer pronto; acima de 3x vai direto
-    const sobe = D.c[i] >= D.o[i], a = sobe ? D.l[i] : D.h[i], b = sobe ? D.h[i] : D.l[i], o = D.o[i];
-    const quadros = R.vel > 3 ? [] : [[o, o, o], [Math.max(o, a), Math.min(o, a), a], [Math.max(o, a, b), Math.min(o, a, b), b]];
-    const fim = () => {
+    const i = R.k + 1, D = R.D;
+    // o candle se forma devagar (abre, anda até os extremos e fecha); nos candles do sinal, da entrada e da saída segura mais
+    const chave = i === R.is || i === R.ie || i === R.ix;
+    R.cancelar = AX.formarCandle(D, i, R.vel >= 16 ? 0 : 2200 / R.vel, () => {
       if (!R.on || R.k !== i - 1) return;
       R.k = i; AX.avancar(i); AX.redesenhar(); pintarBarra();
-      // nos candles importantes (sinal, entrada, saída) o replay segura um pouco mais
-      const chave = i === R.is || i === R.ie || i === R.ix;
-      R.relogio = setTimeout(passo, (chave ? 1500 : 650) / R.vel - (quadros.length ? dur * 0.6 : 0));
-    };
-    let q = 0;
-    const quadro = () => {
-      if (!R.on || R.pausa || R.k !== i - 1) return;
-      if (q >= quadros.length) return fim();
-      const [h, l, c] = quadros[q++];
-      try { AX.S.candle.update({ time: D.t[i], open: o, high: h, low: l, close: c }); } catch (e) { return fim(); }
-      R.relogio = setTimeout(quadro, (dur * 0.6) / quadros.length);
-    };
-    quadro();
+      R.relogio = setTimeout(passo, (chave ? 1700 : 420) / R.vel);
+    });
   }
   // um candle inteiro de uma vez (botão ▶| e pausa no meio da formação)
   function inteiro() { if (R.k < R.fim) { R.k++; AX.avancar(R.k); AX.redesenhar(); } }
   function comecar() {
-    clearTimeout(R.relogio);
+    clearTimeout(R.relogio); if (R.cancelar) R.cancelar();
     const de = Math.max(0, R.is - 25);
     R.k = de; R.pausa = false;
     AX.mostrar(R.D, de, { manterZoom: true });
@@ -69,7 +57,7 @@
   }
   function fechar() {
     if (!R.on) return;
-    clearTimeout(R.relogio); R.on = false; AX.emReplay = false;
+    clearTimeout(R.relogio); if (R.cancelar) R.cancelar(); R.on = false; AX.emReplay = false;
     AX.chart.applyOptions({ timeScale: { shiftVisibleRangeOnNewBar: true } });
     if (barra) barra.classList.add("oculto");
     const D = AX.vivo.D;
@@ -89,7 +77,7 @@
       barra.className = "rp-op";
       barra.innerHTML = `<b class="rp-etapa"></b><span class="rp-fala"></span>
         <span class="rp-ctl"><button data-a="pausa" data-dica="Pausar ou continuar (se já terminou, toca de novo)">⏸</button><button data-a="um" data-dica="Avançar um candle">▶|</button><button data-a="zero" data-dica="Voltar ao começo">⏮</button>
-        <span class="seg mini">${[1, 2, 3, 5, 10].map((v) => `<button data-v="${v}">${v}x</button>`).join("")}</span><button data-a="sair" data-dica="Fechar o replay e voltar ao vivo">✕ Fechar</button></span>`;
+        <span class="seg mini" data-dica="Velocidade: 1x = cada candle leva uns 2 segundos para se formar">${[0.5, 1, 2, 4, 8, 16].map((v) => `<button data-v="${v}">${String(v).replace(".", ",")}x</button>`).join("")}</span><button data-a="sair" data-dica="Fechar o replay e voltar ao vivo">✕ Fechar</button></span>`;
       $("areaGrafico").appendChild(barra);
       barra.addEventListener("click", (e) => {
         const b = e.target.closest("button"); if (!b) return;
@@ -97,10 +85,10 @@
         const a = b.dataset.a;
         if (a === "sair") return fechar();
         if (a === "zero") return comecar();
-        if (a === "um") { R.pausa = true; clearTimeout(R.relogio); inteiro(); return pintarBarra(); }
+        if (a === "um") { R.pausa = true; clearTimeout(R.relogio); if (R.cancelar) R.cancelar(); inteiro(); return pintarBarra(); }
         if (a === "pausa") {
           if (R.k >= R.fim) return comecar();
-          R.pausa = !R.pausa; clearTimeout(R.relogio); if (R.pausa && AX.i === R.k && AX.S.candle.data && AX.S.candle.data().length > R.k + 1) inteiro(); pintarBarra(); if (!R.pausa) passo();
+          R.pausa = !R.pausa; clearTimeout(R.relogio); if (R.pausa && R.cancelar) R.cancelar(); if (R.pausa && AX.i === R.k && AX.S.candle.data && AX.S.candle.data().length > R.k + 1) inteiro(); pintarBarra(); if (!R.pausa) passo();
         }
       });
     }

@@ -279,7 +279,8 @@
     return v;
   }
   AX.testesRecarregar = () => { T.det = null; ciclo(true); };
-  AX.testes = { cobre: (m) => T.lista.some((x) => !x.ate && x.res && combo(x) === combo(m)), lista: () => T.lista, vivo, sinais: () => T.sinais };
+  AX.testes = { cobre: (m) => T.lista.some((x) => !x.ate && x.res && combo(x) === combo(m)), lista: () => T.lista, vivo, sinais: () => T.sinais,
+    abrir: (y) => abrirTeste(y), estadoTxt: (rs) => estadoTxt(rs) };
 
   // ---------------------------------------------------------------- conversa com o servidor
   const rotSinal = (ev) => `${AX.rotAtivo(ev.ativo)} ${ev.nomeTf}`;
@@ -289,12 +290,16 @@
     if (ev.tipo === "entrada") return `${ev.est} · ${lado} executada a ${f(ev.ent)}`;
     return `${ev.est} · saiu (${ev.motivo}) ${AX.res2(ev.R, ev.dinheiro, { meta: { moeda: ev.moeda } })}`;
   }
-  function anunciar(novos) {
+  function anunciar(todos) {
+    // só avisa (pop-up, som e aviso) o que é do mercado aberto no topo: um sinal de cripto não aparece no meio da tela de opções
+    const novos = todos.filter((e) => AX.doMercadoAtual(e.ativo));
+    if (!novos.length) return;
+    if (AX.popupSinal) AX.popupSinal(novos);
     const peso = { ordem: 1, entrada: 2, saida: 3 };
     const top = novos.slice().sort((a, b) => peso[b.tipo] - peso[a.tipo] || b.seq - a.seq)[0];
     const txt = textoSinal(top), resto = novos.length > 1 ? ` (+${novos.length - 1} sinal${novos.length > 2 ? "is" : ""})` : "";
     AX.som(top.tipo === "saida" ? (top.ganho ? "ganho" : "perda") : top.tipo);
-    AX.toast(`${rotSinal(top)} · ${txt}${resto}`, top.tipo === "saida" ? (top.ganho ? "ok" : "erro") : "");
+    if (!AX.popupSinal) AX.toast(`${rotSinal(top)} · ${txt}${resto}`, top.tipo === "saida" ? (top.ganho ? "ok" : "erro") : "");
     AX.notificar("Robô Apex · " + rotSinal(top), txt + resto);
     if (document.hidden) document.title = "● Robô Apex";
     const x = T.atual();
@@ -312,6 +317,7 @@
   const sigVivo = () => { const x = T.atual(), r = detDe(x); return r && !x.ate ? JSON.stringify([r.id, r.abertas, r.pend, r.ajPend, r.trades.length, r.meta.dia]) : "-"; };
   function tudo() {
     renderTeste(); renderSinais(); renderOps();
+    AX.emit("testesLista", T.lista);
     const s = sigVivo();
     if (s !== T.sigVivo) { T.sigVivo = s; AX.refazerVivo(); }       // o "agora" do teste mudou: cartão do momento, setas e linhas
   }
@@ -534,7 +540,7 @@
   let vistoT = null;
   function renderSinais() {
     const el = $("cardSinais"), ativos = T.lista.filter((x) => !x.ate), ids = new Set(T.lista.map((x) => x.id));
-    const lista = T.sinais.filter((e) => ids.has(e.teste)).reverse(), mostra = lista.slice(0, T.todos ? 40 : 4);
+    const lista = T.sinais.filter((e) => ids.has(e.teste) && AX.doMercadoAtual(e.ativo)).reverse(), mostra = lista.slice(0, T.todos ? 40 : 4);
     if (!T.pronto || !lista.length) { el.classList.add("oculto"); return; }
     el.classList.remove("oculto");
     const novos = lista.filter((e) => e.seq > T.visto).length;

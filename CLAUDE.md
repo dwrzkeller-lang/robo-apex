@@ -14,8 +14,8 @@ simples, sem jargão.
   senha de corretora. A ponte com o Profit (`app/profit.py`) é só simulador.
 - Propaganda: nada de depoimento inventado, resultado escolhido a dedo sem contexto ou promessa de ganho (CDC art. 37,
   CVM). A página de vendas (`app/web/site`) mostra prints reais com o aviso de simulação.
-- Nada de promessa de resultado nem de "infalível". Toda estatística é com custos e escorregamento, e os textos dizem
-  quando algo não tem vantagem comprovada. Não dar recomendação pessoal de investimento.
+- Nada de promessa de resultado nem de "infalível". Toda estatística é com custos e escorregamento. Desde a 3.1 o
+  selo "comprovada / não comprovada" saiu da tela (pedido do dono); fica o aviso de POUCOS DADOS e os textos de risco. Não dar recomendação pessoal de investimento.
 - As estratégias **E2 e E9 não são alteradas**. Melhoria entra como estratégia nova (E14, E15…).
 - Tela simples: tudo que não for óbvio tem um "?" com explicação (`data-dica` ou `AX.q("texto")`).
 - Sem dependências novas no servidor (só biblioteca padrão do Python 3.12).
@@ -45,7 +45,8 @@ sem candles.
   `AX.mostrar/avancar/atualizar` para o gráfico. `app.js` é o núcleo; `ops.js` operações e marcações; `replay.js`
   replay da entrada e "E se…" (as edições ficam em `estado_edicoes.json` e o SERVIDOR as aplica como ajustes; "Usar como
   regra" vira o parâmetro `regra` = fator do stop e alvo em R por estratégia); `testar.js` (Testar estratégia e Minhas
-  estratégias); `boleta.js`; `mercado.js` (modo Cripto); `conectar.js`; `tutorial.js`; `vitrine.js` (`?vitrine=1` borra
+  estratégias; curva em `curva.js`); `replay_dia.js` (botão Replay do topo) e `vela_viva.js` (candle se formando);
+  `aovivo.js` (Ao vivo do topo e pop-up dos sinais, só do mercado aberto); `boleta.js`; `mercado.js` (modo Cripto); `conectar.js`; `tutorial.js`; `vitrine.js` (`?vitrine=1` borra
   o nome das estratégias para prints); `tema.css` (visual da 3.0); `desenho.js` ferramentas de desenho; `dicas.js` os "?".
 - `ntsl/` — scripts para o Profit, gerados por `ferramentas/gerar_ntsl.py`.
 - `ferramentas/backtest.py` — testes das estratégias com custos.

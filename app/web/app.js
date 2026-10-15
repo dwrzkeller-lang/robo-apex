@@ -59,8 +59,26 @@
   // ---------------------------------------------------------------- servidor
   let saindo = false;
   function irParaLogin() { if (!saindo) { saindo = true; location.replace("/"); } }
+  // Bolinha de carregamento no meio da tela: aparece quando um clique do usuário pede dados novos (não nas
+  // atualizações automáticas), para a tela nunca parecer travada. Só mostra depois de 180 ms (nada de piscar).
+  const CARGA = { n: 0, t: null, gesto: 0 };
+  AX.carga = (on) => {
+    const el = document.getElementById("cargaMeio");
+    CARGA.n = Math.max(0, CARGA.n + (on ? 1 : -1));
+    if (!el) return;
+    if (CARGA.n && !CARGA.t && el.classList.contains("oculto")) CARGA.t = setTimeout(() => { CARGA.t = null; if (CARGA.n) el.classList.remove("oculto"); }, 180);
+    if (!CARGA.n) { clearTimeout(CARGA.t); CARGA.t = null; el.classList.add("oculto"); }
+  };
+  AX.cargaPulso = (ms = 380) => { AX.carga(true); setTimeout(() => AX.carga(false), ms); };
+  for (const ev of ["pointerdown", "change", "keydown"]) document.addEventListener(ev, (e) => { if (ev !== "keydown" || e.key === "Enter") CARGA.gesto = Date.now(); }, true);
+  const AUTOMATICO = /espera=|[?&]sid=|\/api\/(testes\?seq|boleta|cripto\/mercado|estado|agenda|base|sessao|config)/;
   // Todo pedido tem tempo limite: sem isso, um pedido que nunca volta deixava a tela parada esperando para sempre.
   AX.json = async (url, opts = {}) => {
+    const carga = opts.carga === true || (opts.carga !== false && Date.now() - CARGA.gesto < 1500 && !AUTOMATICO.test(url));
+    if (carga) AX.carga(true);
+    try { return await pedirJson(url, opts); } finally { if (carga) AX.carga(false); }
+  };
+  async function pedirJson(url, opts) {
     const ctl = new AbortController();
     const relogio = setTimeout(() => ctl.abort(), opts.tempo || 60000);
     let r;
@@ -73,7 +91,7 @@
     if (r.status === 402 && j && j.assinar) { location.replace("/"); throw new Error(j.erro || "Assinatura inativa."); }
     if (!r.ok || (j && j.erro)) throw new Error((j && j.erro) || "HTTP " + r.status);
     return j;
-  };
+  }
   AX.post = (url, corpo, opts) => AX.json(url, Object.assign({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo || {}) }, opts));
   AX.api = {   // desenhos e outros estados salvos na pasta de dados do usuário
     async get(nome) { return (await AX.json("/api/estado?nome=" + encodeURIComponent(nome))).valor; },
@@ -626,8 +644,8 @@
     return e;
   };
 
-  const CURTO = { "VANTAGEM ESTATÍSTICA": "VANTAGEM", "PROMISSORA, NÃO COMPROVADA": "NÃO COMPROVADA" };
-  AX.seloCurto = (st) => `<span class="selo ${st.cor || "neutro"}" data-dica="${AX.esc((st.veredito || "") + ": " + (st.explica || ""))}">${AX.esc(CURTO[st.veredito] || st.veredito || "-")}</span>`;
+  // só o aviso de amostra pequena (o selo "comprovada / não comprovada" saiu a pedido do dono)
+  AX.seloCurto = (st) => (st.veredito === "POUCOS DADOS" ? `<span class="selo amarelo" data-dica="${AX.esc("Poucas operações no período: " + (st.explica || "o resultado pode mudar muito com as próximas."))}">POUCOS DADOS</span>` : "");
 
   // curva do capital pequena (uma marca por operação); ao passar o mouse mostra a operação e o acumulado
   AX.sparkline = (cv, valores, rotular) => {
@@ -710,6 +728,9 @@
     return c;
   };
   // os ativos de cada mercado: Bolsa (B3 e, num grupo à parte, lá fora), Opções (ativos-objeto da B3), Cripto (Binance)
+  // o ativo pertence ao mercado aberto no topo? (Bolsa = tudo menos cripto; Opções = ações, WIN e BOVA11; Cripto = cripto)
+  AX.doMercadoAtual = (c) => (AX.pref.mercado === "cripto" ? AX.mercadoDe(c) === "cripto"
+    : AX.pref.mercado === "opcoes" ? AX.ativosDoMercado("opcoes").some((a) => a.chave === c) : AX.mercadoDe(c) !== "cripto");
   AX.mercadoDe = (c) => { const a = AX.infoAtivo(c); return a && a.mercado === "cripto" ? "cripto" : AX.ehCripto(c) ? "cripto" : "b3"; };
   AX.ativosDoMercado = (m = AX.pref.mercado) => AX.cfg.ativos.filter((a) => m === "cripto" ? a.mercado === "cripto"
     : m === "opcoes" ? a.mercado === "b3" && (a.grupo === "Ações da B3" || /^(WIN|BOVA11)$/.test(a.chave)) : a.mercado !== "cripto");
@@ -772,6 +793,7 @@
   AX.montarEstrategias = () => montarEstrategias();
   function marcarPeriodo() {
     document.querySelectorAll("#periodo button").forEach((b) => b.classList.toggle("on", b.dataset.p === AX.pref.per));
+    if ($("periodoSel")) $("periodoSel").value = AX.pref.per;
     $("periodoTxt").textContent = V.D ? AX.periodoTexto(V.D) : "";
   }
   AX.escolherEst = (cod) => {
@@ -865,6 +887,12 @@
       if (AX.pref.per === b.dataset.p) return;
       AX.pref.per = b.dataset.p; AX.salvarPref(); marcarPeriodo(); AX.emit("mudou", "periodo");
     }));
+    $("periodoSel").onchange = () => {
+      const v = $("periodoSel").value;
+      if (v === "custom") { $("periodoSel").value = AX.pref.per; return abrirDatas(); }
+      if (AX.pref.per === v) return;
+      AX.pref.per = v; AX.salvarPref(); marcarPeriodo(); AX.emit("mudou", "periodo");
+    };
     $("perCancelar").onclick = AX.fecharPopovers;
     $("perAplicar").onclick = () => {
       const de = $("perDe").value, ate = $("perAte").value;
@@ -945,6 +973,7 @@
     const consulta = AX.parametros();
     const base = silencioso && V.D && !V.velho && V.consulta === consulta && V.D.meta.aoVivo ? V.D : null;
     if (!silencioso) $("carregando").classList.remove("oculto");
+    if (!silencioso) AX.carga(true);
     try {
       let url = "/api/sim?" + consulta;
       if (base) { const m = base.meta; url += `&sid=${m.sid}&n=${m.n}&fp=${encodeURIComponent(m.fp)}&fo=${m.formando ? 1 : 0}&ii=${m.iIni}&ia=${encodeURIComponent(m.iaSel || "")}`; }
@@ -959,7 +988,8 @@
       if (D.meta.usdbrl) AX.usdbrl = D.meta.usdbrl;                 // dólar do dia: converte também os avisos de ativos em dólar
       V.D = D; V.velho = false; V.consulta = consulta;
       if (AX.emReplay) { /* replay de uma operação tocando: o gráfico não é mexido pelo ao vivo */ }
-      else if (ABAS_VIVAS.includes(AX.aba) || !AX.graficoMostra()) {
+      else if (ABAS_VIVAS.includes(AX.aba) || !AX.graficoMostra() || AX.graficoMostra() === antes ||
+        AX.graficoMostra().meta.ativo !== D.meta.ativo || +AX.graficoMostra().meta.tf !== +D.meta.tf) {   // trocou o ativo ou o tempo em qualquer aba: o gráfico acompanha
         if (X.delta && base) AX.atualizar(D, base, n0 - 1);
         else AX.mostrar(D, D.meta.iFim, { manterZoom: silencioso });
       }
@@ -977,6 +1007,7 @@
       return false;
     } finally {
       if (seq === V.seq) { V.buscando = false; $("carregando").classList.add("oculto"); }
+      if (!silencioso) AX.carga(false);
     }
   }
   AX.carregarVivo = (s) => carregarVivo(s).catch(() => false);
@@ -1178,7 +1209,7 @@
   // ---------------------------------------------------------------- abas
   AX.aba = "vivo";
   // largura do painel: arraste a divisória (cada tamanho de aba guarda a sua); duplo clique volta ao padrão
-  const classeLarg = () => (AX.aba === "cmp" ? "l" : AX.aba === "opcoes" ? "c" : AX.aba === "sim" || AX.aba === "cal" ? "m" : "n");
+  const classeLarg = () => "n";                       // uma largura só para todas as abas: o gráfico não muda de tamanho ao trocar de aba
   const limiteLarg = (w) => Math.round(Math.max(320, Math.min(window.innerWidth - 380, w)));
   function aplicarLargura() {
     const w = (AX.pref.larg || {})[classeLarg()];
@@ -1217,12 +1248,10 @@
     document.querySelectorAll("#subRes button").forEach((b) => b.classList.toggle("on", b.dataset.aba === nome));
     if (grupoRes) { const g = document.querySelector('.abas button[data-grupo]'); if (g) g.dataset.aba = nome; }
     document.querySelectorAll(".aba").forEach((s) => s.classList.toggle("on", s.id === "aba-" + nome));
-    $("painel").classList.toggle("largo", nome === "cmp");
-    $("painel").classList.toggle("medio", nome === "sim" || nome === "cal");
-    $("painel").classList.toggle("cripto", nome === "opcoes");
-    aplicarLargura();
+    if (nome !== AX.abaAntes) AX.cargaPulso();
+    AX.abaAntes = nome;
     if (ABAS_VIVAS.includes(nome)) {
-      if (V.D && !V.velho) { if (AX.graficoMostra() !== V.D) AX.mostrar(V.D, V.D.meta.iFim); if (nome === "vivo") renderVivo(V.D); }
+      if (V.D && !V.velho) { if (AX.graficoMostra() !== V.D && !AX.emReplay) AX.mostrar(V.D, V.D.meta.iFim); if (nome === "vivo") renderVivo(V.D); }
       else AX.carregarVivo();
     }
     if (nome === "sim" && V.D) setTimeout(() => renderVivo(V.D), 0);           // a curva do resumo só desenha com a aba visível

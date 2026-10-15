@@ -33,7 +33,7 @@ import traceback
 import urllib.parse
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import agenda
@@ -54,7 +54,7 @@ import radar
 from estrategias import AQUECIMENTO, ESTRATEGIAS, GESTOES, GESTOES_CURTO, atencao
 from simulador import PROTECOES, atualizar_ultimo, estatisticas, preparar, simular
 
-VERSAO = "3.0"
+VERSAO = "3.1"
 ARGS = sys.argv[1:]
 
 
@@ -743,13 +743,23 @@ def _resumo_teste(chave, tf_pedido, codigos, P, q, cfg_so=False):
         m[0] += 1; m[1] += x["dinheiro"]; m[2] += x["dinheiro"] > 0
         w = semanas.setdefault(_semana(dd), [0, 0.0, 0])
         w[0] += 1; w[1] += x["dinheiro"]; w[2] += x["dinheiro"] > 0
-    acum, curva = 0.0, []
+    acum, curva, pontos, dias = 0.0, [], [], {}
     for x in tr:
         acum += x["dinheiro"]
         curva.append(round(acum, 2))
+        pontos.append([t[x["i_sai"]], round(acum, 2), round(x["dinheiro"], 2)])
+        dd = dias.setdefault(d[x["i_sai"]], [0.0, 0])
+        dd[0] += x["dinheiro"]; dd[1] += 1
     if len(curva) > 120:
         passo = len(curva) / 120.0
         curva = [curva[int(k * passo)] for k in range(120)] + [curva[-1]]
+    if len(pontos) > 400:                                   # curva por operacao (periodos curtos): no maximo 400 pontos
+        passo = len(pontos) / 400.0
+        pontos = [pontos[int(k * passo)] for k in range(400)] + [pontos[-1]]
+    acum, serie_dias = 0.0, []                              # curva dia a dia: resultado do dia e acumulado
+    for k in sorted(dias):
+        acum += dias[k][0]
+        serie_dias.append([k, round(dias[k][0], 2), round(acum, 2), dias[k][1]])
     pend = [o for o in r["ordens"] if o["status"] == "pendente"]
     agora = ("operacao" if r["abertas"] else "ordem" if pend else "atencao" if aten else "aguardando")
     ab = r["abertas"][0] if r["abertas"] else None
@@ -761,7 +771,7 @@ def _resumo_teste(chave, tf_pedido, codigos, P, q, cfg_so=False):
                 ganhoMedio=(sum(v for v in din if v > 0) / max(1, sum(1 for v in din if v > 0))) if din else 0.0,
                 meses=[[k, v[0], round(v[1], 2), v[2]] for k, v in sorted(meses.items())],
                 semanas=[[k, v[0], round(v[1], 2), v[2]] for k, v in sorted(semanas.items())][-12:],
-                curva=curva, agora=agora,
+                curva=curva, pontos=pontos, dias=serie_dias[-500:], agora=agora,
                 aberta=dict(est=ab["est"], dir=ab["dir"], ent=ab["ent"], R=round(ab["R"], 3),
                             dinheiro=round(ab["R"] * ab["risco"] * sc["valor_ponto"] * (ab.get("q") or contratos), 2)) if ab else None,
                 ultimas=[dict(est=x["est"], dir=x["dir"], t_ent=t[x["i_ent"]], t_sai=t[x["i_sai"]], ent=x["ent"], sai=x["sai"],
@@ -797,7 +807,8 @@ def api_minhas(q):
     for c in cods:
         try:
             x = _resumo_teste(P["chave"], P["tf"], [c], P, q)
-            x.pop("curva", None); x.pop("semanas", None)
+            for k in ("curva", "semanas", "pontos", "dias"):
+                x.pop(k, None)
             linhas.append(dict(x, est=c, nome=ESTRATEGIAS[c]["nome"]))
         except Exception as e:
             linhas.append(dict(est=c, nome=ESTRATEGIAS[c]["nome"], erro=str(e)))
@@ -805,7 +816,8 @@ def api_minhas(q):
     if len(cods) > 1:
         try:
             juntas = _resumo_teste(P["chave"], P["tf"], cods, P, q)
-            juntas.pop("curva", None)
+            for k in ("curva", "pontos", "dias"):
+                juntas.pop(k, None)
         except Exception as e:
             juntas = dict(erro=str(e))
     return dict(ativo=P["chave"], tf=P["tf"], linhas=linhas, juntas=juntas)
@@ -1389,7 +1401,9 @@ class Sentinela:
             if r:
                 st, m = r["stats"], r["meta"]
                 a = r["abertas"][0] if r["abertas"] else None
-                item["res"] = dict(n=st["n"], total=st.get("total", 0.0), acerto=st.get("acerto"), moeda=m["moeda"], decimais=m["decimais"],
+                hoje = datetime.now(df.BRT).strftime("%Y%m%d")
+                tr_hoje = [y["dinheiro"] for y in r["trades"] if datetime.fromtimestamp(y["t_sai"], df.BRT).strftime("%Y%m%d") == hoje]
+                item["res"] = dict(n=st["n"], total=st.get("total", 0.0), hoje=round(sum(tr_hoje), 2), nHoje=len(tr_hoje), acerto=st.get("acerto"), moeda=m["moeda"], decimais=m["decimais"],
                                    nomeTf=m["nomeTf"], nome=m["nome"], intraday=m["intraday"], ultimoT=m["ultimoT"], formando=m["formando"],
                                    estado="parado" if x.get("ate") else ("operacao" if a else ("ordem" if r["pend"] else "espera")),
                                    R=a["R"] if a else None, dir=(a or (r["pend"][0] if r["pend"] else {})).get("dir"),
@@ -1911,7 +1925,26 @@ class Handler(BaseHTTPRequestHandler):
                 tipo = "text/javascript"
             with open(arq, "rb") as f:
                 dados = f.read()
-            self.send_response(200)
+            faixa = re.match(r"bytes=(\d*)-(\d*)$", self.headers.get("Range") or "") if tipo.startswith("video/") else None
+            if faixa and (faixa.group(1) or faixa.group(2)):     # video: o navegador (Safari/iPhone) pede por pedacos
+                n = len(dados)
+                if faixa.group(1):
+                    ini, fim = int(faixa.group(1)), min(n - 1, int(faixa.group(2) or n - 1))
+                else:
+                    ini, fim = max(0, n - int(faixa.group(2))), n - 1
+                if ini >= n or ini > fim:
+                    self.send_response(416)
+                    self.send_header("Content-Range", "bytes */%d" % n)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                self.send_response(206)
+                self.send_header("Content-Range", "bytes %d-%d/%d" % (ini, fim, n))
+                dados = dados[ini:fim + 1]
+            else:
+                self.send_response(200)
+            if tipo.startswith("video/"):
+                self.send_header("Accept-Ranges", "bytes")
             self.send_header("Content-Type", tipo + ("; charset=utf-8" if tipo.startswith("text") else ""))
             self.send_header("Content-Length", str(len(dados)))
             self.send_header("Cache-Control", "no-cache")

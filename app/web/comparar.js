@@ -56,19 +56,19 @@
     let html = `<div class="card"><div class="rot">RESULTADO · ${AX.esc(nomeTf)}${l0 ? ` · ${AX.dataTxt(l0.dataIni)} a ${AX.dataTxt(l0.dataFim)}` : ""}<span class="dir">${st.feito}/${st.total} ativos</span></div>
       <div class="nota">Gestão: ${AX.esc(AX.cfg.gestoes[p.gestao])}.</div>
       ${difere ? `<div class="nota" style="color:var(--laranja)">Atenção: o topo mudou (tempo, período ou gestão) depois desta comparação. Clique em Comparar para refazer.</div>` : ""}
-      <div class="nota">Cada célula: <b>resultado com 1 contrato/lote</b> (líquido de custos, na moeda do ativo), número de operações e acerto. Cor = veredito estatístico.</div>
-      <div class="rolagem" style="max-height:none"><table class="tab cmp"><tr><th>Ativo</th>${cods.map((c) => `<th class="n" title="${AX.esc(AX.nomeEst(c))}">${c === "TODAS" ? "TODAS" : c}</th>`).join("")}</tr>`;
+      <div class="nota">Cada célula: <b>resultado com 1 contrato/lote</b> (líquido de custos, na moeda do ativo), número de operações e acerto. Verde = terminou no positivo, vermelho = no negativo.</div>
+      <div class="rolagem" style="max-height:none;overflow-x:auto"><table class="tab cmp"><tr><th>Ativo</th>${cods.map((c) => `<th class="n" title="${AX.esc(AX.nomeEst(c))}">${c === "TODAS" ? "TODAS" : c}</th>`).join("")}</tr>`;
     for (const l of st.linhas) {
       if (l.erro) { html += `<tr><td>${AX.esc(l.ativo)}</td><td colspan="${cods.length}" class="ruim">${AX.esc(l.erro)}</td></tr>`; continue; }
       html += `<tr><td title="${AX.esc(l.nome)}"><b>${AX.esc(l.ativo)}</b><br><small class="neutro">${l.dias} dias</small></td>` + cods.map((c) => {
         const s = l.res[c];
         if (!s) return `<td class="cel neutro"><small>não se aplica</small></td>`;
         if (!s.n) return `<td class="cel" data-a="${AX.esc(l.ativo)}" data-e="${c}"><small>sem operações</small></td>`;
-        return `<td class="cel ${s.cor}" data-a="${AX.esc(l.ativo)}" data-e="${c}" title="${AX.esc(s.veredito + ": " + s.explica)}"><b class="${AX.cls(s.total)}">${moedaCurta(l.moeda)}${fmtCurto(s.total)}</b><small>${s.n} ops · ${AX.pct(s.acerto, 0)} · ${AX.R(s.expR, 2)}</small></td>`;
+        return `<td class="cel ${s.total > 0 ? "verde" : s.total < 0 ? "vermelho" : ""}" data-a="${AX.esc(l.ativo)}" data-e="${c}" title="${AX.esc(s.n + " operações")}"><b class="${AX.cls(s.total)}">${moedaCurta(l.moeda)}${fmtCurto(s.total)}</b><small>${s.n} ops · ${AX.pct(s.acerto, 0)} · ${AX.R(s.expR, 2)}</small></td>`;
       }).join("") + `</tr>`;
     }
-    html += `</table></div><div class="legenda-cmp"><span class="selo verde">VANTAGEM ESTATÍSTICA</span><span class="selo amarelo">NÃO COMPROVADA / INSTÁVEL / POUCOS DADOS</span><span class="selo vermelho">NÃO OPERAR</span></div>
-      <div class="nota">"Vantagem estatística" = média positiva com a margem de erro acima de zero e positiva nas duas metades do período. Mesmo assim é passado: confirme na Simulação e no simulador da corretora antes de usar dinheiro real.</div></div>`;
+    html += `</table></div><div class="legenda-cmp"><span class="selo verde">TERMINOU POSITIVO</span><span class="selo vermelho">TERMINOU NEGATIVO</span></div>
+      <div class="nota">É passado: confirme na Simulação e num teste ao vivo antes de usar.</div></div>`;
     $("cmpResultado").innerHTML = html;
     $("cmpResultado").querySelectorAll("td.cel[data-a]").forEach((td) => (td.onclick = () => abrir(td.dataset.a, td.dataset.e, p)));
   }

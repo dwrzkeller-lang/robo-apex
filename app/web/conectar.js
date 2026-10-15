@@ -1,6 +1,7 @@
 /* ROBÔ APEX: aba Conectar. Liga o robô à conta da corretora pelo MetaTrader 5 (EA "RoboApex"), sempre por decisão do
    usuário: ele entra na corretora pelo MetaTrader dele, instala o EA, aceita o termo e liga o envio de ordens. O EA vem
-   travado em conta demo. O Profit fica com os scripts NTSL das estratégias (automação dentro do próprio Profit). */
+   travado em conta demo. O Profit fica com os scripts NTSL das estratégias (automação dentro do próprio Profit).
+   O guia "Plataformas e corretoras" diz onde o robô já opera, onde dá para usar junto e os cuidados legais. */
 (() => {
   "use strict";
   const AX = window.AX, $ = AX.$;
@@ -18,6 +19,35 @@
     } catch (e) { AX.toast(e.message, "erro"); }
   }
   const quando = (t) => (t ? AX.horaBR(t) + (AX.diaBR(t) === AX.diaBR(Date.now() / 1000) ? "" : " de " + AX.diaBR(t)) : "-");
+
+  // guia das plataformas: o que já funciona com o robô, o que é grátis e o que evitar (fica igual a cada atualização da aba)
+  const PLAT = [
+    ["MetaTrader 5", "pronto", "Pronto no robô",
+      "O EA do Robô Apex segue o seu teste ao vivo e envia as ordens pela sua conta. O MetaTrader 5 é grátis e várias corretoras da B3 oferecem (por exemplo XP, Genial e Modal; confira na sua corretora se há custo e quais ativos ela libera: mini índice, mini dólar, ações). Comece pela conta demo."],
+    ["Profit (Nelogica)", "parcial", "Scripts prontos",
+      "As estratégias têm script NTSL pronto (pasta ntsl). A automação de ordens roda dentro do próprio Profit e, em geral, exige uma versão paga (como Pro ou Ultra) liberada pela corretora; o Profit One grátis serve para ver o gráfico. A ponte do Robô Apex com o Profit é só simulador."],
+    ["TradingView", "parcial", "Gráfico e conferência",
+      "O plano grátis serve para ver o gráfico e conferir os sinais. Os alertas por webhook (que poderiam acionar um robô) só existem nos planos pagos, e poucas corretoras da B3 deixam negociar por dentro do TradingView: confira a lista de corretoras no próprio site. Hoje o robô não envia ordens por lá."],
+    ["Binance (cripto)", "proximo", "Próximo passo",
+      "Os preços de cripto do robô já vêm da Binance em tempo real. A conta é grátis e a Binance tem API oficial para robô na própria conta, com um ambiente de teste grátis (Spot Testnet, dinheiro de mentira). A ligação de ordens do Apex com a Binance ainda não está pronta."],
+    ["Bybit, OKX e outras de cripto", "proximo", "Possível depois",
+      "Também têm API para robô na própria conta. São corretoras de fora do Brasil: veja a obrigação de informar à Receita (Instrução Normativa 1.888) e prefira as que têm operação regular no país."],
+  ];
+  const COR_PLAT = { pronto: "verde", parcial: "amarelo", proximo: "neutro" };
+  function guia() {
+    return `<details class="card con-guia" id="conGuia"${C.guiaAberto ? " open" : ""}><summary><span class="rot">PLATAFORMAS E CORRETORAS ${AX.q("Onde o Robô Apex já opera, onde dá para usar junto e o cuidado legal de cada uma. As ordens são sempre suas, na sua conta.")}</span><span class="dir">ver</span></summary>
+      <div class="con-plats">${PLAT.map(([n, st, rot, txt]) => `<div class="con-plat"><div><b>${n}</b><span class="selo ${COR_PLAT[st]}">${rot}</span></div><p>${txt}</p></div>`).join("")}</div>
+      <div class="rot" style="margin-top:12px">PARA NÃO TER PROBLEMA</div>
+      <ul class="con-legal">
+        <li><b>Use corretora autorizada.</b> Confira se ela é autorizada pela CVM e participante da B3 (consulta grátis nos sites da CVM e da B3). Não opere B3 por corretora estrangeira.</li>
+        <li><b>Robô na sua própria conta é permitido.</b> O que não pode é operar a conta de outra pessoa, pegar a senha de alguém ou prometer ganho.</li>
+        <li><b>Evite forex/CFD de corretoras de fora sem autorização da CVM e opções binárias</b>: a CVM já mandou suspender várias dessas ofertas no Brasil.</li>
+        <li><b>Imposto do day trade:</b> 20% sobre o lucro do mês, pago por DARF até o último dia útil do mês seguinte (a corretora já retém 1% na fonte, que você desconta).</li>
+        <li><b>Se for vender sinais ou operar por clientes</b>, pode precisar de registro na CVM (analista ou consultor). O Robô Apex é uma ferramenta: cada pessoa liga e decide na própria conta. Na dúvida, fale com um advogado.</li>
+        <li><b>Comece no demo</b> e só passe para a conta real com lote pequeno, limite de perda no dia e o envio de ordens desligado quando não estiver olhando.</li>
+      </ul></details>`;
+  }
+  function ligarGuia() { const g = $("conGuia"); if (g) g.ontoggle = () => { C.guiaAberto = g.open; }; }
 
   function render() {
     const c = el(); if (!c || !C.d) return;
@@ -38,7 +68,8 @@
         <pre class="termo">${AX.esc(d.termo)}</pre>
         <label class="campo"><span>Para aceitar, escreva ACEITO</span><input id="conAceito" autocomplete="off" placeholder="ACEITO"></label>
         <div class="botoes"><button class="primario" id="conAceitar">Li e aceito o termo</button></div></div>`;
-      c.innerHTML = h;
+      c.innerHTML = h + guia();
+      ligarGuia();
       $("conAceitar").onclick = () => enviar({ acao: "aceitar", confirmo: $("conAceito").value }, "Termo aceito.");
       return;
     }
@@ -77,7 +108,8 @@
     h += `<div class="card"><div class="rot">PROFIT (NELOGICA)</div>
       <div class="nota">No Profit, a automação é feita dentro do próprio Profit: as estratégias E1 a E10 têm script NTSL pronto (pasta <b>ntsl</b> do robô). Abra no Profit em <i>Estratégias › Editor de estratégias</i>, cole o script e use a <b>Automação de estratégias</b> do Profit, primeiro no simulador dele. A ligação direta com o Profit (DLL) depende do pacote da Nelogica.</div></div>`;
     h += `<div class="card"><div class="rot">REGISTRO</div>${d.log.length ? `<div class="con-log">${d.log.map((x) => `<div><span>${quando(x.t)}</span><b>${AX.esc(x.tipo)}</b><em>${AX.esc(x.detalhe)}</em></div>`).join("")}</div>` : '<div class="nota">Nada ainda.</div>'}</div>`;
-    c.innerHTML = h;
+    c.innerHTML = h + guia();
+    ligarGuia();
     const bt = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
     bt("conLigar", () => {
       if (!cfg.ligado && !confirm("Ligar o envio de ordens? O EA vai seguir o teste escolhido na conta conectada (" + (ea.tipo || "?") + ").")) return;

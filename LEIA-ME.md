@@ -16,6 +16,28 @@ estudos (RSI-2 de Connors, ORB de Zarattini & Aziz, fechamento de gap e o moment
 
 ---
 
+## Novidades da versão 3.1
+
+- **Testar estratégia com a curva do resultado:** a curva soma o resultado dia a dia (ou operação a operação), verde
+  acima do zero e vermelha abaixo, como no Profit. A janela tem o seu próprio período: hoje, 1 e 2 semanas, 1, 3 e 6
+  meses, tudo ou as datas de/até. Sem data de fim, ela se atualiza sozinha a cada minuto.
+- **Botão ⏪ Replay no topo:** escolha o dia e assista o pregão inteiro candle a candle no ativo, tempo e estratégia do
+  topo, com as entradas e saídas na hora em que aconteceram e o resultado do dia somando. Barra para pular, pausa, um
+  candle por vez e velocidade de 0,5x a 16x.
+- **Replay mais natural:** o candle se forma devagar (abre, vai aos extremos e fecha), também no replay de cada operação.
+- **Ao vivo no topo:** mostra os testes ao vivo ligados no mercado aberto, quanto fizeram hoje e desde que foram ligados.
+  Sem teste ligado fica em **standby**. Quando um teste arma, entra ou sai aparece um **aviso na tela**, só do mercado
+  aberto (Bolsa, Opções ou Cripto).
+- **Tutorial novo:** a tela de trás fica parada e embaçada até seguir ou pular; fala dos tempos gráficos, do período,
+  dos desenhos e das edições no gráfico e nos candles.
+- **Tela mais firme:** o painel da direita tem uma largura só (o gráfico não muda de tamanho ao trocar de aba), o topo
+  ficou alinhado numa linha e a bolinha de carregamento aparece no meio quando um clique pede dados novos.
+- **Gráfico sempre igual ao topo:** trocar o ativo ou o tempo na aba Resultado ou Plano já troca o gráfico.
+- **Saiu o selo "comprovada / não comprovada"** dos resultados; fica só o aviso de poucos dados.
+- **Conectar:** guia de plataformas e corretoras (MetaTrader 5 pronto; Profit, TradingView e Binance) e os cuidados
+  legais para operar sem problema.
+- **Página de vendas** com os prints reais de outubro (nomes das estratégias borrados) e o vídeo do replay no topo.
+
 ## Novidades da versão 3.0
 
 - **Cara nova e mais simples.** Topo com o mercado (**Bolsa · Opções · Cripto**), ativo, tempo, estratégia, período e
@@ -125,7 +147,7 @@ estudos (RSI-2 de Connors, ORB de Zarattini & Aziz, fechamento de gap e o moment
 
 - **Replay da entrada:** clique numa operação da lista e em **▶ Replay da entrada**: o gráfico toca candle a candle,
   de antes do sinal até a saída, dizendo em que etapa está (sinal, ordem armada, entrada, stop e alvos, saída), com
-  pausa e velocidade de 1x a 10x.
+  pausa e velocidade de 0,5x a 16x (desde a 3.1).
 - **E se…:** refaz a mesma entrada com outro stop e outro alvo nos candles reais e aplica o mesmo ajuste a todas as
   operações da estratégia no período, para mostrar se a correção vale no geral ou só naquela operação.
 - **Suas lições** (aba IA): os ajustes salvos, o ajuste médio por estratégia e o efeito dele no conjunto. O ajuste
@@ -467,6 +489,8 @@ Não foi possível testar daqui: o envio real pelo Telegram (precisa do seu rob�
 teste"), o aviso do Windows (depende de o navegador permitir) e os scripts compilados dentro do Profit.
 
 ## Como ler o veredito
+
+Desde a 3.1 a tela mostra só o aviso de POUCOS DADOS; o veredito completo continua nos testes do código e na comparação.
 
 | Veredito | Quando |
 |---|---|

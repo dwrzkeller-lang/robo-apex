@@ -17,7 +17,7 @@
     corpo.innerHTML = html;
     modal.classList.remove("oculto");
   }
-  function fechar() { modal.classList.add("oculto"); M.seq++; M.aba = null; }
+  function fechar() { modal.classList.add("oculto"); M.seq++; M.aba = null; M.aberto = false; }
   $("roboFechar").onclick = fechar;
   modal.addEventListener("pointerdown", (e) => { if (e.target === modal) fechar(); });
   AX.on("tecla", (e) => { if (e.key === "Escape" && !modal.classList.contains("oculto")) fechar(); });
@@ -25,37 +25,94 @@
   const aviso = '<div class="nota tst-aviso">Simulação com dados passados, já com custos e escorregamento. É estudo: resultado passado não garante resultado futuro.</div>';
 
   // ---------------------------------------------------------------- testar esta estratégia
-  async function testar(est) {
+  // período só desta janela (começa igual ao do topo): atalhos, semanas e datas de/até
+  const ATALHOS = [["hoje", "Hoje"], ["7", "1 semana"], ["14", "2 semanas"], ["30", "1 mês"], ["91", "3 meses"], ["182", "6 meses"], ["tudo", "Tudo"]];
+  const isoDe = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+  function periodoInicial() {
+    const p = AX.pref;
+    if (p.per === "custom") return { at: "", de: p.de || "", ate: p.ate || "" };
+    return { at: { hoje: "hoje", "5d": "7", "1m": "30", "3m": "91", tudo: "tudo" }[p.per] || "30", de: "", ate: "" };
+  }
+  function datasDoAtalho(at) {                 // atalho -> datas (contadas a partir de hoje)
+    if (at === "tudo") return { de: "", ate: "" };
+    if (at === "hoje") return { de: isoDe(new Date()), ate: "" };
+    const dt = new Date(); dt.setDate(dt.getDate() - (+at - 1));
+    return { de: isoDe(dt), ate: "" };
+  }
+  function consultaTeste(cod) {
+    const per = M.per, ds = per.at ? datasDoAtalho(per.at) : per;
+    return AX.parametros({ est: cod, per: per.at === "hoje" ? "hoje" : "tudo", de: per.at === "hoje" ? 0 : AX.isoInt(ds.de) || 0, ate: AX.isoInt(ds.ate) || 0 });
+  }
+  const aoVivo = () => !M.per || !M.per.ate || AX.isoInt(M.per.ate) >= AX.isoInt(isoDe(new Date()));
+  function barraPeriodo() {
+    const p = M.per;
+    return `<div class="tst-per">
+      <div class="seg tst-atalhos">${ATALHOS.map(([k, t]) => `<button data-at="${k}" class="${p.at === k ? "on" : ""}">${t}</button>`).join("")}</div>
+      <div class="tst-datas"><label class="tst-data"><span>de</span><input type="date" id="tstDe" value="${AX.esc(p.at ? datasDoAtalho(p.at).de : p.de)}"></label>
+      <label class="tst-data"><span>até</span><input type="date" id="tstAte" value="${AX.esc(p.at ? "" : p.ate)}"></label>
+      <button class="mini-btn" id="tstAplicar">Ver</button>
+      ${AX.q("Escolha o período só desta janela: os atalhos contam a partir de hoje (1 semana = os últimos 7 dias). Ou escolha as datas de início e fim e clique em Ver. Sem data de fim, a janela se atualiza sozinha a cada minuto enquanto estiver aberta.")}</div>
+    </div>`;
+  }
+  async function testar(est, silencioso = false) {
     const cod = est || (AX.pref.est !== "TODAS" ? AX.pref.est : AX.pref.ultEst);
     const e = AX.cfg.estMap[cod];
     if (!e) return AX.toast("Escolha uma estratégia no topo.", "aviso");
+    if (!silencioso) { M.per = M.per && M.cod === cod && M.aberto ? M.per : periodoInicial(); M.cod = cod; M.aberto = true; }
     const seq = ++M.seq;
     M.aba = "testar";
-    const titulo = `<div class="tst-cab"><div><small>TESTAR ESTRATÉGIA</small><h2>${AX.esc(cod)} · ${AX.esc(e.nome)}</h2>
-      <span>${AX.esc(AX.rotAtivo(AX.pref.ativo))} · período: ${AX.esc(AX.periodoTexto(AX.vivo.D))} · ${AX.unidade(AX.vivo.D ? AX.vivo.D.meta : { fracionado: false }, AX.pref.contratos)}</span></div></div>`;
-    abrir(titulo + carregando("Rodando a estratégia em 5, 15 e 60 minutos…"));
+    const titulo = () => `<div class="tst-cab"><div><small>TESTAR ESTRATÉGIA</small><h2>${AX.esc(cod)} · ${AX.esc(e.nome)}</h2>
+      <span>${AX.esc(AX.rotAtivo(AX.pref.ativo))} · ${M.dados && M.dados.dataIni ? `${AX.dataTxt(M.dados.dataIni)} a ${AX.dataTxt(M.dados.dataFim)}` : "período escolhido"} · ${AX.unidade(AX.vivo.D ? AX.vivo.D.meta : { fracionado: false }, AX.pref.contratos)}</span></div>
+      ${aoVivo() ? `<span class="tst-vivo" data-dica="Sem data de fim: os números e a curva se atualizam sozinhos a cada minuto com os candles novos."><i class="luz vivo"></i>ao vivo${M.quando ? " · " + M.quando : ""}</span>` : ""}</div>` + barraPeriodo();
+    M.titulo = titulo;
+    if (!silencioso) { M.dados = null; abrir(titulo() + carregando("Rodando a estratégia em 5, 15 e 60 minutos…")); ligarPeriodo(cod); }
     let d;
-    try { d = await AX.json("/api/testar?" + AX.parametros({ est: cod }), { tempo: 120000 }); }
-    catch (err) { if (seq === M.seq) corpo.innerHTML = titulo + `<div class="erro">⚠ ${AX.esc(err.message)}</div>`; return; }
-    if (seq !== M.seq) return;
-    M.dados = d;
-    M.tfSel = d.tempos.some((x) => x.tf === +AX.pref.tf && !x.erro) ? +AX.pref.tf : (d.tempos.find((x) => !x.erro) || {}).tf;
-    pintarTestar(titulo, cod);
+    try { d = await AX.json("/api/testar?" + consultaTeste(cod), { tempo: 120000 }); }
+    catch (err) {
+      if (seq === M.seq && !silencioso) { corpo.innerHTML = titulo() + `<div class="erro">⚠ ${AX.esc(err.message)}</div>`; ligarPeriodo(cod); }
+      return;
+    }
+    if (seq !== M.seq || modal.classList.contains("oculto")) return;
+    const ref = d.tempos.find((x) => !x.erro) || {};
+    M.dados = { tempos: d.tempos, dataIni: ref.dataIni, dataFim: ref.dataFim };
+    M.quando = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    if (!silencioso || !d.tempos.some((x) => x.tf === M.tfSel && !x.erro))
+      M.tfSel = d.tempos.some((x) => x.tf === +AX.pref.tf && !x.erro) ? +AX.pref.tf : ref.tf;
+    pintarTestar(cod);
   }
+  function ligarPeriodo(cod) {
+    corpo.querySelectorAll(".tst-atalhos button").forEach((b) => (b.onclick = () => { M.per = { at: b.dataset.at, de: "", ate: "" }; testar(cod); }));
+    const ap = $("tstAplicar");
+    if (ap) ap.onclick = () => {
+      const de = $("tstDe").value, ate = $("tstAte").value;
+      if (de && ate && de > ate) return AX.toast("A data de início precisa ser antes da data de fim.", "aviso");
+      M.per = { at: "", de, ate }; testar(cod);
+    };
+  }
+  // atualiza sozinho a cada minuto enquanto a janela estiver aberta num período sem data de fim
+  setInterval(() => {
+    if (M.aba === "testar" && M.cod && M.dados && !modal.classList.contains("oculto") && !document.hidden && aoVivo()) testar(M.cod, true);
+  }, 60000);
   function cartaoTf(x) {
     if (x.erro) return `<div class="tst-tf erro-tf"><small>${tfNome(x.tf)}</small><b class="neutro">sem dados</b><em>${AX.esc(x.erro)}</em></div>`;
     const ag = AGORA[x.agora] || AGORA.aguardando;
-    return `<button class="tst-tf ${x.tf === M.tfSel ? "on" : ""}" data-tf="${x.tf}">
+    return `<button class="tst-tf ${x.tf === M.tfSel ? "on" : ""} ${x.n ? (x.total >= 0 ? "pos" : "neg") : ""}" data-tf="${x.tf}">
       <small>${tfNome(x.tf)}${x.tf === +AX.pref.tf ? " · no gráfico" : ""}</small>
       <b class="${AX.cls(x.total)}">${x.n ? din(x.total, x.moeda) : "sem operações"}</b>
       <em>${x.n} operações · acerto ${AX.pct(x.acerto, 0)}</em>
       <span class="tst-agora ${ag[1]}">● ${ag[0]}</span></button>`;
   }
-  function pintarTestar(titulo, cod) {
+  // pontos da curva: dia a dia quando o período tem mais de um dia; senão, operação a operação
+  function pontosCurva(x) {
+    if (M.modo !== "op" && x.dias && x.dias.length > 1)
+      return { pts: x.dias.map((r) => ({ x: diaTxt(r[0]), v: r[2], d: r[1], n: r[3] })), rot: "dia" };
+    return { pts: (x.pontos || []).map((r) => ({ x: AX.quandoT(r[0]).slice(0, 5), dica: AX.quandoT(r[0]).slice(-5), v: r[1], d: r[2] })), rot: "operação" };
+  }
+  function pintarTestar(cod) {
     const d = M.dados, x = d.tempos.find((y) => y.tf === M.tfSel) || d.tempos[0];
-    let h = titulo + `<div class="tst-tfs">${d.tempos.map(cartaoTf).join("")}</div>`;
+    let h = M.titulo() + `<div class="tst-tfs">${d.tempos.map(cartaoTf).join("")}</div>`;
     if (x && !x.erro) {
-      const m = x.moeda;
+      const m = x.moeda, diasPos = (x.dias || []).filter((r) => r[1] > 0).length, diasNeg = (x.dias || []).filter((r) => r[1] < 0).length;
       h += `<div class="tst-det">
         <div class="tst-kpis">
           <div><small>Resultado</small><b class="${AX.cls(x.total)}">${din(x.total, m)}</b></div>
@@ -65,7 +122,12 @@
           <div><small>Maior ganho</small><b class="bom">${din(x.maiorGanho, m)}</b></div>
           <div><small>Maior perda</small><b class="ruim">${din(x.maiorPerda, m)}</b></div>
         </div>
-        <canvas class="spark tst-curva" id="tstCurva"></canvas>
+        <div class="tst-curva-caixa">
+          <div class="tst-curva-cab"><span class="rot">RESULTADO ACUMULADO ${AX.q("A linha soma o resultado de cada dia (ou de cada operação). Acima do zero fica verde, abaixo do zero fica vermelho. Passe o mouse para ver o dia, o resultado do dia e o acumulado.")}</span>
+            <span class="tst-dias">${x.dias && x.dias.length ? `<b class="bom">${diasPos}</b> dia${diasPos === 1 ? "" : "s"} no positivo · <b class="ruim">${diasNeg}</b> no negativo` : ""}</span>
+            <div class="seg mini"><button data-modo="dia" class="${M.modo !== "op" ? "on" : ""}">dia a dia</button><button data-modo="op" class="${M.modo === "op" ? "on" : ""}">por operação</button></div></div>
+          <canvas class="tst-curva" id="tstCurva"></canvas>
+        </div>
         <div class="tst-grade">
           <div><div class="rot">MÊS A MÊS</div><table class="tab">${x.meses.length ? x.meses.map((r) => `<tr><td>${mesTxt(r[0])}</td><td class="n">${r[1]} ops</td><td class="n">${AX.pct((100 * r[3]) / r[1], 0)}</td><td class="n ${AX.cls(r[2])}">${din(r[2], m)}</td></tr>`).join("") : '<tr><td class="neutro">sem operações</td></tr>'}</table></div>
           <div><div class="rot">SEMANA A SEMANA</div><table class="tab">${x.semanas.length ? x.semanas.slice().reverse().map((r) => `<tr><td>semana de ${diaTxt(r[0])}</td><td class="n">${r[1]} ops</td><td class="n ${AX.cls(r[2])}">${din(r[2], m)}</td></tr>`).join("") : '<tr><td class="neutro">sem operações</td></tr>'}</table></div>
@@ -80,16 +142,21 @@
       </div>`;
     }
     h += aviso;
+    const jan = modal.querySelector(".modal-janela"), rolagem = jan ? jan.scrollTop : 0;
     corpo.innerHTML = h;
-    corpo.querySelectorAll(".tst-tf[data-tf]").forEach((b) => (b.onclick = () => { M.tfSel = +b.dataset.tf; pintarTestar(titulo, cod); }));
+    if (jan) jan.scrollTop = rolagem;
+    ligarPeriodo(cod);
+    corpo.querySelectorAll(".tst-tf[data-tf]").forEach((b) => (b.onclick = () => { M.tfSel = +b.dataset.tf; pintarTestar(cod); }));
     if (x && !x.erro) {
-      const vals = []; let ant = 0; for (const v of x.curva) { vals.push(v - ant); ant = v; }
-      requestAnimationFrame(() => AX.sparkline($("tstCurva"), vals, (i, v, ac) => `Acumulado: ${din(ac, x.moeda)}`));
+      const desenhar = () => { const c = pontosCurva(x); AX.curvaPL($("tstCurva"), c.pts, { moeda: x.moeda, rotulo: c.rot }); };
+      requestAnimationFrame(desenhar);
+      corpo.querySelectorAll("[data-modo]").forEach((b) => (b.onclick = () => { M.modo = b.dataset.modo; pintarTestar(cod); }));
       $("tstGrafico").onclick = () => { fechar(); irPara(cod, x.tf); };
       $("tstLigar").onclick = async () => { fechar(); irPara(cod, x.tf); setTimeout(() => AX.ops && AX.ops.ligarTeste && AX.ops.ligarTeste(), 600); };
-      $("tstFav").onclick = () => { favoritar(cod, !(AX.pref.minhas || []).includes(cod)); pintarTestar(titulo, cod); };
+      $("tstFav").onclick = () => { favoritar(cod, !(AX.pref.minhas || []).includes(cod)); pintarTestar(cod); };
     }
   }
+  window.addEventListener("resize", () => { if (M.aba === "testar" && M.dados && !modal.classList.contains("oculto")) pintarTestar(M.cod); });
   function irPara(cod, tf) {
     if (AX.aba !== "vivo") AX.trocarAba("vivo");
     AX.irPara({ ativo: AX.pref.ativo, tf, est: cod });

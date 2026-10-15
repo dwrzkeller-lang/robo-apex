@@ -7,7 +7,7 @@
 <meta name="description" content="Mais de 20 estratégias de day trade com entrada, stop e alvo no gráfico, teste no passado com custos reais, replay de cada operação, boleta simulada ao vivo, cripto e opções. R$ 49,99 por mês.">
 <meta property="og:title" content="Robô Apex · estratégias de day trade">
 <meta property="og:description" content="Veja onde cada estratégia entra e sai, teste antes de arriscar e treine ao vivo na boleta simulada.">
-<meta property="og:image" content="img/app_grafico.png">
+<meta property="og:image" content="img/replay_15out.jpg">
 <link rel="icon" type="image/png" href="../icone-64.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -155,6 +155,21 @@ footer a { color: var(--txt2); }
 @media (max-width: 640px) { .fixo-celular { display: block; position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 60; } .fixo-celular .bt { width: 100%; } }
 .aparece { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s ease; }
 .aparece.on { opacity: 1; transform: none; }
+/* 3.1: video no topo e os casos reais */
+.tela-hero video { width: 100%; height: auto; aspect-ratio: 1362 / 912; display: block; object-fit: cover; border-radius: 16px; background: #05080f; }
+.flutua b.verde, b.verde { color: var(--verde); }
+.caso { margin: 0 0 54px; display: grid; grid-template-columns: 1.35fr 1fr; gap: 34px; align-items: center; }
+.caso.inverte { grid-template-columns: 1fr 1.35fr; }
+.caso.inverte .print { order: 2; }
+.caso.grande { grid-template-columns: 1fr; gap: 18px; }
+.caso.grande figcaption { max-width: 860px; }
+.caso h3 { font-size: 26px; margin: 6px 0 10px; }
+.caso p { color: #c3cee0; margin: 0 0 16px; }
+.data { display: inline-block; font-size: 12.5px; font-weight: 700; letter-spacing: .4px; color: #a5f3fc; padding: 4px 10px; border-radius: 999px;
+  background: rgba(34, 211, 238, .08); border: 1px solid rgba(34, 211, 238, .3); }
+.dupla-txt .data { margin-bottom: 8px; }
+.print.estreito { max-width: 360px; margin: 0 auto; }
+@media (max-width: 860px) { .caso, .caso.inverte { grid-template-columns: 1fr; gap: 16px; } .caso.inverte .print { order: 0; } .caso h3 { font-size: 22px; } }
 </style>
 </head>
 <body>
@@ -180,11 +195,11 @@ footer a { color: var(--txt2); }
       </div>
       <div class="mini"><b>Cancele quando quiser.</b> 7 dias de garantia pela plataforma de pagamento.</div>
     </div>
-    <div class="tela-hero">
-      <canvas id="anim" aria-label="Animação de um gráfico com uma operação marcada"></canvas>
-      <span class="legenda-anim">ilustração</span>
-      <div class="flutua f1"><small>Entrada, stop e alvo</small><b>tudo no gráfico</b></div>
-      <div class="flutua f2"><small>Testar estratégia</small><b>5, 15 e 60 min</b></div>
+    <div class="tela-hero tem-video">
+      <video id="videoHero" src="img/replay_15out.mp4" poster="img/replay_15out.jpg" autoplay muted loop playsinline preload="auto" aria-label="Replay de duas entradas no mini índice em 15/10/2026"></video>
+      <span class="legenda-anim">replay · WIN 5 min · 15/10/2026</span>
+      <div class="flutua f1"><small>2 entradas seguidas</small><b class="verde">+R$ 3.443,97</b></div>
+      <div class="flutua f2"><small>Replay candle a candle</small><b>do sinal à saída</b></div>
     </div>
   </div>
 </section>
@@ -193,14 +208,61 @@ footer a { color: var(--txt2); }
 
 <section class="bloco" id="como">
   <div class="envolve">
-    <div class="titulo-sec aparece"><small>O ROBÔ EM AÇÃO</small><h2>Cada operação explicada, do sinal à saída</h2>
-      <p>Prints reais do robô. Os nomes das estratégias estão borrados de propósito: elas ficam para quem assina.</p></div>
-    <div class="print vitrine-grande aparece"><img src="img/app_grafico.png" alt="Tela do Robô Apex com operações marcadas no gráfico"></div>
+    <div class="titulo-sec aparece"><small>O ROBÔ EM AÇÃO</small><h2>Operações reais de mercado, marcadas pelo robô</h2>
+      <p>Prints tirados do Robô Apex em outubro de 2026, com os dados reais do mercado, em simulação (sem dinheiro). O nome das estratégias fica borrado de propósito: elas são para quem assina.</p></div>
+
+    <figure class="caso grande aparece">
+      <div class="print"><img src="img/dia_win_15out.png" alt="Gráfico do mini índice em 15/10/2026 com duas vendas e as saídas no alvo" loading="lazy"></div>
+      <figcaption><span class="data">15/10/2026 · WIN · 5 min · 10 contratos</span>
+        <h3>O dia inteiro no gráfico: sinal, entrada, stop e saída</h3>
+        <p>Às 14:45 o robô marcou a venda em 205.475 e saiu no alvo às 16:10 com <b class="verde">+R$ 1.794,00</b>. Às 16:25 veio a segunda venda, que saiu às 16:30 com <b class="verde">+R$ 1.649,97</b>. Na direita, o painel mostra o resultado do dia, o teste ao vivo e cada operação, que você pode abrir em replay.</p></figcaption>
+    </figure>
+
+    <figure class="caso aparece">
+      <div class="print"><img src="img/estrategia_win_15out.png" alt="Duas compras no mini índice com saída no alvo de 4 vezes o risco" loading="lazy"></div>
+      <figcaption><span class="data">14 e 15/10/2026 · WIN · 5 min · 10 contratos</span>
+        <h3>Ganhar muito quando acerta, perder pouco quando erra</h3>
+        <p>A estratégia é composta por três peças: espera o preço romper uma mínima importante, confirma que o rompimento foi falso quando ele volta para dentro e entra a favor da volta, com o stop logo abaixo do fundo e o alvo de 4 vezes o risco. Aqui foram duas saídas no alvo: <b class="verde">+R$ 4.778,13</b> e <b class="verde">+R$ 5.345,25</b>. Na lista ao lado aparecem também os dois stops da semana, de cerca de R$ 400 cada.</p>
+        <a class="bt bt-pri bt-peq" data-app="/entrar?cadastro=1">Assine e veja como ela funciona na prática</a></figcaption>
+    </figure>
+
+    <figure class="caso inverte aparece">
+      <div class="print"><img src="img/parcial_win_15out.png" alt="Resultado de 15/10/2026 com a gestão parcial" loading="lazy"></div>
+      <figcaption><span class="data">15/10/2026 · WIN · 5 min · gestão Parcial</span>
+        <h3>A mesma estratégia, no dia 15/10, com outra gestão</h3>
+        <p>Compra às 10:40 em 203.774, stop em 203.105 e saída às 12:25 no alvo, com <b class="verde">+R$ 2.000,72</b> em 10 contratos. Na direita você troca a gestão (2:1, 3:1, 4:1, parcial, trailing) e o robô refaz a conta na hora.</p></figcaption>
+    </figure>
+
+    <figure class="caso aparece">
+      <div class="print"><img src="img/outra_win_2309.png" alt="Duas compras seguidas no mini índice em 22 e 23/09/2026" loading="lazy"></div>
+      <figcaption><span class="data">22 e 23/09/2026 · WIN · 5 min · 10 contratos · alvo 3:1</span>
+        <h3>Outra estratégia, outras entradas</h3>
+        <p>Duas compras seguidas a favor da tendência, cada uma com o stop curto embaixo e o alvo de 3 vezes o risco: <b class="verde">+R$ 1.284,00</b> no dia 22 e <b class="verde">+R$ 2.961,28</b> no dia 23. O robô mostra onde estava o stop e por que saiu.</p></figcaption>
+    </figure>
+
+    <figure class="caso inverte aparece">
+      <div class="print"><img src="img/acoes_petr4.png" alt="Compra em PETR4 com dois alvos" loading="lazy"></div>
+      <figcaption><span class="data">PETR4 · 5 min · 02/10/2026</span>
+        <h3>Também em ações da B3</h3>
+        <p>Compra em 50,41 às 13:30, stop em 50,19 e dois alvos marcados no gráfico. Saída a 50,74 às 14:40, com <b class="verde">+R$ 304,79</b>. As mesmas estratégias rodam em PETR4, VALE3, ITUB4 e outras ações, no mini índice, no mini dólar e em cripto.</p></figcaption>
+    </figure>
+
+    <figure class="caso grande aparece">
+      <div class="print"><img src="img/mes_win.png" alt="Um mês de operações no mini índice com o resultado do período" loading="lazy"></div>
+      <figcaption><span class="data">15/09 a 15/10/2026 · WIN · 5 min · 10 contratos · gestão 3:1</span>
+        <h3>O mês inteiro de uma estratégia, operação por operação</h3>
+        <p>48 operações no mês e <b class="verde">+R$ 6.642,00</b> no período, com acerto de 35%: perde várias vezes pouco e ganha menos vezes, mas bem mais. Ao lado ficam a média por operação, os custos e a pior queda do mês (R$ 11.028), para você saber o tamanho do caminho antes de decidir.</p></figcaption>
+    </figure>
+
     <div class="duplas">
-      <div class="aparece"><div class="print"><img src="img/app_testar.png" alt="Janela Testar estratégia"></div>
-        <div class="dupla-txt"><h3>Teste antes de arriscar</h3><p>Escolha a estratégia e veja como ela foi em 5, 15 e 60 minutos: resultado em reais, mês a mês, semana a semana, maior ganho e maior perda. Com os custos e o escorregamento já descontados.</p></div></div>
-      <div class="aparece"><div class="print"><img src="img/app_boleta.png" alt="Boleta simulada e mercado cripto"></div>
-        <div class="dupla-txt"><h3>Treine ao vivo, sem dinheiro</h3><p>A boleta simulada compra e vende na hora, com contratos, stop e alvo, a mercado, limitada ou stop. O resultado aparece em reais, igual numa corretora. Funciona em ações, mini índice, mini dólar e cripto.</p></div></div>
+      <div class="aparece"><div class="print"><img src="img/testar_15out.png" alt="Janela Testar estratégia" loading="lazy"></div>
+        <div class="dupla-txt"><span class="data">15/10/2026 · WIN · último mês</span><h3>▶ Testar estratégia</h3><p>Um clique e a estratégia roda em 5, 15 e 60 minutos: resultado em reais, a curva dia a dia (verde acima do zero, vermelha abaixo), mês a mês, semana a semana, maior ganho e maior perda. Os custos já vêm descontados.</p></div></div>
+      <div class="aparece"><div class="print"><img src="img/boleta_15out.png" alt="Boleta simulada ao lado do gráfico" loading="lazy"></div>
+        <div class="dupla-txt"><span class="data">15/10/2026 · WIN · boleta simulada</span><h3>Boleta simulada ao vivo</h3><p>Compre e venda na hora com contratos, stop e alvo, a mercado, limitada ou stop, sem dinheiro. No gráfico, a operação de 14/10 que bateu no stop: o robô mostra as perdas também, para você treinar de verdade.</p></div></div>
+      <div class="aparece"><div class="print estreito"><img src="img/resultado_15out.png" alt="Resultado do período e gestões" loading="lazy"></div>
+        <div class="dupla-txt"><span class="data">15/10/2026 · aba Resultado</span><h3>Resultado e gestão</h3><p>O resultado do período em reais, a média por operação, a pior queda e os custos. Teste a gestão de saída e o editor “E se…”: arraste o stop e o alvo e veja na hora o que teria acontecido.</p></div></div>
+      <div class="aparece"><div class="print estreito"><img src="img/calendario_out.png" alt="Calendário com o resultado de cada dia" loading="lazy"></div>
+        <div class="dupla-txt"><span class="data">outubro de 2026 · aba Dia a dia</span><h3>O dia a dia num calendário</h3><p>Cada dia com o resultado, quantas operações e quantas deram certo. Clique no dia e o gráfico vai direto para ele, ou abra o <b>Replay</b> do pregão inteiro.</p></div></div>
     </div>
   </div>
 </section>
@@ -209,8 +271,8 @@ footer a { color: var(--txt2); }
   <div class="envolve">
     <div class="titulo-sec aparece"><small>RECURSOS</small><h2>Tudo o que um trader precisa para estudar de verdade</h2></div>
     <div class="cards">
-      <div class="card aparece"><div class="ic">📈</div><h3>23 estratégias prontas</h3><p>Clássicas do mercado e as mais usadas no TradingView: Fibonacci, pivô, rompimento, Supertrend, Squeeze, Tartarugas, VWAP e outras. Escolha as suas favoritas.</p></div>
-      <div class="card aparece"><div class="ic">▶</div><h3>Replay da entrada</h3><p>Assista a operação candle a candle, de antes do sinal até a saída, com a explicação de cada etapa. Velocidade de 1x a 10x.</p></div>
+      <div class="card aparece"><div class="ic">📈</div><h3>23 estratégias prontas</h3><p>Clássicas do mercado e das mais usadas no TradingView: tendência, rompimento, retração, reversão e volatilidade. Escolha as suas favoritas.</p></div>
+      <div class="card aparece"><div class="ic">▶</div><h3>Replay do pregão</h3><p>Escolha o dia e assista o pregão inteiro candle a candle, com cada candle se formando e a estratégia entrando e saindo na hora. Velocidade de 0,5x a 16x.</p></div>
       <div class="card aparece"><div class="ic">✎</div><h3>E se eu tivesse feito diferente?</h3><p>Arraste o stop e o alvo no gráfico e veja o que teria acontecido. Gostou? Salve como regra e a estratégia passa a operar assim.</p></div>
       <div class="card aparece"><div class="ic">🛡</div><h3>Gestão e stop lado a lado</h3><p>Compare alvo fixo, parcial, trailing e stop curto numa tabela só, e escolha a combinação que perde menos para ganhar o mesmo.</p></div>
       <div class="card aparece"><div class="ic">📡</div><h3>Teste ao vivo com aviso</h3><p>Deixe a estratégia rodando: o robô registra cada sinal, entrada e saída e avisa no computador e no celular.</p></div>
@@ -233,7 +295,7 @@ footer a { color: var(--txt2); }
     <div class="titulo-sec aparece"><small>RESULTADOS DE VERDADE</small><h2>Números reais da simulação, com o lado bom e o lado ruim</h2>
       <p>O robô não esconde nada: mostra onde a estratégia ganhou e onde perdeu, com custos. É assim que você descobre o que funciona para você.</p></div>
     <div class="resultado-caixa">
-      <div class="print aparece"><img src="img/app_resultado.png" alt="Resultado do período, gestão e stops comparados"></div>
+      <div class="print aparece"><img src="img/mes_win.png" alt="Resultado de um mês, com a pior queda e os custos" loading="lazy"></div>
       <div class="aparece">
         <h3 style="font-size:26px">O que você vê em cada estratégia</h3>
         <ul>
@@ -242,7 +304,7 @@ footer a { color: var(--txt2); }
           <li>O resultado de cada gestão com cada tipo de stop, lado a lado.</li>
           <li>O dia a dia num calendário e as operações uma por uma.</li>
         </ul>
-        <div class="aviso-honesto"><b>Transparência:</b> os prints são de simulações com dados passados. Em outros ativos, tempos gráficos e períodos a mesma estratégia pode dar prejuízo, e o robô mostra isso também. Resultado passado não garante resultado futuro.</div>
+        <div class="aviso-honesto"><b>Transparência:</b> os prints e o vídeo são do robô em simulação, com dados reais do mercado e sem dinheiro. Em outros ativos, tempos gráficos e períodos a mesma estratégia pode dar prejuízo, e o robô mostra isso também. Resultado passado não garante resultado futuro.</div>
       </div>
     </div>
   </div>
@@ -328,45 +390,11 @@ footer a { color: var(--txt2); }
   const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("on"); io.unobserve(e.target); } }), { threshold: .12 });
   document.querySelectorAll(".aparece").forEach((el) => io.observe(el));
 
-  // grafico animado do topo (ilustracao): candles andando, uma compra com stop e alvo e a saida no alvo
-  const cv = document.getElementById("anim"), ctx = cv.getContext("2d");
-  let W, H, dpr;
-  function medir() { dpr = window.devicePixelRatio || 1; W = cv.clientWidth; H = cv.clientHeight; cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
-  medir(); window.addEventListener("resize", medir);
-  const velas = [];
-  let p = 100, semente = 7;
-  const rnd = () => { semente = (semente * 9301 + 49297) % 233280; return semente / 233280; };
-  function nova(tendencia) { const o = p, c = o + (rnd() - .5 + tendencia) * 1.6, h = Math.max(o, c) + rnd() * .8, l = Math.min(o, c) - rnd() * .8; p = c; velas.push({ o, h, l, c }); }
-  for (let i = 0; i < 70; i++) nova(i > 40 ? .18 : -.02);
-  let t = 0, fase = 0;
-  function quadro() {
-    t++;
-    if (t % 28 === 0) { nova(fase < 25 ? .22 : fase < 40 ? -.05 : .08); velas.shift(); fase = (fase + 1) % 60; }
-    ctx.clearRect(0, 0, W, H);
-    const n = velas.length, mn = Math.min(...velas.map((v) => v.l)) - 1, mx = Math.max(...velas.map((v) => v.h)) + 1;
-    const y = (v) => 14 + (mx - v) / (mx - mn) * (H - 28), x = (i) => 10 + i * (W - 20) / n, w = Math.max(3, (W - 20) / n * .6);
-    ctx.strokeStyle = "rgba(148,163,184,.08)"; ctx.lineWidth = 1;
-    for (let g = 1; g < 6; g++) { ctx.beginPath(); ctx.moveTo(0, g * H / 6); ctx.lineTo(W, g * H / 6); ctx.stroke(); }
-    // media
-    ctx.strokeStyle = "#4795f1"; ctx.lineWidth = 2; ctx.beginPath();
-    velas.forEach((v, i) => { const s = velas.slice(Math.max(0, i - 9), i + 1); const m = s.reduce((a, b) => a + b.c, 0) / s.length; i ? ctx.lineTo(x(i) + w / 2, y(m)) : ctx.moveTo(x(i) + w / 2, y(m)); });
-    ctx.stroke();
-    velas.forEach((v, i) => {
-      const cor = v.c >= v.o ? "#26d6a0" : "#ff5470";
-      ctx.strokeStyle = cor; ctx.beginPath(); ctx.moveTo(x(i) + w / 2, y(v.h)); ctx.lineTo(x(i) + w / 2, y(v.l)); ctx.stroke();
-      ctx.fillStyle = cor; ctx.fillRect(x(i), Math.min(y(v.o), y(v.c)), w, Math.max(1.5, Math.abs(y(v.o) - y(v.c))));
-    });
-    // operacao
-    const ie = n - 26, ent = velas[ie].h + .2, stop = ent - 2.2, alvo = ent + 4.6, xe = x(ie), xf = W - 12;
-    ctx.fillStyle = "rgba(46,242,168,.10)"; ctx.fillRect(xe, y(alvo), xf - xe, y(ent) - y(alvo));
-    ctx.fillStyle = "rgba(255,77,106,.10)"; ctx.fillRect(xe, y(ent), xf - xe, y(stop) - y(ent));
-    const linha = (v, cor, txt) => { ctx.strokeStyle = cor; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(xe, y(v)); ctx.lineTo(xf, y(v)); ctx.stroke(); ctx.setLineDash([]);
-      ctx.font = "700 11px Inter, sans-serif"; const tw = ctx.measureText(txt).width + 12; ctx.fillStyle = cor; ctx.fillRect(xf - tw, y(v) - 9, tw, 18); ctx.fillStyle = "#04101a"; ctx.fillText(txt, xf - tw + 6, y(v) + 4); };
-    linha(alvo, "#2ef2a8", "ALVO"); linha(stop, "#ff4d6a", "STOP"); linha(ent, "#22d3ee", "COMPRA");
-    ctx.fillStyle = "#ffd23f"; ctx.font = "700 11px Inter, sans-serif"; ctx.fillText("SINAL", xe - 12, y(velas[ie - 1].l) + 18);
-    requestAnimationFrame(quadro);
+  // video do topo: so toca quando esta na tela (economiza bateria e dados no celular)
+  const vid = document.getElementById("videoHero");
+  if (vid && "IntersectionObserver" in window) {
+    new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { const p = vid.play(); if (p && p.catch) p.catch(() => {}); } else vid.pause(); }), { threshold: .2 }).observe(vid);
   }
-  requestAnimationFrame(quadro);
 })();
 </script>
 </body>
