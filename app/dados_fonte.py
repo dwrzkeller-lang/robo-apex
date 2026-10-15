@@ -41,6 +41,16 @@ def _intl(nome, yahoo, tick, dec, valor, lote, slip):
                 valor_ponto=valor, moeda="US$", lote=lote, prm=INTL_PRM, slip=slip, custo=3.5, fracionado=True)
 
 
+# acoes da B3 (Yahoo, ~15 min de atraso): 1 lote = 100 acoes; custo = emolumentos de day trade (~0,025% por lado)
+B3_PRM = dict(HoraInicio=1010, HoraFimEntradas=1630, HoraZeragem=1650)
+
+
+def _acao(cod, nome):
+    return dict(nome="%s - %s" % (cod, nome), yahoo=cod + ".SA", escala=1.0, tick=0.01, sessao=(1000, 1700), decimais=2,
+                valor_ponto=100.0, moeda="R$", lote="lote de 100 ações", prm=B3_PRM, slip=0.01, custo=0.0, custo_pct=0.00025,
+                fracionado=False, mercado="b3", grupo="Ações da B3")
+
+
 # valor_ponto = quanto vale 1,00 de variacao de preco em 1 contrato/lote
 ATIVOS = {
     "WIN": dict(nome="Mini Índice (WIN) - proxy: Ibovespa à vista", yahoo="^BVSP", escala=1.0, tick=5.0,
@@ -66,7 +76,23 @@ ATIVOS = {
                    prm=dict(HoraInicio=0, HoraFimEntradas=2300, HoraZeragem=2355), slip=10.0, custo=0.0, fracionado=True),
     "PRATA": _intl("Prata (XAG/USD - futuro SI)", "SI=F", 0.005, 3, 5000.0, "lote de 5.000 onças", 0.01),
     "PETROLEO": _intl("Petróleo WTI (futuro CL)", "CL=F", 0.01, 2, 1000.0, "lote de 1.000 barris", 0.02),
+    "SPX500": dict(nome="S&P 500 (horário de Nova York)", yahoo="^GSPC", escala=1.0, tick=0.1, fuso="NY",
+                   sessao=(930, 1600), decimais=1, valor_ponto=1.0, moeda="US$", lote="lote (US$ 1 por ponto)",
+                   prm=dict(HoraInicio=935, HoraFimEntradas=1530, HoraZeragem=1555), slip=0.5, custo=0.0, fracionado=True),
+    "US30": dict(nome="Dow Jones 30 (horário de Nova York)", yahoo="^DJI", escala=1.0, tick=1.0, fuso="NY",
+                 sessao=(930, 1600), decimais=0, valor_ponto=1.0, moeda="US$", lote="lote (US$ 1 por ponto)",
+                 prm=dict(HoraInicio=935, HoraFimEntradas=1530, HoraZeragem=1555), slip=3.0, custo=0.0, fracionado=True),
 }
+for _c, _n in (("PETR4", "Petrobras PN"), ("VALE3", "Vale ON"), ("ITUB4", "Itaú Unibanco PN"), ("BBDC4", "Bradesco PN"),
+               ("BBAS3", "Banco do Brasil ON"), ("ABEV3", "Ambev ON"), ("B3SA3", "B3 ON"), ("WEGE3", "WEG ON"),
+               ("PRIO3", "PRIO ON"), ("MGLU3", "Magazine Luiza ON"), ("SUZB3", "Suzano ON"), ("ELET3", "Eletrobras ON")):
+    ATIVOS[_c] = _acao(_c, _n)
+ATIVOS["BOVA11"] = dict(_acao("BOVA11", "ETF do Ibovespa"), lote="lote de 100 cotas", grupo="Ações da B3")
+for _k in ("WIN", "WDO"):
+    ATIVOS[_k].update(mercado="b3", grupo="Mini contratos da B3")
+for _k, _v in ATIVOS.items():
+    _v.setdefault("mercado", "mundo")
+    _v.setdefault("grupo", "Índices e ações lá de fora" if _k in ("USTEC", "JP225", "SPX500", "US30") else "Moedas e commodities")
 
 # intervalo do Yahoo e periodo maximo para cada tempo grafico
 TEMPOS = {2: ("2m", "60d"), 5: ("5m", "60d"), 15: ("15m", "60d"), 30: ("30m", "60d"), 60: ("60m", "730d"),
@@ -341,7 +367,7 @@ def carregar_yahoo(base, chave, tf=5, guardar=True, max_idade=None):
         arq_cache = os.path.join(pasta_dados(base), "cache", "yahoo_%s%s.json" % (chave, sufixo))
         arq_hist = os.path.join(pasta_dados(base), "historico", "yahoo", "%s_%d.json" % (chave, tf))
         st = dict(completo=0.0, gravado=0.0, n_gravado=0, ok=0.0)
-        rotulo = "Yahoo Finance (%s%s)" % (NOME_TEMPO[tf], ", atraso ~15 min" if tf < 1440 and chave in ("WIN", "WDO") else "")
+        rotulo = "Yahoo Finance (%s%s)" % (NOME_TEMPO[tf], ", atraso ~15 min" if tf < 1440 and cfg.get("mercado") == "b3" else "")
 
         def gravar_hist(b):
             try:

@@ -1,4 +1,4 @@
-/* ROBÔ APEX — aba CALENDÁRIO: resultado de cada dia (e de cada operação) do robô no ativo e tempo gráfico
+/* ROBÔ APEX: aba CALENDÁRIO: resultado de cada dia (e de cada operação) do robô no ativo e tempo gráfico
    do topo, usando toda a base carregada. Com "TODAS juntas" dá para ver cada estratégia sozinha. */
 (() => {
   "use strict";
@@ -41,7 +41,7 @@
     }
     const meses = [...new Set([...porDia.keys()].map((d) => Math.floor(d / 100)))].sort();
     if (!meses.length) {
-      $("calMeses").innerHTML = ""; $("calTitulo").textContent = "—";
+      $("calMeses").innerHTML = ""; $("calTitulo").textContent = "-";
       $("calGrade").innerHTML = `<div class="vazio-bloco" style="grid-column:1/-1">Nenhuma operação nesta seleção.</div>`;
       $("calResumo").innerHTML = ""; $("calDia").innerHTML = "";
       return;
@@ -84,8 +84,8 @@
       <div><small>Resultado</small><b class="${AX.cls(tot)}">${AX.dinheiro(tot, D, true)}</b></div>
       <div><small>Operações</small><b>${n}</b><em>acerto ${AX.pct(n ? (100 * g) / n : null, 0)}</em></div>
       <div><small>Dias</small><b><span class="bom">${diasPos}</span> / <span class="ruim">${diasNeg}</span></b><em>positivos / negativos</em></div>
-      <div><small>Melhor dia</small><b class="bom">${melhor ? AX.dinheiro(melhor[1], D, true) : "—"}</b><em>${melhor ? "dia " + melhor[0] : ""}</em></div>
-      <div><small>Pior dia</small><b class="ruim">${pior ? AX.dinheiro(pior[1], D, true) : "—"}</b><em>${pior ? "dia " + pior[0] : ""}</em></div>
+      <div><small>Melhor dia</small><b class="bom">${melhor ? AX.dinheiro(melhor[1], D, true) : "-"}</b><em>${melhor ? "dia " + melhor[0] : ""}</em></div>
+      <div><small>Pior dia</small><b class="ruim">${pior ? AX.dinheiro(pior[1], D, true) : "-"}</b><em>${pior ? "dia " + pior[0] : ""}</em></div>
       <div><small>Média por dia operado</small><b class="${AX.cls(tot)}">${AX.dinheiro((diasPos + diasNeg) ? tot / (diasPos + diasNeg) : 0, D, true)}</b></div></div>`;
     if (m.est === "TODAS" && D.porEst) {
       res += `<div class="rot" style="margin-top:10px">CADA ESTRATÉGIA SOZINHA NESTE MÊS</div><table class="tab"><tr><th>Estratégia</th><th class="n">Ops</th><th class="n">Acerto</th><th class="n">Resultado</th></tr>` +

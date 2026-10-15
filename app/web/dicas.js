@@ -1,4 +1,4 @@
-/* ROBÔ APEX — dicas: o balãozinho que explica um botão ou um número. Qualquer elemento com o atributo data-dica ganha a
+/* ROBÔ APEX: dicas: o balãozinho que explica um botão ou um número. Qualquer elemento com o atributo data-dica ganha a
    explicação ao passar o mouse (ou ao receber o foco pelo teclado); os pontinhos "?" (<i class="q" data-dica="...">)
    abrem na hora e também com um clique/toque. O texto é lido do atributo a cada vez: quem muda o data-dica com o mouse
    em cima (a curvinha do resultado, por exemplo) vê o balão acompanhar. */

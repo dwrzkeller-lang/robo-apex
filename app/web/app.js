@@ -1,4 +1,4 @@
-/* ROBÔ APEX — núcleo da tela: topo (ativo, tempo, estratégia, período, contratos, ajustes), tela de abertura,
+/* ROBÔ APEX: núcleo da tela: topo (ativo, tempo, estratégia, período, contratos, ajustes), tela de abertura,
    gráfico e a aba AO VIVO. Toda conta de estratégia e de resultado é feita no servidor (Python); a tela só mostra.
    Ao vivo a tela pede ao servidor só o que mudou (o trecho novo dos candles) e atualiza o gráfico no lugar. */
 (() => {
@@ -18,7 +18,9 @@
     tam: "fixo", risco: 1, lossDia: 0, metaDia: 0, seletivo: false, metaMes: 0, quedaMax: 0,     // aba Plano
     criptos: [], prot: [],
     candles: { alta: "#26a69a", baixa: "#ef5350", tipo: "cheio", tendencia: false }, notificar: false,
-    unidade: "reais", emReais: true,                     // resultados em dinheiro (ou em R) e dólar convertido para reais
+    unidade: "reais", emReais: true,
+    mercado: "b3", ultAtivo: { b3: "WIN", opcoes: "PETR4", cripto: "BN:BTCUSDT" },          // Bolsa, Opções ou Cripto
+    minhas: ["E1", "E2", "E9", "E16", "E19", "E21"], regras: {}, tutorialVisto: false,                     // resultados em dinheiro (ou em R) e dólar convertido para reais
     graf: { fundo: "#0b0e14", gradeV: true, gradeH: true, mira: false, linhaPreco: true } };      // aparência (botão direito no gráfico)
   const lerLS = (k) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } };
   // A tela só sabe quem entrou depois da primeira resposta do servidor; por isso guarda o último usuário deste navegador.
@@ -27,6 +29,7 @@
   try { uidPref = localStorage.getItem("apex_usuario") || ""; } catch (e) { /* sem armazenamento */ }
   const chavePref = () => "apex_pref:" + uidPref;
   AX.pref = Object.assign({}, PADRAO, (uidPref && lerLS(chavePref())) || lerLS("rk_pref") || {});
+  if (/[?&]ativo=B[NF]%3A|[?&]ativo=B[NF]:/.test(location.search)) AX.pref.mercado = "cripto";
   AX.salvarPref = () => { if (!uidPref) return; try { localStorage.setItem(chavePref(), JSON.stringify(AX.pref)); } catch (e) { /* ok */ } };
   function identificar(u) {
     if (!u || u.id === uidPref) return false;
@@ -45,7 +48,11 @@
   const pc = AX.pref.candles || {};
   { const g = AX.pref.graf || {}, pg = PADRAO.graf;
     AX.pref.graf = { fundo: corOk(g.fundo) ? g.fundo : pg.fundo, gradeV: g.gradeV !== false, gradeH: g.gradeH !== false, mira: !!g.mira, linhaPreco: g.linhaPreco !== false };
-    if (AX.pref.unidade !== "R") AX.pref.unidade = "reais"; }
+    if (AX.pref.unidade !== "R") AX.pref.unidade = "reais";
+    if (!["b3", "opcoes", "cripto"].includes(AX.pref.mercado)) AX.pref.mercado = "b3";
+    AX.pref.ultAtivo = Object.assign({}, PADRAO.ultAtivo, AX.pref.ultAtivo || {});
+    if (!Array.isArray(AX.pref.minhas) || !AX.pref.minhas.length) AX.pref.minhas = PADRAO.minhas.slice();
+    if (!AX.pref.regras || typeof AX.pref.regras !== "object" || Array.isArray(AX.pref.regras)) AX.pref.regras = {}; }
   AX.pref.candles = { alta: corOk(pc.alta) ? pc.alta : PADRAO.candles.alta, baixa: corOk(pc.baixa) ? pc.baixa : PADRAO.candles.baixa,
     tipo: pc.tipo === "vazado" ? "vazado" : "cheio", tendencia: !!pc.tendencia };
 
@@ -63,6 +70,7 @@
     let j = null;
     try { j = await r.json(); } catch (e) { throw new Error("Resposta inválida do robô (HTTP " + r.status + ")"); }
     if (r.status === 401 || (r.status === 403 && j && j.trocar)) { irParaLogin(); throw new Error((j && j.erro) || "Sessão encerrada."); }
+    if (r.status === 402 && j && j.assinar) { location.replace("/"); throw new Error(j.erro || "Assinatura inativa."); }
     if (!r.ok || (j && j.erro)) throw new Error((j && j.erro) || "HTTP " + r.status);
     return j;
   };
@@ -75,21 +83,21 @@
   // ---------------------------------------------------------------- formatação
   const nf = (d) => ({ minimumFractionDigits: d, maximumFractionDigits: d });
   AX.dec = () => (AX.D ? AX.D.meta.decimais : 2);
-  AX.fmt = (v, d) => (v == null || isNaN(v) ? "—" : Number(v).toLocaleString("pt-BR", nf(d ?? AX.dec())));
-  AX.num = (v, d = 1) => (v == null || isNaN(v) ? "—" : Number(v).toLocaleString("pt-BR", nf(d)));
-  AX.pct = (v, d = 1) => (v == null || isNaN(v) ? "—" : AX.num(v, d) + "%");
+  AX.fmt = (v, d) => (v == null || isNaN(v) ? "-" : Number(v).toLocaleString("pt-BR", nf(d ?? AX.dec())));
+  AX.num = (v, d = 1) => (v == null || isNaN(v) ? "-" : Number(v).toLocaleString("pt-BR", nf(d)));
+  AX.pct = (v, d = 1) => (v == null || isNaN(v) ? "-" : AX.num(v, d) + "%");
   // "R" = quantas vezes o risco da operação. Por padrão a tela mostra DINHEIRO; onde só existe o múltiplo (uma média, uma
   // estimativa) ele aparece por extenso ("1,5× o risco"). Quem prefere R troca no botão direito do gráfico.
   AX.emR = () => AX.pref.unidade === "R";
   AX.R = (v, d = 2) => {                     // o sinal vem do valor já arredondado: nada de "−0,00R"
-    if (v == null || isNaN(v)) return "—";
+    if (v == null || isNaN(v)) return "-";
     const p = Math.pow(10, d), r = Math.round(v * p) / p;
     return (r > 0 ? "+" : r < 0 ? "−" : "") + AX.num(Math.abs(r), d) + (AX.emR() ? "R" : "× o risco");
   };
   AX.moeda = (D) => ((D || AX.D) ? (D || AX.D).meta.moeda : "R$");
   AX.usdbrl = 0;                             // dólar em reais usado pelo servidor na última resposta (0 = sem conversão)
   AX.dinheiro = (v, D, sinal = false) => {
-    if (v == null || isNaN(v)) return "—";
+    if (v == null || isNaN(v)) return "-";
     let m = AX.moeda(D);
     if (m === "US$" && AX.usdbrl > 0 && AX.pref.emReais !== false) { v *= AX.usdbrl; m = "R$"; }      // conta em reais
     const s = v < 0 ? "−" : sinal && v > 0 ? "+" : "";
@@ -127,7 +135,7 @@
   AX.dataISO = (d) => { const s = String(d); return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`; };
   AX.isoInt = (iso) => (iso ? parseInt(String(iso).replace(/-/g, ""), 10) || 0 : 0);
   AX.esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-  AX.nomeEst = (cod) => (cod === "TODAS" ? "TODAS juntas" : ((AX.cfg && AX.cfg.estMap[cod]) || {}).nome || cod);
+  AX.nomeEst = (cod) => (cod === "TODAS" ? "Minhas estratégias juntas" : ((AX.cfg && AX.cfg.estMap[cod]) || {}).nome || cod);
   AX.dirTxt = (d) => (d > 0 ? "COMPRA" : "VENDA");
   // pontinho de interrogação com a explicação ao passar o mouse (dicas.js)
   AX.q = (txt) => `<i class="q" data-dica="${AX.esc(txt)}"></i>`;
@@ -597,7 +605,7 @@
         ${q > 0 ? "" : `<div class="detalhe ruim"><b>Fora do plano:</b> o lote mínimo arrisca mais que ${AX.num(m.riscoPct, 1)}% do capital. Pelo plano, não entra.</div>`}
         ${o.ctx != null ? `<div class="detalhe">Contexto: ${AX.ctxTxt(o.ctx, o.er)}</div>` : ""}
         ${AX.iaLinha(o, m)}
-        ${e.pend.length > 1 ? `<div class="detalhe">+${e.pend.length - 1} outra(s) ordem(ns): ${e.pend.slice(0, -1).map((x) => x.est + " " + AX.dirTxt(x.dir).toLowerCase()).join(", ")} — a primeira que executar vale.</div>` : ""}${saiu}${aviso}`;
+        ${e.pend.length > 1 ? `<div class="detalhe">+${e.pend.length - 1} outra(s) ordem(ns): ${e.pend.slice(0, -1).map((x) => x.est + " " + AX.dirTxt(x.dir).toLowerCase()).join(", ")}: a primeira que executar vale.</div>` : ""}${saiu}${aviso}`;
     } else if (agora && m.intraday && m.dia && m.dia.trava && m.dia.data === D.d[k]) {
       cls = "trava";                                       // regra do plano: o dia acabou para esta estratégia
       html = `<div class="estado">PARE POR HOJE</div><div class="detalhe"><b>${AX.esc(m.dia.trava)}</b> · resultado do dia: <b class="${AX.cls(m.dia.resultado)}">${AX.dinheiro(m.dia.resultado, D, true)}</b>.
@@ -619,7 +627,7 @@
   };
 
   const CURTO = { "VANTAGEM ESTATÍSTICA": "VANTAGEM", "PROMISSORA, NÃO COMPROVADA": "NÃO COMPROVADA" };
-  AX.seloCurto = (st) => `<span class="selo ${st.cor || "neutro"}" data-dica="${AX.esc((st.veredito || "") + ": " + (st.explica || ""))}">${AX.esc(CURTO[st.veredito] || st.veredito || "—")}</span>`;
+  AX.seloCurto = (st) => `<span class="selo ${st.cor || "neutro"}" data-dica="${AX.esc((st.veredito || "") + ": " + (st.explica || ""))}">${AX.esc(CURTO[st.veredito] || st.veredito || "-")}</span>`;
 
   // curva do capital pequena (uma marca por operação); ao passar o mouse mostra a operação e o acumulado
   AX.sparkline = (cv, valores, rotular) => {
@@ -654,6 +662,8 @@
     const q = new URLSearchParams({ ativo: p.ativo, tf: p.tf, est: p.est, gestao: p.gestao, contratos: p.contratos,
       capital: p.capital, maxstops: p.maxstops, per: p.per === "custom" ? "tudo" : p.per });
     if (p.per === "custom") { q.set("de", AX.isoInt(p.de)); q.set("ate", AX.isoInt(p.ate)); }
+    if (p.est === "TODAS") q.set("cods", (p.minhas || []).join(","));
+    if (AX.edv) q.set("edv", AX.edv);                                            // edições do E se…: versão (pedido novo quando mudam)
     for (const [k, v] of Object.entries(AX.planoParams())) q.set(k, v);
     for (const [k, v] of Object.entries(extra)) q.set(k, v);
     return q.toString();
@@ -667,7 +677,16 @@
     if (p.seletivo) o.seletivo = 1;
     if (p.emReais !== false) o.brl = 1;                                         // conta em reais: dólar convertido
     if (Array.isArray(p.prot) && p.prot.length) o.prot = p.prot.join(",");      // proteções do stop (aba Plano)
+    const rg = AX.regraTxt(p);
+    if (rg) o.regra = rg;                                                      // "Minha regra" de cada estratégia (feita no E se…)
     return o;
+  };
+  AX.regraTxt = (p = AX.pref) => Object.entries(p.regras || {}).filter(([k, v]) => Array.isArray(v) && v.length === 2)
+    .map(([k, v]) => `${k}:${+(+v[0]).toFixed(3)}:${+(+v[1]).toFixed(2)}`).join(",");
+  AX.salvarRegras = async () => {                    // a regra também passa a valer nos testes ao vivo ligados
+    AX.salvarPref();
+    try { await AX.post("/api/regras", { regra: AX.regraTxt() }); } catch (e) { AX.toast("Não consegui levar a regra aos testes ao vivo: " + e.message, "erro"); }
+    AX.emit("mudou", "plano");
   };
   // nome da gestão de uma operação: as do menu e as internas (saída/alvos da própria estratégia)
   AX.gestaoTxt = (g) => AX.cfg.gestoes[g] || { propria: "regra de saída da própria estratégia", fixo: "alvo da própria estratégia",
@@ -690,13 +709,39 @@
     if ((c.match(/\(/g) || []).length > (c.match(/\)/g) || []).length) c = c.split("(")[0].trim();
     return c;
   };
+  // os ativos de cada mercado: Bolsa (B3 e, num grupo à parte, lá fora), Opções (ativos-objeto da B3), Cripto (Binance)
+  AX.mercadoDe = (c) => { const a = AX.infoAtivo(c); return a && a.mercado === "cripto" ? "cripto" : AX.ehCripto(c) ? "cripto" : "b3"; };
+  AX.ativosDoMercado = (m = AX.pref.mercado) => AX.cfg.ativos.filter((a) => m === "cripto" ? a.mercado === "cripto"
+    : m === "opcoes" ? a.mercado === "b3" && (a.grupo === "Ações da B3" || /^(WIN|BOVA11)$/.test(a.chave)) : a.mercado !== "cripto");
   function montarAtivos() {
     const op = (a) => `<option value="${AX.esc(a.chave)}" title="${AX.esc(a.nome)}">${AX.esc(nomeCurto(a.nome))}</option>`;
-    const cr = AX.pref.criptos;
-    $("ativo").innerHTML = (cr.length ? `<optgroup label="Mercados">` : "") + AX.cfg.ativos.map(op).join("") +
-      (cr.length ? `</optgroup><optgroup label="Cripto (Binance, tempo real)">${cr.map(op).join("")}</optgroup>` : "");
+    const lista = AX.ativosDoMercado(), grupos = {};
+    for (const a of lista) (grupos[a.grupo || "Outros"] = grupos[a.grupo || "Outros"] || []).push(a);
+    const ordem = ["Mini contratos da B3", "Ações da B3", "Criptomoedas (Binance, tempo real)", "Índices e ações lá de fora", "Moedas e commodities", "Outros"];
+    $("ativo").innerHTML = Object.keys(grupos).sort((a, b) => ordem.indexOf(a) - ordem.indexOf(b))
+      .map((g) => `<optgroup label="${AX.esc(g)}">${grupos[g].map(op).join("")}</optgroup>`).join("");
     $("ativo").value = AX.pref.ativo;
   }
+  function marcarMercado() {
+    const m = AX.pref.mercado;
+    document.querySelectorAll("#mercado button").forEach((b) => b.classList.toggle("on", b.dataset.m === m));
+    document.body.classList.toggle("modo-b3", m === "b3");
+    document.body.classList.toggle("modo-opcoes", m === "opcoes");
+    document.body.classList.toggle("modo-cripto", m === "cripto");
+  }
+  AX.escolherMercado = (m) => {
+    if (!["b3", "opcoes", "cripto"].includes(m)) return;
+    const antes = AX.pref.mercado;
+    AX.pref.mercado = m;
+    const lista = AX.ativosDoMercado(m);
+    let a = AX.pref.ativo;
+    if (!lista.some((x) => x.chave === a)) a = lista.some((x) => x.chave === AX.pref.ultAtivo[m]) ? AX.pref.ultAtivo[m] : (lista[0] || {}).chave;
+    marcarMercado(); montarAtivos();
+    if (a && a !== AX.pref.ativo) AX.escolherAtivo(a); else AX.salvarPref();
+    if (m === "opcoes") trocarAba("opcoes");
+    else if (AX.aba === "opcoes") trocarAba("vivo");
+    if (m !== antes) AX.emit("mercado", m);
+  };
   // abre uma moeda da Binance no gráfico (vem da aba Cripto): entra na lista de ativos e vira o ativo atual
   AX.abrirCripto = (chave, nome) => {
     if (!AX.ehCripto(chave)) return false;
@@ -717,12 +762,14 @@
     inp.value = AX.pref.contratos;
   }
   function montarEstrategias() {
-    const diario = +AX.pref.tf >= 1440;
-    $("est").innerHTML = `<option value="TODAS">▶ TODAS juntas</option>` + AX.cfg.estrategias.map((e) =>
-      `<option value="${e.cod}" ${e.intraday && diario ? "disabled" : ""}>${e.cod} · ${AX.esc(e.nome)}${e.intraday && diario ? " (só intraday)" : ""}</option>`).join("");
+    const diario = +AX.pref.tf >= 1440, minhas = new Set(AX.pref.minhas || []);
+    const op = (e) => `<option value="${e.cod}" ${e.intraday && diario ? "disabled" : ""}>${minhas.has(e.cod) ? "★ " : ""}${e.cod} · ${AX.esc(e.nome)}${e.intraday && diario ? " (só intraday)" : ""}</option>`;
+    $("est").innerHTML = `<option value="TODAS">★ Minhas estratégias juntas (${minhas.size})</option>` +
+      `<optgroup label="Minhas estratégias">${AX.cfg.estrategias.filter((e) => minhas.has(e.cod)).map(op).join("")}</optgroup>` +
+      `<optgroup label="Todas as estratégias">${AX.cfg.estrategias.filter((e) => !minhas.has(e.cod)).map(op).join("")}</optgroup>`;
     $("est").value = AX.pref.est;
-    $("btTodas").classList.toggle("on", AX.pref.est === "TODAS");
   }
+  AX.montarEstrategias = () => montarEstrategias();
   function marcarPeriodo() {
     document.querySelectorAll("#periodo button").forEach((b) => b.classList.toggle("on", b.dataset.p === AX.pref.per));
     $("periodoTxt").textContent = V.D ? AX.periodoTexto(V.D) : "";
@@ -745,7 +792,7 @@
   };
   function corrigirEst() {
     const e = AX.cfg.estMap[AX.pref.est];
-    if (e && e.intraday && +AX.pref.tf >= 1440) { AX.pref.est = "TODAS"; AX.toast(`${e.nome} só funciona em gráfico intraday — mudei para TODAS juntas.`, "aviso"); }
+    if (e && e.intraday && +AX.pref.tf >= 1440) { AX.pref.est = "TODAS"; AX.toast(`${e.nome} só funciona em gráfico intraday: mudei para TODAS juntas.`, "aviso"); }
     montarEstrategias();
   }
   AX.atualizarTopo = () => {
@@ -753,12 +800,17 @@
     ajustarContratos(); montarEstrategias(); marcarPeriodo();
   };
   AX.escolherAtivo = (a) => {
-    AX.pref.ativo = a; $("ativo").value = a; ajustarContratos(); AX.salvarPref(); AX.emit("mudou", "ativo");
+    AX.pref.ativo = a; AX.pref.ultAtivo[AX.pref.mercado] = a;
+    if (AX.mercadoDe(a) === "cripto" && AX.pref.mercado !== "cripto") { AX.pref.mercado = "cripto"; marcarMercado(); montarAtivos(); }
+    else if (AX.mercadoDe(a) !== "cripto" && AX.pref.mercado === "cripto") { AX.pref.mercado = "b3"; marcarMercado(); montarAtivos(); }
+    $("ativo").value = a; ajustarContratos(); AX.salvarPref(); AX.emit("mudou", "ativo");
   };
   AX.irPara = ({ ativo, tf, est }) => {
     const p = AX.pref;
     if (ativo === p.ativo && +tf === +p.tf && est === p.est) return false;
     p.ativo = ativo; p.tf = +tf; p.est = est; if (est !== "TODAS") p.ultEst = est;
+    const mm = AX.mercadoDe(ativo);
+    if ((mm === "cripto") !== (p.mercado === "cripto")) { p.mercado = mm; marcarMercado(); montarAtivos(); }
     AX.salvarPref(); AX.atualizarTopo(); AX.emit("mudou", "ativo");
     return true;
   };
@@ -776,15 +828,21 @@
   }
   function ligarTopo() {
     const sa = $("ativo"), st = $("tf"), sg = $("gestao"), sc = $("contratos");
-    AX.pref.criptos = [];                                  // o mercado de cripto saiu do robô na versão 2.1
-    if (AX.ehCripto(AX.pref.ativo) || AX.pref.ativo === "BTCUSD") AX.pref.ativo = "WIN";
+    AX.pref.criptos = [];
+    if (AX.pref.ativo === "BTCUSD") AX.pref.ativo = "BN:BTCUSDT";
     if (!Array.isArray(AX.pref.prot)) AX.pref.prot = [];
     if (AX.ehCripto(AX.pref.ativo) && !AX.pref.criptos.some((x) => x.chave === AX.pref.ativo))
       AX.pref.criptos.unshift({ chave: AX.pref.ativo, nome: AX.nomeCripto(AX.pref.ativo), fracionado: true, cripto: true });
     st.innerHTML = AX.cfg.tempos.map((t) => `<option value="${t.tf}">${t.nome}</option>`).join("");
     sg.innerHTML = Object.entries(AX.cfg.gestoes).map(([k, v]) => `<option value="${k}">${AX.esc(v)}</option>`).join("");
     if (!AX.ativoValido(AX.pref.ativo)) AX.pref.ativo = "WIN";
+    AX.pref.mercado = AX.pref.mercado === "opcoes" && AX.mercadoDe(AX.pref.ativo) !== "cripto" ? "opcoes" : AX.mercadoDe(AX.pref.ativo);
+    marcarMercado();
     montarAtivos();
+    document.querySelectorAll("#mercado button").forEach((b) => (b.onclick = () => AX.escolherMercado(b.dataset.m)));
+    $("btTestar").onclick = () => AX.emit("testar");
+    $("btMinhas").onclick = () => AX.emit("minhas");
+    $("btTutorial").onclick = () => (AX.tutorial ? AX.tutorial.abrir() : null);
     if (!AX.cfg.tempos.some((t) => +t.tf === +AX.pref.tf)) AX.pref.tf = 5;
     if (!(AX.pref.gestao in AX.cfg.gestoes)) AX.pref.gestao = "padrao";
     if (AX.pref.est !== "TODAS" && !AX.cfg.estMap[AX.pref.est]) AX.pref.est = "TODAS";
@@ -794,7 +852,6 @@
     sa.onchange = () => AX.escolherAtivo(sa.value);
     st.onchange = () => AX.escolherTf(+st.value);
     $("est").onchange = () => AX.escolherEst($("est").value);
-    $("btTodas").onclick = () => AX.escolherEst(AX.pref.est === "TODAS" ? AX.pref.ultEst : "TODAS");
     sc.onchange = () => {
       const a = AX.infoAtivo(AX.pref.ativo) || {};
       let v = parseFloat(String(sc.value).replace(",", "."));
@@ -846,7 +903,6 @@
     };
     document.querySelectorAll("#ouvirSons button").forEach((b) => (b.onclick = () => AX.som(b.dataset.s, true)));
     $("btAtualizar").onclick = () => { AX.fecharPopovers(); V.velho = true; carregarVivo(); };
-    $("btRobo").onclick = () => AX.emit("rodarRobo");
     document.addEventListener("pointerdown", (e) => {
       if (!e.target.closest(".popover") && !e.target.closest("#btAjustes") && !e.target.closest("#periodo") && !e.target.closest("#btInd") && !e.target.closest("#btCandles")) AX.fecharPopovers();
     });
@@ -900,8 +956,7 @@
       const antes = V.D, n0 = base ? base.t.length : 0;
       const retratoAntes = antes ? retrato(antes) : null, tAntes = antes ? antes.t[antes.meta.ultimo] : 0, metaAntes = antes && antes.meta;
       const D = X.delta && base ? fundir(base, X) : X;
-      AX.usdbrl = D.meta.usdbrl || 0;
-      if (AX.replay && AX.replay.aplicarEdicoes) AX.replay.aplicarEdicoes(D);      // as edições do "e se…" valem nos resultados
+      if (D.meta.usdbrl) AX.usdbrl = D.meta.usdbrl;                 // dólar do dia: converte também os avisos de ativos em dólar
       V.D = D; V.velho = false; V.consulta = consulta;
       if (AX.emReplay) { /* replay de uma operação tocando: o gráfico não é mexido pelo ao vivo */ }
       else if (ABAS_VIVAS.includes(AX.aba) || !AX.graficoMostra()) {
@@ -1027,7 +1082,7 @@
     const stopAtual = g.stopAtual || "base";
     $("gestLado").innerHTML = `<table class="tab gl gl-m"><tr><th>Gestão</th><th class="n" style="display:none">Ops</th>${COLS.map(([k, nome, dica]) => `<th class="n" data-dica="${dica}">${nome}</th>`).join("")}</tr>` +
       g.linhas.map((x) => `<tr class="clic ${x.gestao === AX.pref.gestao ? "sel" : ""}" data-g="${x.gestao}"><td>${AX.esc(x.nome)}<small>${x.n} ops</small></td><td class="n" style="display:none">${x.n}</td>` +
-        COLS.map(([k]) => { const c = (x.stops || {})[k]; if (!c) return `<td class="n">—</td>`;
+        COLS.map(([k]) => { const c = (x.stops || {})[k]; if (!c) return `<td class="n">-</td>`;
           return `<td class="n gl-c ${x.gestao === AX.pref.gestao && k === stopAtual ? "atual" : ""}" data-s="${k}" data-dica="${AX.esc(x.nome)} com ${COLS.find((z) => z[0] === k)[1].toLowerCase()}: ${c.n} operações, acerto ${AX.pct(c.acerto, 0)}, resultado ${AX.dinheiro(c.total, D, true)}, pior queda ${AX.dinheiro(-c.ddMax, D)}, perda média ${AX.dinheiro(c.perdaMedia, D)}. Clique para usar.">
             <b class="${AX.cls(c.total)}">${curto(c.total)}</b>${eh(melhor, x, k) ? '<i class="gl-e" title="maior resultado">★</i>' : ""}${eh(seguro, x, k) && !eh(melhor, x, k) ? '<i class="gl-e seg" title="melhor resultado para a queda que exige">◆</i>' : ""}<small>queda ${curto(-c.ddMax)}</small></td>`; }).join("") + `</tr>`).join("") + `</table>
       <div class="nota">Valores em ${cambio !== 1 || g.moeda !== "US$" ? "R$" : "US$"}. Cada célula: resultado do período e, embaixo, a pior queda. <b>★</b> maior resultado · <b>◆</b> melhor resultado para a queda que exige. Clique numa célula para usar aquela gestão com aquele stop. Mesma estratégia, mesmo período, mesmos custos. Período curto engana: confira também em “3 meses” e “Tudo”.</div>`;
@@ -1052,6 +1107,14 @@
     setTimeout(() => { const g = $("btGestLado"); if (g) g.scrollIntoView({ block: "center", behavior: "smooth" }); }, 80);
   };
   AX.rerenderVivo = () => { if (V.D) renderVivo(V.D); };
+  // aba Agora: o resultado do período numa linha só (o completo fica na aba Resultado)
+  function resumoCurto(D) {
+    const st = D.stats, el = $("resumoCurto");
+    el.innerHTML = `<div class="rc"><div><small>No período · ${AX.esc(AX.periodoTexto(D))}${AX.q("Quanto a estratégia escolhida fez no período do topo, já com custos. Toque em “ver resultado” para ver tudo: gestão, stops, dia a dia e comparação.")}</small>
+      ${st.n ? `<b class="${AX.cls(st.total)}">${AX.dinheiro(st.total, D, true)}</b><em>${st.n} operações · acerto ${AX.pct(st.acerto, 0)}${D.edN ? " · ✎ com suas edições" : ""}</em>` : `<b class="neutro">sem operações</b><em>nenhum setup no período</em>`}</div>
+      <button class="mini-btn" id="rcVer">ver resultado ›</button></div>`;
+    $("rcVer").onclick = () => trocarAba("sim");
+  }
   function renderVivo(D) {
     const m = D.meta, st = D.stats, k = m.iFim;
     AX.cartaoMomento($("cardVivo"), D, k);
@@ -1068,7 +1131,7 @@
       const cr = st.custoR || 0;
       html += `<div class="resumo-topo"><div><div class="grande ${AX.cls(st.total)}">${AX.dinheiro(st.total, D, true)}</div>
           <div class="sub">${st.n} operações · acerto ${AX.pct(st.acerto, 0)} (empata com ${AX.pct(st.empate, 0)}) · ${tamanho}</div>
-          ${D.edN ? `<div class="sub ed-linha" data-dica="Soma do período trocando o resultado das operações que você editou no E se… pelo resultado da sua edição. Atenção: as edições foram feitas depois de ver o que o preço fez; servem para aprender, não provam que a regra funciona daqui para a frente.">✎ ${D.edN === 1 ? "Com a sua edição" : "Com as suas " + D.edN + " edições"}: <b class="${AX.cls(st.total + D.edAjuste)}">${AX.dinheiro(st.total + D.edAjuste, D, true)}</b> <span class="neutro">(o robô sozinho: ${AX.dinheiro(st.total, D, true)})</span></div>` : ""}</div>${AX.seloCurto(st)}</div>
+          ${D.edN ? `<div class="sub ed-linha" data-dica="Este total já conta as suas edições do E se… (as operações marcadas com ✎). Ao lado, o que o robô fez sozinho, sem nenhuma edição. Atenção: as edições foram feitas depois de ver o que o preço fez; servem para aprender e testar, não provam que funcionam daqui para a frente.">✎ ${D.edN === 1 ? "Inclui 1 operação editada por você" : "Inclui " + D.edN + " operações editadas por você"}${D.statsRobo ? ` · <span class="neutro">o robô sozinho: ${AX.dinheiro(D.statsRobo.total, D, true)}</span>` : ""}</div>` : ""}</div>${AX.seloCurto(st)}</div>
         <canvas class="spark" id="sparkVivo"></canvas>
         <div class="kpis">
           <div><small>Média por operação${AX.q("Resultado médio de cada operação, já com custos. O “±” é a margem de erro (95%): enquanto ela for maior que a média, o resultado ainda pode ser sorte.")}</small><b class="${AX.cls(st.mediaDin)}">${AX.dinheiro(st.mediaDin, D, true)}</b><em>± ${AX.dinheiro(st.icDin, D)}</em></div>
@@ -1087,13 +1150,14 @@
       ${plano ? `<div class="linha-ctx"><span>Plano: ${plano}</span></div>` : ""}
       ${m.foraDoPlano ? `<div class="linha-ctx"><span class="ruim">${m.foraDoPlano} ordem(ns) ficaram de fora: o lote mínimo arriscava mais que ${AX.num(m.riscoPct, 1)}% do capital.</span></div>` : ""}
       <div class="linha-ctx">${ctx}</div>
-      <div class="botoes finos"><button id="btExplica" data-dica="Abre uma minijanela com o desenho do setup e o passo a passo desta estratégia.">❔ Como funciona ${est === "TODAS" ? "o modo TODAS" : "a " + AX.esc(est)}</button></div>
+      <div class="botoes finos"><button id="btExplica" data-dica="Abre uma minijanela com o desenho do setup e o passo a passo desta estratégia.">❔ Como funciona ${est === "TODAS" ? "o modo Minhas estratégias" : "a " + AX.esc(est)}</button></div>
       <details><summary>Como ler · detalhes</summary>
         <div class="nota">${AX.esc(st.explica || "")}${st.n ? ` Média na 1ª metade: ${AX.dinheiro(st.exp1, D, true)} · na 2ª: ${AX.dinheiro(st.exp2, D, true)}. Ganho médio ÷ perda média: ${AX.num(st.payoff, 2)} · fator de lucro ${AX.num(st.fatorLucro, 2)}.` : ""}</div>
         ${cx && (cx.favor.n || cx.contra.n) ? `<div class="nota">A favor da tendência do diário: ${cx.favor.n} operações, média ${AX.dinheiro(cx.favor.media, D, true)}. Contra: ${cx.contra.n} operações, média ${AX.dinheiro(cx.contra.media, D, true)}.</div>` : ""}
         <div class="nota">Gestão: ${AX.esc(AX.cfg.gestoes[m.gestao])}. Custos: escorregamento de ${AX.fmt(m.slip)} por lado${m.custo ? ` + ${AX.dinheiro(m.custo, D)} por ${m.fracionado ? "lote" : "contrato"} por lado` : ""}${m.custoPct ? ` + taxa de ${AX.num(100 * m.custoPct, 2)}% do valor por lado` : ""}. ${m.lote ? "Tamanho: " + AX.esc(m.lote) + ". " : ""}Fonte: ${AX.esc(m.fonte)}.</div>
       </details>`;
     $("resumoVivo").innerHTML = html;
+    resumoCurto(D);
     AX.sparkline($("sparkVivo"), D.trades.map((t) => t.dinheiro), (i, v, ac) => `Operação ${i} de ${D.trades.length}: ${AX.dinheiro(v, D, true)} · acumulado ${AX.dinheiro(ac, D, true)}`);
     $("resumoVivo").querySelectorAll(".gest-btns button").forEach((b) => (b.onclick = () => AX.escolherGestao(b.dataset.g)));
     $("btGestLado").onclick = () => { GEST.aberto = !GEST.aberto; renderVivo(V.D); };
@@ -1143,10 +1207,15 @@
   })();
   $("btCentro").onclick = () => AX.centralizar();
   $("btPeriodoTodo").onclick = () => AX.centralizar(true);
-  const ABAS_VIVAS = ["vivo", "ia", "cal", "plano", "opcoes"];       // abas em que o gráfico mostra o "agora"
+  const ABAS_VIVAS = ["vivo", "ia", "cal", "plano", "opcoes", "news", "conectar"];       // abas em que o gráfico mostra o "agora"
   function trocarAba(nome) {
+    if (!document.getElementById("aba-" + nome)) nome = "vivo";
     AX.aba = nome;
-    document.querySelectorAll(".abas button").forEach((b) => b.classList.toggle("on", b.dataset.aba === nome));
+    document.querySelectorAll(".abas button").forEach((b) => b.classList.toggle("on", b.dataset.aba === nome || (b.dataset.grupo || "").split(" ").includes(nome)));
+    const grupoRes = ["sim", "cal", "cmp"].includes(nome);
+    $("subRes").classList.toggle("oculto", !grupoRes);
+    document.querySelectorAll("#subRes button").forEach((b) => b.classList.toggle("on", b.dataset.aba === nome));
+    if (grupoRes) { const g = document.querySelector('.abas button[data-grupo]'); if (g) g.dataset.aba = nome; }
     document.querySelectorAll(".aba").forEach((s) => s.classList.toggle("on", s.id === "aba-" + nome));
     $("painel").classList.toggle("largo", nome === "cmp");
     $("painel").classList.toggle("medio", nome === "sim" || nome === "cal");
@@ -1156,15 +1225,17 @@
       if (V.D && !V.velho) { if (AX.graficoMostra() !== V.D) AX.mostrar(V.D, V.D.meta.iFim); if (nome === "vivo") renderVivo(V.D); }
       else AX.carregarVivo();
     }
+    if (nome === "sim" && V.D) setTimeout(() => renderVivo(V.D), 0);           // a curva do resumo só desenha com a aba visível
     AX.emit("aba", nome);
   }
   AX.trocarAba = trocarAba;
-  document.querySelectorAll(".abas button").forEach((b) => (b.onclick = () => trocarAba(b.dataset.aba)));
+  document.querySelectorAll(".abas button, #subRes button").forEach((b) => (b.onclick = () => trocarAba(b.dataset.aba)));
   window.addEventListener("resize", () => { if (V.D && AX.aba === "vivo") renderVivo(V.D); });
 
   AX.on("mudou", () => {
     V.velho = true;
-    if (ABAS_VIVAS.includes(AX.aba)) AX.carregarVivo();
+    // a aba Resultado mostra o resumo do período: ela também recarrega (sem mexer no gráfico, que pode estar na simulação)
+    if (ABAS_VIVAS.includes(AX.aba) || AX.aba === "sim") AX.carregarVivo();
   });
 
   // Atualização automática: a cada 5 s a tela pergunta "mudou algo?" e recebe só o trecho novo. Um pedido pendurado há
@@ -1231,7 +1302,7 @@
       sp.passo("resumo", ok ? "feito" : "falhou", ok && V.D ? `${V.D.stats.n} operações no período` : "");
       sp.passo("news", "fazendo", "buscando notícias do mercado…");
       const n = await Promise.race([AX.noticiasPrimeira ? AX.noticiasPrimeira() : Promise.resolve(null), espera(9000).then(() => null)]);
-      sp.passo("news", n ? "feito" : "falhou", n ? `${n} notícias das últimas horas` : "notícias demorando — continuam carregando");
+      sp.passo("news", n ? "feito" : "falhou", n ? `${n} notícias das últimas horas` : "notícias demorando: continuam carregando");
       if (u.has("ind") && AX.ind) AX.ind.ligar(u.get("ind").split(","));
       if (u.has("op") && AX.ops) AX.ops.abrir(+u.get("op") || 1);
       if (u.get("pop") === "ind") $("btInd").click();
@@ -1239,10 +1310,12 @@
       if (u.get("pop") === "explica" && AX.explica) AX.explica.abrir(AX.pref.est);
       if (u.get("pop") === "gestoes") { GEST.aberto = true; if (V.D) renderVivo(V.D); }
       const aba = u.get("aba");
-      if (["sim", "cmp", "cal", "news", "plano", "opcoes", "ia"].includes(aba)) trocarAba(aba);
+      if (["sim", "cmp", "cal", "news", "plano", "opcoes", "ia", "conectar"].includes(aba)) trocarAba(aba);
+      if (u.get("mercado")) AX.escolherMercado(u.get("mercado"));
       if (aba === "sim" && u.get("acao") && AX.simDemo) await AX.simDemo({ acao: u.get("acao"), passos: +u.get("passos") || 0 });
       if (aba === "cmp" && u.get("acao") === "comparar") $("btComparar").click();
-      if (u.get("acao") === "robo") AX.emit("rodarRobo");
+      if (u.get("acao") === "robo" || u.get("acao") === "testar") AX.emit("testar");
+      if (u.get("acao") === "minhas") AX.emit("minhas");
       if (u.get("conta") && AX.conta) AX.conta.abrir(u.get("conta"));
     } catch (e) {
       if (saindo) return;

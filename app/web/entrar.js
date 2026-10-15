@@ -1,4 +1,4 @@
-/* ROBÔ APEX — tela de entrada (entrar.html). O servidor entrega esta página em "/" enquanto não há sessão válida, ou
+/* ROBÔ APEX: tela de entrada (entrar.html). O servidor entrega esta página em "/" enquanto não há sessão válida, ou
    enquanto a senha ainda é a provisória. Aqui só se escolhe qual formulário mostrar (pela resposta de
    /api/acesso/estado) e se enviam os pedidos: quem confere a senha e guarda a sessão é o servidor, num cookie que o
    JavaScript não enxerga. Senha nenhuma vai para localStorage, sessionStorage ou para o console, e todo texto que vem
@@ -114,6 +114,10 @@
       return voltou ? falha("Você já entrou, mas a tela do robô não abriu. Tente de novo; se continuar assim, feche o robô e abra-o outra vez.") : irParaRobo();
     if (usuario) return abrirCriar(usuario, msg);                   // senha provisória pendente (página recarregada no meio do caminho)
     provisoria = "";
+    const site = est.site || {};
+    $("enIrCadastro").classList.toggle("oculto", !site.cadastroAberto || !!est.primeiroAcesso);
+    if (est.publico) $("enRodape").textContent = "Conexão protegida. Sua senha nunca é guardada em texto.";
+    if (!est.primeiroAcesso && /[?&]cadastro=1/.test(location.search) && site.cadastroAberto) return abrirCadastro();
     if (!est.primeiroAcesso) return mostrar("entrar", msg);
     $("enAdmEmail").value = est.adminEmail || "";
     mostrar("primeiro", msg);
@@ -185,6 +189,42 @@
     iniciar();
   });
   $("enDeNovo").addEventListener("click", () => iniciar());
+
+  // ---------------------------------------------------------------- cadastro: os termos têm de ser lidos até o fim
+  let versaoTermos = "";
+  async function abrirCadastro() {
+    mostrar("cadastro");
+    try {
+      const t = await pedir("/api/site/termos");
+      versaoTermos = t.versao;
+      $("enTermos").textContent = t.termos;
+    } catch (e) { $("enTermos").textContent = "Não consegui carregar os termos: " + e.message; }
+    liberarCaixas();
+  }
+  function liberarCaixas() {
+    const cx = $("enTermos"), fim = cx.scrollTop + cx.clientHeight >= cx.scrollHeight - 8;
+    if (fim && versaoTermos) {
+      for (const c of $("enCadastro").querySelectorAll(".en-aceite input")) c.disabled = false;
+      $("enTermosDica").textContent = "Marque as três caixas para criar a conta.";
+    }
+  }
+  $("enTermos").addEventListener("scroll", liberarCaixas);
+  $("enIrCadastro").addEventListener("click", abrirCadastro);
+  $("enVoltarEntrar").addEventListener("click", () => mostrar("entrar"));
+  $("enCadastro").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const f = ev.currentTarget, el = f.elements, falta = conferir(f);
+    if (!el.nome.value.trim()) return erro(f, "Escreva o seu nome.");
+    if (!el.email.value.trim()) return erro(f, "Escreva o seu e-mail.");
+    if (falta) return erro(f, falta);
+    if (!el.termos.checked || !el.risco.checked || !el.maior.checked) return erro(f, "Para criar a conta, leia os termos e marque as três caixas.");
+    enviar(f, async () => {
+      await pedir("/api/acesso/cadastrar", { nome: el.nome.value.trim(), email: el.email.value.trim(), senha: el.nova.value,
+        aceite: { versao: versaoTermos, termos: true, risco: true, maior: true } });
+      await sessaoGuardada();
+      irParaRobo();
+    });
+  });
 
   for (const f of forms) {
     f.querySelector("[data-mostrar]").addEventListener("change", (ev) => mostrarSenhas(f, ev.target.checked));

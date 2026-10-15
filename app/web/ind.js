@@ -1,4 +1,4 @@
-/* ROBÔ APEX — indicadores do gráfico (botão "Indicadores"): médias móveis à escolha, VWAP, Bandas de Bollinger,
+/* ROBÔ APEX: indicadores do gráfico (botão "Indicadores"): médias móveis à escolha, VWAP, Bandas de Bollinger,
    Canal de Keltner, volume, IFR e estocástico, e os NÍVEIS que o robô traça sozinho: máxima, mínima e fechamento de
    ontem, abertura de hoje e os suportes e resistências (topos e fundos tocados mais de uma vez).
    São só para LER o gráfico: as estratégias usam os indicadores calculados no servidor e não mudam com o que for

@@ -1,4 +1,4 @@
-/* ROBÔ APEX — conta: o botão do usuário no topo, o menu dele e a janela com "Minha conta", "Avisos no celular" e, só
+/* ROBÔ APEX: conta: o botão do usuário no topo, o menu dele e a janela com "Minha conta", "Avisos no celular" e, só
    para o administrador, "Usuários" e "Registro de acessos". Quem pode o quê é decidido no servidor (auth.py): a tela
    apenas deixa de mostrar o que seria recusado. Todo texto que vem do servidor ou do teclado passa por AX.esc antes
    de virar HTML: o registro guarda até o que um estranho digitou no campo de e-mail da tela de entrada. */
@@ -10,7 +10,7 @@
   const papelTxt = (p) => (p === "admin" ? "Administrador" : "Usuário");
   const nomeDe = (u) => String(u.nome || "").trim() || String(u.email || "").split("@")[0] || "Conta";
   const ADMIN_PRINCIPAL = "admin";           // id do administrador que já vem criado (auth.py): o servidor não deixa apagá-lo
-  const SECOES = [["conta", "Minha conta"], ["avisos", "Avisos no celular"], ["usuarios", "Usuários", true], ["registro", "Registro de acessos", true]];
+  const SECOES = [["conta", "Minha conta"], ["avisos", "Avisos no celular"], ["usuarios", "Usuários", true], ["vendas", "Vendas e site", true], ["registro", "Registro de acessos", true]];
   const permitidas = () => SECOES.filter((s) => !s[2] || (eu() && eu().papel === "admin"));       // s[2] = só administrador
   const J = { fundo: null, janela: null, abas: null, corpo: null, vivo: null, email: null, secao: "", vez: 0, antes: null };      // a janela
   const U = { lista: [], prov: null };       // usuários; prov = senha provisória recém-sorteada (aparece uma única vez)
@@ -37,7 +37,7 @@
 
   // dd/mm hh:mm no horário de Brasília; com o ano quando faz muito tempo (um "último acesso" antigo não pode parecer recente)
   function quando(t, seg = false) {
-    if (!(t > 0)) return "—";
+    if (!(t > 0)) return "-";
     const ano = Date.now() / 1000 - t > 300 * 86400 ? "/" + new Date(t * 1000).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", year: "numeric" }) : "";
     return `${AX.diaBR(t)}${ano} ${AX.horaBR(t, seg)}`;
   }
@@ -515,16 +515,17 @@
         (proprio || u.id === ADMIN_PRINCIPAL ? "" : botao("apagar", "apagar", " ct-perigo"));
       const ponto = u.online ? '<i class="ct-ponto ct-on" role="img" aria-label="conectado agora" data-dica="Conectado agora"></i>' : '<i class="ct-ponto" aria-hidden="true"></i>';
       return `<tr class="ct-u">
-          <td data-rot="Nome" class="ct-quebra"${u.criado ? ` data-dica="Usuário criado em ${esc(quando(u.criado))}"` : ""}>${ponto}${esc(u.nome) || "—"}${proprio ? ' <small class="neutro">(você)</small>' : ""}</td>
+          <td data-rot="Nome" class="ct-quebra"${u.criado ? ` data-dica="Usuário criado em ${esc(quando(u.criado))}"` : ""}>${ponto}${esc(u.nome) || "-"}${proprio ? ' <small class="neutro">(você)</small>' : ""}</td>
           <td data-rot="E-mail" class="ct-quebra">${esc(u.email)}</td><td data-rot="Papel" class="ct-junto">${papelTxt(u.papel)}</td>
           <td data-rot="Situação" class="${sit[1]}">${sit[0]}</td>
+          <td data-rot="Assinatura" class="ct-junto">${assinTxt(u)}</td>
           <td data-rot="Último acesso" class="ct-junto">${u.ultimo ? esc(quando(u.ultimo)) : "nunca entrou"}</td></tr>
-        <tr class="ct-acoes" data-id="${esc(u.id)}"><td colspan="5"><div>${acoes ||
+        <tr class="ct-acoes" data-id="${esc(u.id)}"><td colspan="6"><div>${(u.papel === "admin" ? "" : botao("assin30", "liberar 31 dias") + botao("assin0", "tirar o acesso")) + acoes ||
           '<span class="nota">Único administrador ativo: crie outro antes de mudar este. A sua senha você troca em Minha conta.</span>'}</div></td></tr>`;
     };
     $("ctuTotal").textContent = `${U.lista.length} usuário${U.lista.length === 1 ? "" : "s"}`;
     $("ctuTabela").innerHTML = `<table class="tab ct-tab ct-usuarios">
-        <thead><tr><th>Nome</th><th>E-mail</th><th>Papel</th><th>Situação</th><th>Último acesso</th></tr></thead>
+        <thead><tr><th>Nome</th><th>E-mail</th><th>Papel</th><th>Situação</th><th>Assinatura</th><th>Último acesso</th></tr></thead>
         <tbody>${U.lista.map(linha).join("")}</tbody></table>`;
     if (caixaProv() || !focoId) return;
     // a tabela foi refeita: o foco volta para o mesmo botão da mesma pessoa (ou para a janela, se o botão sumiu)
@@ -563,8 +564,25 @@
     return true;
   }
 
+  function assinTxt(u) {
+    if (u.papel === "admin") return '<span class="neutro">administrador</span>';
+    const a = u.assinatura || {};
+    if (a.status === "ativa" && (a.ate || 0) * 1000 > Date.now()) return `<span class="bom">ativa até ${esc(new Date(a.ate * 1000).toLocaleDateString("pt-BR"))}</span>${a.origem ? ` <small class="neutro">(${esc(a.origem)})</small>` : ""}`;
+    return `<span class="ruim">${a.status === "ativa" ? "vencida" : "inativa"}</span>`;
+  }
   async function acaoUsuario(b, u, vez) {
     const a = b.dataset.acao, proprio = u.id === eu().id, quem = u.email;
+    if (a === "assin30" || a === "assin0") {
+      if (a === "assin0" && !confirm(`Tirar o acesso de ${quem}? Ele vai ver a página de assinatura ao entrar.`)) return;
+      await rodar(b, $("ctuErro"), "…", async () => {
+        const r = await pedir("/api/admin/assinatura", { id: u.id, dias: a === "assin30" ? 31 : 0 });
+        U.lista = r.usuarios || U.lista;
+        if (vez !== J.vez) return;
+        pintarUsuarios(u.id, a);
+        dizer(a === "assin30" ? `${quem}: acesso liberado por mais 31 dias.` : `${quem}: acesso tirado.`);
+      });
+      return;
+    }
     let corpo, feito;
     if (a === "papel") {
       if (proprio && !confirm("Você vai deixar de ser administrador e perde o acesso a Usuários e ao Registro de acessos.\n\nContinuar?")) return;
@@ -600,8 +618,10 @@
     usuario_criado: "Usuário criado", usuario_alterado: "Usuário alterado", usuario_apagado: "Usuário apagado",
     senha_redefinida: "Senha redefinida", admin_negado: "Acesso de administrador negado", admin_zerado: "Senha do administrador zerada",
     teste_ligado: "Teste ao vivo ligado", teste_parado: "Teste ao vivo parado", teste_apagado: "Teste ao vivo apagado",
-    ajuste_manual: "Ajuste manual", avisos_configurados: "Avisos configurados" };
-  const nomeEvento = (c) => (Object.hasOwn(EVENTOS, c) ? EVENTOS[c] : String(c || "—").replace(/_/g, " "));
+    ajuste_manual: "Ajuste manual", avisos_configurados: "Avisos configurados", cadastro: "Cadastro pelo site", assinatura: "Assinatura",
+    hotmart: "Aviso da Hotmart", hotmart_negado: "Aviso da Hotmart recusado", site_configurado: "Site configurado", boleta: "Boleta simulada",
+    conexao: "Conexão com a corretora", regra_trocada: "Regra de estratégia" };
+  const nomeEvento = (c) => (Object.hasOwn(EVENTOS, c) ? EVENTOS[c] : String(c || "-").replace(/_/g, " "));
   const semAcento = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const LIMITE = 300;
 
@@ -648,14 +668,71 @@
         : `<table class="tab ct-tab ct-registro"><thead><tr><th>Quando</th><th>Evento</th><th>Quem</th><th>Detalhe</th></tr></thead><tbody>${linhas.map((x) => `
             <tr><td data-rot="Quando" class="ct-junto">${esc(quando(x.t, true))}</td>
               <td data-rot="Evento"><span class="ct-tag${/_negad[ao]$/.test(x.evento) ? " ct-negado" : ""}">${esc(nomeEvento(x.evento))}</span></td>
-              <td data-rot="Quem" class="ct-quebra">${esc(x.quem) || "—"}</td><td data-rot="Detalhe" class="ct-quebra">${esc(x.detalhe)}</td></tr>`).join("")}</tbody></table>`;
+              <td data-rot="Quem" class="ct-quebra">${esc(x.quem) || "-"}</td><td data-rot="Detalhe" class="ct-quebra">${esc(x.detalhe)}</td></tr>`).join("")}</tbody></table>`;
     } catch (e) {
       if (vez === J.vez && seq === R.seq) falha($("ctrErro"), e.message);
     }
   }
 
   // ================================================================ ligações
-  const DESENHAR = { conta: secConta, avisos: secAvisos, usuarios: secUsuarios, registro: secRegistro };
+  // ================================================================ vendas e site (administrador)
+  async function secVendas() {
+    const vez = J.vez;
+    J.corpo.innerHTML = `<div class="nota">Carregando…</div>`;
+    let d;
+    try { d = await pedir("/api/admin/site"); } catch (e) { if (vez === J.vez) J.corpo.innerHTML = erroHtml(e); return; }
+    if (vez !== J.vez) return;
+    const c = d.cfg, r = d.resumo, vis = d.visitas || { porDia: [], origens: [] };
+    const maxV = Math.max(1, ...vis.porDia.map(([, v]) => v.visitas));
+    const totalVis = vis.porDia.reduce((a, [, v]) => a + v.visitas, 0), totalPes = vis.porDia.reduce((a, [, v]) => a + v.pessoas, 0);
+    const pagas = d.compras.filter((x) => x.status === "ativa").length;
+    J.corpo.innerHTML = `
+      <div class="card"><div class="rot">RESUMO</div>
+        <div class="ct-kpis">
+          <div><small>Assinantes ativos</small><b class="bom">${r.assinantes}</b></div>
+          <div><small>Contas</small><b>${r.usuarios}</b></div>
+          <div><small>Cadastros (30 dias)</small><b>${r.cadastros30}</b></div>
+          <div><small>Conectados agora</small><b>${r.online}</b></div>
+          <div><small>Visitas (30 dias)</small><b>${totalVis}</b></div>
+          <div><small>Pessoas (30 dias)</small><b>${totalPes}</b></div>
+        </div>
+        <div class="nota">${d.publico ? `Site no ar em <b>${esc(d.dominio || "(sem domínio)")}</b>.` : "O robô está rodando neste computador (modo local). Para vender online, veja o arquivo PUBLICAR-ONLINE.md."}
+          ${totalPes ? ` Conversão aproximada: ${(100 * pagas / totalPes).toFixed(1).replace(".", ",")}% das pessoas que visitaram compraram.` : ""}</div></div>
+      <div class="card"><div class="rot">VISITAS DA PÁGINA DE VENDAS · 30 DIAS</div>
+        ${vis.porDia.length ? `<div class="ct-barras">${vis.porDia.map(([dia, v]) => `<div data-dica="${esc(dia)}: ${v.visitas} visitas, ${v.pessoas} pessoas"><i style="height:${Math.max(3, (100 * v.visitas) / maxV)}%"></i><small>${esc(dia.slice(8))}</small></div>`).join("")}</div>
+          <div class="nota">De onde vieram: ${vis.origens.map(([o, n]) => `<b>${esc(o)}</b> ${n}`).join(" · ")}</div>` : '<div class="nota">Nenhuma visita ainda.</div>'}</div>
+      <div class="card"><div class="rot">COMPRAS E AVISOS DA HOTMART</div>
+        ${d.compras.length ? `<table class="tab ct-tab"><thead><tr><th>Quando</th><th>Evento</th><th>E-mail</th><th>Valor</th><th>Situação</th></tr></thead><tbody>${d.compras.slice(0, 60).map((x) => `<tr>
+          <td class="ct-junto">${esc(quando(x.quando))}</td><td>${esc(x.evento)}</td><td class="ct-quebra">${esc(x.email)}</td>
+          <td class="ct-junto">${x.valor != null ? esc(String(x.valor)) + " " + esc(x.moeda || "") : "-"}</td>
+          <td>${x.status ? `<span class="${x.status === "ativa" ? "bom" : "ruim"}">${esc(x.status)}</span>${x.aplicada === false ? ' <small class="alerta">(sem conta ainda: vale quando ele se cadastrar)</small>' : ""}` : '<span class="neutro">só registro</span>'}</td></tr>`).join("")}</tbody></table>` : '<div class="nota">Nenhum aviso da Hotmart ainda.</div>'}</div>
+      <form class="card" id="ctfSite" novalidate><div class="rot">CONFIGURAÇÃO DO SITE E DO PAGAMENTO</div>
+        <label class="chk"><input type="checkbox" name="cadastro_aberto"${c.cadastro_aberto ? " checked" : ""}> <span><b>Cadastro aberto</b>: qualquer pessoa cria conta pela tela de entrada (com o aceite dos termos)</span></label>
+        <label class="chk"><input type="checkbox" name="exigir_assinatura"${c.exigir_assinatura ? " checked" : ""}> <span><b>Exigir assinatura</b>: só entra no robô quem tem assinatura ativa (o administrador sempre entra)</span></label>
+        <div class="ct-grade">
+          <label class="campo"><span>Link do checkout (Hotmart)</span><input name="checkout_url" value="${esc(c.checkout_url || "")}" placeholder="https://pay.hotmart.com/..."></label>
+          <label class="campo"><span>Preço mostrado</span><input name="preco" value="${esc(c.preco || "")}"></label>
+          <label class="campo"><span>Hottok da Hotmart ${c.hottok ? "(atual " + esc(c.hottok) + ")" : ""}</span><input name="hottok" type="password" autocomplete="off" placeholder="cole para trocar"></label>
+          <label class="campo"><span>Dias de folga depois do vencimento</span><input name="dias_extra" type="number" min="0" max="30" value="${c.dias_extra}"></label>
+        </div>
+        <div class="nota">Na Hotmart: <i>Ferramentas › Webhook (API e notificações)</i>, versão 2.0.0, URL <code>https://SEU-DOMINIO/api/hotmart</code>, eventos de compra aprovada, completa, cancelada, reembolsada, chargeback e cancelamento de assinatura. Copie o <b>hottok</b> de lá para o campo acima.</div>
+        <div class="erro oculto" role="alert"></div>
+        <div class="ct-botoes"><button type="submit" class="primario">Salvar</button></div>
+      </form>`;
+    const f = $("ctfSite");
+    f.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const el = f.elements;
+      enviar(f, "Salvando…", async () => {
+        await pedir("/api/admin/site", { cadastro_aberto: el.cadastro_aberto.checked, exigir_assinatura: el.exigir_assinatura.checked,
+          checkout_url: el.checkout_url.value.trim(), preco: el.preco.value.trim(), hottok: el.hottok.value.trim(), dias_extra: +el.dias_extra.value || 0 });
+        el.hottok.value = "";
+        dizer("Configuração do site salva.");
+      });
+    });
+  }
+
+  const DESENHAR = { conta: secConta, avisos: secAvisos, usuarios: secUsuarios, vendas: secVendas, registro: secRegistro };
   if (bt) bt.addEventListener("click", () => (menuAberto() ? fecharMenu() : abrirMenu()));
   document.addEventListener("pointerdown", (e) => {
     if (menuAberto() && !menu.contains(e.target) && !bt.contains(e.target)) fecharMenu();

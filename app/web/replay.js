@@ -1,4 +1,4 @@
-/* ROBÔ APEX — replay da entrada e "e se…".
+/* ROBÔ APEX: replay da entrada e "e se…".
    (1) REPLAY DA ENTRADA: toca uma operação da lista candle a candle, de antes do sinal até depois da saída, com as
        etapas escritas (antes do sinal, sinal, ordem armada, entrada, em andamento, saída) e velocidade 1x a 10x.
    (2) E SE…: refaz a mesma entrada com outro stop e outro alvo e mostra o que teria acontecido nos candles reais.
@@ -142,20 +142,53 @@
     return { R: pts / risco, pts, motivo, i_sai: i, sai, risco, dinheiro: pts * (m.valorPonto || 1) * (t.q != null ? t.q : m.contratos || 1) };
   }
   const L = { lista: null };
-  const O = (t) => t.orig || t;               // a operação como o robô fez (antes de uma edição do "e se…")
   async function licoes() {
     if (L.lista) return L.lista;
     try { const v = await AX.api.get("licoes"); L.lista = Array.isArray(v) ? v : []; } catch (e) { L.lista = []; }
     return L.lista;
   }
+  // As edições ficam guardadas por usuário (arquivo "edicoes" da conta). Quem aplica é o SERVIDOR: ele refaz a operação
+  // com o stop e o alvo editados desde o candle do sinal, e o resultado vale em tudo (lista, gráfico, total do período,
+  // dia a dia, testes ao vivo). Cada edição guarda também o que o robô tinha feito ("orig"), para comparar.
+  const ED = { mapa: null };
+  const chaveEd = (tr, meta) => [meta.ativo, +meta.tf, tr.est, tr.t_ent, tr.dir].join("|");
+  const edDe = (t, meta) => (ED.mapa && meta && ED.mapa[chaveEd(t, meta)]) || null;
+  const O = (t, meta) => { const e = edDe(t, meta); return e && e.orig ? Object.assign({}, t, e.orig) : t; };      // como o robô fez
+  async function carregarEd() {
+    if (ED.mapa) return completarEd();
+    try { const v = await AX.api.get("edicoes"); ED.mapa = v && typeof v === "object" && !Array.isArray(v) ? v : {}; } catch (e) { ED.mapa = {}; }
+    completarEd();
+  }
+  // edições feitas antes da 3.0 não guardavam o horário do sinal (o servidor precisa dele): completa com a tela
+  function completarEd() {
+    const D = AX.vivo.D;
+    if (!D || !ED.mapa) return;
+    let mudou = false;
+    for (const t of (D.trades || []).concat(D.abertas || [])) {
+      const e = ED.mapa[chaveEd(t, D.meta)];
+      if (e && !e.t_sinal && t.t_sinal) { e.t_sinal = t.t_sinal; mudou = true; }
+    }
+    if (mudou) gravarEd().then(recarregar).catch(() => {});
+  }
+  async function gravarEd() {
+    const ks = Object.keys(ED.mapa || {});
+    if (ks.length > 300) for (const k of ks.sort((a, b) => ED.mapa[a].q - ED.mapa[b].q).slice(0, ks.length - 300)) delete ED.mapa[k];
+    await AX.api.set("edicoes", ED.mapa);
+    AX.edv = Date.now();                       // muda o pedido ao servidor: ele refaz o período com as edições
+  }
+  function recarregar() {
+    AX.vivo.velho = true;
+    AX.carregarVivo();
+    if (AX.ops && AX.ops.recarregarTestes) AX.ops.recarregarTestes();
+  }
   // aplica o ajuste de uma lição (stop a "fs" vezes a distância original; alvo a "ra" vezes o risco novo) a todas as operações da estratégia
   function generalizar(D, est, fs, ra, lista) {
     let n = 0, antes = 0, depois = 0, viraram = 0, pioraram = 0;
-    for (const t of lista || D.trades) {
-      if (t.est !== est) continue;
-      const o = O(t), s0 = o.stop_ini ?? o.stop, risco0 = Math.abs(t.ent - s0);
+    for (const t0 of lista || D.trades) {
+      if (t0.est !== est) continue;
+      const t = O(t0, D.meta), s0 = t.stop_ini ?? t.stop, risco0 = Math.abs(t.ent - s0);
       const stop = t.ent - t.dir * risco0 * fs, alvo = ra > 0 ? t.ent + t.dir * risco0 * fs * ra : null;
-      const base = refazer(D, t, s0, o.alvo), novo = refazer(D, t, stop, alvo);
+      const base = refazer(D, t, s0, t.alvo), novo = refazer(D, t, stop, alvo);
       if (!base || !novo) continue;
       n++; antes += base.dinheiro; depois += novo.dinheiro;
       if (base.dinheiro <= 0 && novo.dinheiro > 0) viraram++;
@@ -163,25 +196,7 @@
     }
     return { n, antes, depois, viraram, pioraram };
   }
-  // A última edição de cada operação fica guardada (por usuário): ao reabrir o "e se…" ela volta como estava, e a lista
-  // de operações mostra o resultado editado ao lado do original. As estatísticas do robô continuam sendo as originais.
-  const ED = { mapa: null, relogio: null };
-  const chaveEd = (tr, meta) => [meta.ativo, +meta.tf, tr.est, tr.t_ent, tr.dir].join("|");
-  async function carregarEd() {
-    if (ED.mapa) return;
-    try { const v = await AX.api.get("edicoes"); ED.mapa = v && typeof v === "object" && !Array.isArray(v) ? v : {}; } catch (e) { ED.mapa = {}; }
-    refletir();
-    if (AX.ops && AX.ops.atualizar) AX.ops.atualizar();
-  }
-  function gravarEd() {
-    clearTimeout(ED.relogio);
-    ED.relogio = setTimeout(async () => {
-      const ks = Object.keys(ED.mapa || {});
-      if (ks.length > 300) for (const k of ks.sort((a, b) => ED.mapa[a].q - ED.mapa[b].q).slice(0, ks.length - 300)) delete ED.mapa[k];
-      try { await AX.api.set("edicoes", ED.mapa); } catch (e) { AX.toast("Não consegui salvar a edição: " + e.message, "erro"); }
-    }, 500);
-  }
-  // Cada edição vira também uma lição automática (aba IA, "Suas lições"): é assim que o robô aprende com o que você muda.
+  // Cada edição vira também uma lição automática (aba Aprender, "Suas lições"): é assim que o robô aprende com o que você muda.
   const mesmaOp = (x, tr, meta) => x.auto && x.ativo === meta.ativo && +x.tf === +meta.tf && x.est === tr.est && x.t_ent === tr.t_ent;
   async function licaoAuto(tr, meta, item) {
     const lista = (await licoes()).filter((x) => !mesmaOp(x, tr, meta));
@@ -190,43 +205,8 @@
     try { await AX.api.set("licoes", L.lista); } catch (e) { /* a edição já foi salva; a lição tenta de novo na próxima */ }
     if (AX.aba === "ia") renderLicoes();
   }
-  function refletir() {                // os resultados da tela passam a contar com as edições
-    aplicarEdicoes(AX.vivo.D);
-    if (AX.rerenderVivo) AX.rerenderVivo();
-    AX.redesenhar();
-  }
-  function salvarEd() {
-    if (!E.tr || !E.res || !ED.mapa) return;
-    const tr = E.tr, meta = E.meta, r = E.res;
-    ED.mapa[chaveEd(tr, meta)] = { stop: E.stop, alvo: E.alvo, R: +r.R.toFixed(2), din: +r.dinheiro.toFixed(2), q: Date.now() };
-    gravarEd(); refletir();
-    if (E.g) licaoAuto(tr, meta, { quando: Date.now(), auto: true, ativo: meta.ativo, tf: +meta.tf, est: tr.est, dir: tr.dir, t_ent: tr.t_ent, fs: +E.fs.toFixed(3), ra: +E.ra.toFixed(2),
-      antes: +(+O(tr).R).toFixed(2), depois: +r.R.toFixed(2), nota: "", geral: { n: E.g.n, antes: Math.round(E.g.antes), depois: Math.round(E.g.depois) } });
-  }
-  // Troca, nas operações de F (o período na tela ou um teste ao vivo), o resultado das que têm edição salva pelo resultado
-  // da edição, refeito nos candles reais. O que o robô fez fica guardado em t.orig; F.edN e F.edAjuste dizem quantas
-  // foram trocadas e quanto isso muda a soma.
-  function aplicarEdicoes(F) {
-    if (!F || !F.trades || !ED.mapa) return;
-    const D = AX.vivo.D && AX.vivo.D.meta.ativo === F.meta.ativo && +AX.vivo.D.meta.tf === +F.meta.tf ? AX.vivo.D : (F.t ? F : null);
-    let n = 0, aj = 0;
-    for (const t of F.trades) {
-      const ed = ED.mapa[chaveEd(t, F.meta)];
-      const volta = () => { if (t.orig) { Object.assign(t, t.orig); delete t.orig; } };
-      if (!ed || !D) { volta(); continue; }
-      const o = t.orig || { R: t.R, dinheiro: t.dinheiro, sai: t.sai, motivo: t.motivo, t_sai: t.t_sai, i_sai: t.i_sai, stop: t.stop, stop_ini: t.stop_ini,
-        alvo: t.alvo, alvo1: t.alvo1, alvo2: t.alvo2, risco: t.risco, maxR: t.maxR };
-      const r = refazer(D, t, ed.stop, ed.alvo);
-      if (!r || r.motivo === "ainda aberta") { volta(); continue; }
-      const mesmoQuadro = t.i_ent != null && D.t[t.i_ent] === t.t_ent;
-      Object.assign(t, { orig: o, R: r.R, dinheiro: r.dinheiro, sai: r.sai, motivo: r.motivo, t_sai: D.t[r.i_sai], i_sai: mesmoQuadro ? r.i_sai : o.i_sai,
-        stop: ed.stop, stop_ini: ed.stop, alvo: ed.alvo, alvo1: null, alvo2: null, risco: r.risco, maxR: null });
-      n++; aj += r.dinheiro - o.dinheiro;
-    }
-    F.edN = n; F.edAjuste = aj;
-  }
   // Hipótese em edição: a operação com o stop e o alvo que o usuário escolheu (arrastando no gráfico ou digitando).
-  const E = { tr: null, meta: null, stop: null, alvo: null, res: null, hip: null, box: null, drag: null };
+  const E = { tr: null, meta: null, stop: null, alvo: null, res: null, hip: null, box: null, drag: null, sujo: false };
   function montarHip() {
     const D = AX.vivo.D, t = E.tr;
     E.res = D ? refazer(D, t, E.stop, E.alvo) : null;
@@ -237,21 +217,32 @@
       t_sai: r.motivo === "ainda aberta" ? null : D.t[r.i_sai] });
     if (E.hip.i_sai == null) delete E.hip.t_sai;
   }
+  function situacao() {
+    const el = $("eseSituacao"); if (!el || !E.tr) return;
+    const ed = edDe(E.tr, E.meta), rg = (AX.pref.regras || {})[E.tr.est];
+    el.innerHTML = (E.sujo ? '<span class="alerta">● Mudança ainda não salva.</span> ' : ed ? '<span class="bom">✓ Edição salva nesta operação.</span> ' : "") +
+      (rg ? `Regra ativa na ${AX.esc(E.tr.est)}: stop a ${AX.num(rg[0], 2)}× ${rg[1] ? "e alvo a " + AX.num(rg[1], 1) + " : 1" : "(alvo da gestão)"} <a href="#" id="eseTiraRegra">tirar a regra</a>` : "");
+    const tr2 = $("eseTiraRegra");
+    if (tr2) tr2.onclick = (e) => { e.preventDefault(); const r2 = Object.assign({}, AX.pref.regras); delete r2[E.tr.est]; AX.pref.regras = r2; fecharEse(); AX.salvarRegras(); AX.toast("Regra tirada: a estratégia volta ao stop e ao alvo dela.", "ok"); };
+  }
   function pintarEse() {
     const el = E.box && $("eseRes"); if (!el) return;
     const D = AX.vivo.D, t = E.tr, dec = E.meta.decimais, f = (v) => (v == null ? "" : (+v).toFixed(dec).replace(".", ","));
     if (document.activeElement !== $("eseStop")) $("eseStop").value = f(E.stop);
     if (document.activeElement !== $("eseAlvo")) $("eseAlvo").value = f(E.alvo);
     const r = E.res;
+    situacao();
     if (!r) { el.innerHTML = '<span class="ruim">O stop tem de ficar do lado da perda e o alvo do lado do ganho.</span>'; AX.redesenhar(); return; }
-    const o = O(t), s0 = o.stop_ini ?? o.stop, fs = r.risco / Math.abs(t.ent - s0), ra = E.alvo != null ? Math.abs(E.alvo - t.ent) / r.risco : 0;
+    const o = O(t, E.meta), s0 = o.stop_ini ?? o.stop, fs = r.risco / Math.abs(t.ent - s0), ra = E.alvo != null ? Math.abs(E.alvo - t.ent) / r.risco : 0;
     const g = generalizar(D, t.est, fs, ra, E.lista);
     E.fs = fs; E.ra = ra; E.g = g;
-    el.innerHTML = `<div class="ese-res"><div><small>O robô sozinho</small><b class="${AX.cls(o.R)}">${AX.res(o.R, o.dinheiro, D)}</b><em>${AX.esc(o.motivo || "aberta")}</em></div>
-        <div><small>Com o seu ajuste</small><b class="${AX.cls(r.R)}">${AX.res(r.R, r.dinheiro, D)}</b><em>${AX.emR() ? AX.dinheiro(r.dinheiro, D, true) + " · " : ""}${AX.esc(r.motivo)} em ${AX.quando(D, r.i_sai).slice(-5)}</em></div>
-        <div><small>Nas ${g.n} operações da ${AX.esc(t.est)}</small><b class="${AX.cls(g.depois - g.antes)}">${AX.dinheiro(g.depois - g.antes, D, true)}</b><em>de ${AX.dinheiro(g.antes, D, true)} para ${AX.dinheiro(g.depois, D, true)}</em></div></div>
-      <div class="nota">Stop a ${AX.num(fs, 2)}× a distância original${ra ? " · alvo a " + AX.num(ra, 1) + " : 1" : " · sem alvo"} · no conjunto, ${g.viraram} perda(s) viraram ganho e ${g.pioraram} ganho(s) viraram perda.
-        <span class="${g.depois > g.antes ? "bom" : "alerta"}">${g.depois > g.antes ? "Melhorou o conjunto: vale testar como regra." : "No conjunto não melhorou: a correção só funciona olhando esta operação depois que ela aconteceu."}</span></div>`;
+    const aberta = r.motivo === "ainda aberta";
+    el.innerHTML = `<div class="ese-res"><div><small>O robô sozinho</small><b class="${AX.cls(o.R)}">${o.dinheiro != null ? AX.res(o.R, o.dinheiro, D) : AX.R(o.R)}</b><em>${AX.esc(o.motivo || "aberta")}</em></div>
+        <div><small>Com o seu ajuste</small><b class="${AX.cls(r.R)}">${AX.res(r.R, r.dinheiro, D)}</b><em>${aberta ? "ainda aberta agora" : AX.esc(r.motivo) + " às " + AX.quando(D, r.i_sai).slice(-5)}</em></div>
+        <div><small>Como regra nas ${g.n} operações da ${AX.esc(t.est)}</small><b class="${AX.cls(g.depois - g.antes)}">${AX.dinheiro(g.depois - g.antes, D, true)}</b><em>de ${AX.dinheiro(g.antes, D, true)} para ${AX.dinheiro(g.depois, D, true)}</em></div></div>
+      <div class="nota">Stop a ${AX.num(fs, 2)}× a distância do robô${ra ? " · alvo a " + AX.num(ra, 1) + " : 1" : " · sem alvo"}. Como regra: ${g.viraram} perda(s) viram ganho e ${g.pioraram} ganho(s) viram perda.
+        <span class="${g.depois > g.antes ? "bom" : "alerta"}">${g.depois > g.antes ? "No conjunto melhorou: vale testar como regra." : "No conjunto não melhorou: a correção só funciona nesta operação, olhando depois que ela aconteceu."}</span></div>`;
+    $("eseRegra").textContent = `📐 Usar como regra da ${t.est}`;
     AX.redesenhar();
   }
   // A escala de preço do gráfico inclui o stop e o alvo em edição: sem isso a linha podia ficar fora da tela, sem como pegar.
@@ -266,44 +257,85 @@
   }
   function fecharEse() {
     if (R.on) fechar();
-    E.tr = null; E.hip = null; E.res = null; enquadrarEse();
+    E.tr = null; E.hip = null; E.res = null; E.sujo = false; enquadrarEse();
     if (E.box) E.box.innerHTML = "";
     E.box = null;
     $("areaGrafico").style.cursor = "";
     AX.redesenhar();
     if (AX.ops && AX.ops.atualizar) AX.ops.atualizar();
   }
+  async function salvarEd() {
+    if (!E.tr || !E.res || !ED.mapa) return AX.toast("Ajuste o stop e o alvo primeiro.", "aviso");
+    if (!E.tr.t_sinal) return AX.toast("Esta operação não tem o horário do sinal; não dá para salvar.", "aviso");
+    const tr = E.tr, meta = E.meta, r = E.res, k = chaveEd(tr, meta), antigo = ED.mapa[k], o = O(tr, meta);
+    ED.mapa[k] = { stop: E.stop, alvo: E.alvo, t_sinal: tr.t_sinal, R: +r.R.toFixed(2), din: +r.dinheiro.toFixed(2), q: Date.now(),
+      orig: (antigo && antigo.orig) || { stop: o.stop_ini ?? o.stop, stop_ini: o.stop_ini ?? o.stop, alvo: o.alvo, R: o.R, dinheiro: o.dinheiro, motivo: o.motivo } };
+    try { await gravarEd(); }
+    catch (e) { delete ED.mapa[k]; if (antigo) ED.mapa[k] = antigo; return AX.toast("Não consegui salvar a edição: " + e.message, "erro"); }
+    if (E.g) licaoAuto(tr, meta, { quando: Date.now(), auto: true, ativo: meta.ativo, tf: +meta.tf, est: tr.est, dir: tr.dir, t_ent: tr.t_ent, fs: +E.fs.toFixed(3), ra: +E.ra.toFixed(2),
+      antes: +(+o.R).toFixed(2), depois: +r.R.toFixed(2), nota: "", geral: { n: E.g.n, antes: Math.round(E.g.antes), depois: Math.round(E.g.depois) } });
+    const igual = o.dinheiro != null && Math.abs(r.dinheiro - o.dinheiro) < 0.005;
+    AX.toast(igual ? `Edição salva. O resultado ficou igual ao do robô (${AX.dinheiro(r.dinheiro, AX.vivo.D, true)}): o preço não chegou no stop nem no alvo novos antes da saída.`
+      : `Edição salva: esta operação passa a ${AX.dinheiro(r.dinheiro, AX.vivo.D, true)} (o robô fez ${AX.dinheiro(o.dinheiro, AX.vivo.D, true)}). A lista, o gráfico e o total do período já contam com ela.`, "ok");
+    fecharEse();
+    recarregar();
+  }
+  async function voltarOriginal(tr, meta) {
+    const k = chaveEd(tr, meta);
+    if (!ED.mapa || !ED.mapa[k]) { fecharEse(); return; }
+    const antigo = ED.mapa[k];
+    delete ED.mapa[k];
+    try { await gravarEd(); } catch (e) { ED.mapa[k] = antigo; return AX.toast("Não consegui desfazer: " + e.message, "erro"); }
+    licaoAuto(tr, meta, null);
+    AX.toast("Edição desfeita: a operação volta a ser como o robô fez.", "ok");
+    fecharEse();
+    recarregar();
+  }
+  function usarRegra() {
+    if (!E.tr || !E.res || !(E.fs > 0)) return AX.toast("Ajuste o stop e o alvo primeiro.", "aviso");
+    const est = E.tr.est, fs = +E.fs.toFixed(3), ra = +E.ra.toFixed(2);
+    if (fs < 0.2 || fs > 5) return AX.toast("Esse stop ficou longe demais do original para virar regra (de 0,2× a 5× a distância do robô).", "aviso");
+    AX.pref.regras = Object.assign({}, AX.pref.regras, { [est]: [fs, ra] });
+    AX.toast(`Regra ligada na ${est}: stop a ${AX.num(fs, 2)}× a distância do robô${ra ? " e alvo a " + AX.num(ra, 1) + " : 1" : ""}, em todas as operações (passadas, a aberta e as próximas). Para tirar: aba Plano.`, "ok");
+    fecharEse();
+    AX.salvarRegras();
+  }
   function painelEse(tr, meta, alvoEl, lista) {
     const D = AX.vivo.D;
     if (!D || D.meta.ativo !== meta.ativo || +D.meta.tf !== +meta.tf || AX.idxT(D, tr.t_ent) < 0) return AX.toast("Abra este ativo e este tempo gráfico para editar a operação.", "aviso");
     if (R.on) fechar();
-    const s0 = O(tr).stop_ini ?? O(tr).stop, risco0 = Math.abs(tr.ent - s0);
-    Object.assign(E, { tr, meta, stop: s0, alvo: O(tr).alvo != null ? O(tr).alvo : tr.ent + tr.dir * 2 * risco0, box: alvoEl, lista: lista || null });
-    const ed = ED.mapa && ED.mapa[chaveEd(tr, meta)];         // a última edição desta operação volta como foi deixada
+    const o = O(tr, meta), s0 = o.stop_ini ?? o.stop, risco0 = Math.abs(tr.ent - s0);
+    Object.assign(E, { tr, meta, stop: s0, alvo: o.alvo != null ? o.alvo : tr.ent + tr.dir * 2 * risco0, box: alvoEl, lista: lista || null, sujo: false });
+    const ed = edDe(tr, meta);                                  // a edição salva desta operação volta como foi deixada
     if (ed && ed.stop > 0 && tr.dir * (tr.ent - ed.stop) > 0 && (ed.alvo == null || tr.dir * (ed.alvo - tr.ent) > 0)) { E.stop = ed.stop; E.alvo = ed.alvo; }
-    alvoEl.innerHTML = `<div class="ese"><div class="manual-tit">E SE… ${AX.q("Arraste no gráfico as linhas ⇕ STOP e ⇕ ALVO desta operação (ou digite os preços). O robô refaz a entrada nos candles reais, com os mesmos custos, e aplica o mesmo ajuste a todas as operações desta estratégia no período, para mostrar se a correção vale no geral ou só aqui.")}
+    alvoEl.innerHTML = `<div class="ese"><div class="manual-tit">EDITAR ESTA OPERAÇÃO ${AX.q("Mude o stop e o alvo desta operação e veja o que teria acontecido nos candles reais, com os mesmos custos. Salvar nesta operação: ela passa a contar com a sua edição em tudo (lista, gráfico, total, dia a dia e testes ao vivo). Usar como regra: o mesmo ajuste (proporcional) vale para todas as operações da estratégia, inclusive a aberta e as próximas.")}
         <span class="dir"><button id="eseFechar" class="mini-btn">✕ fechar</button></span></div>
-      <div class="nota" style="margin:0 0 6px"><b>Arraste no gráfico</b> as linhas ⇕ STOP e ⇕ ALVO, ou digite. A edição fica salva, entra nos resultados do período e vira lição para a IA.</div>
+      <ol class="ese-passos"><li><b>Arraste no gráfico</b> as linhas ⇕ STOP e ⇕ ALVO (ou digite os preços).</li><li>Veja o resultado mudar na hora.</li>
+        <li><b>Salve</b> só nesta operação ou use como <b>regra</b> da estratégia.</li></ol>
       <div class="ese-campos"><label class="campo"><span>Stop</span><input type="text" inputmode="decimal" id="eseStop" autocomplete="off"></label>
         <label class="campo"><span>Alvo</span><input type="text" inputmode="decimal" id="eseAlvo" autocomplete="off" placeholder="vazio = sem alvo"></label></div>
       <div id="eseRes"></div>
-      <div class="botoes finos"><button id="eseReplay" class="primario">▶ Replay com este ajuste</button><button id="eseOrig">Voltar ao original</button></div>
-      <label class="campo" style="margin-top:6px"><span>O que você aprendeu nesta entrada (opcional)</span><input type="text" id="eseNota" maxlength="200" placeholder="ex.: stop curto demais para esse horário"></label>
-      <div class="botoes finos"><button id="eseSalvar">Salvar como lição</button></div></div>`;
+      <div class="ese-acoes"><button id="eseGravar" class="primario">💾 Salvar nesta operação</button><button id="eseRegra" class="secundario">📐 Usar como regra</button></div>
+      <div class="botoes finos"><button id="eseReplay">▶ Replay com este ajuste</button><button id="eseOrig">↺ Voltar ao original</button></div>
+      <div class="nota" id="eseSituacao"></div>
+      <details class="ese-licao"><summary>Anotar uma lição sobre esta entrada</summary>
+        <label class="campo"><span>O que você aprendeu (opcional)</span><input type="text" id="eseNota" maxlength="200" placeholder="ex.: stop curto demais para esse horário"></label>
+        <div class="botoes finos"><button id="eseSalvar">Salvar como lição</button></div></details></div>`;
     const num = (id) => { const x = $(id).value.trim().replace(/\s/g, ""); if (!x) return null; const a = parseFloat(x.replace(/\./g, "").replace(",", ".")), b = parseFloat(x.replace(",", ".")); const ok = [a, b].filter((v) => v > 0); return ok.length ? ok.sort((p, q) => Math.abs(Math.log(p / tr.ent)) - Math.abs(Math.log(q / tr.ent)))[0] : NaN; };
-    const digitou = () => { const st = num("eseStop"), al = num("eseAlvo"); if (!(st > 0) || Number.isNaN(al)) return AX.toast("Não entendi o preço.", "aviso"); E.stop = st; E.alvo = al; montarHip(); pintarEse(); enquadrarEse(); salvarEd(); };
+    const digitou = () => { const st = num("eseStop"), al = num("eseAlvo"); if (!(st > 0) || Number.isNaN(al)) return AX.toast("Não entendi o preço.", "aviso"); E.stop = st; E.alvo = al; E.sujo = true; montarHip(); pintarEse(); enquadrarEse(); };
     for (const id of ["eseStop", "eseAlvo"]) { $(id).onchange = digitou; $(id).onkeydown = (e) => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); $(id).blur(); } }; }
-    $("eseFechar").onclick = (e) => { e.stopPropagation(); fecharEse(); };
-    $("eseOrig").onclick = () => { E.stop = s0; E.alvo = O(tr).alvo != null ? O(tr).alvo : tr.ent + tr.dir * 2 * risco0; montarHip(); pintarEse(); enquadrarEse();
-      if (ED.mapa && ED.mapa[chaveEd(tr, meta)]) { delete ED.mapa[chaveEd(tr, meta)]; gravarEd(); refletir(); licaoAuto(tr, meta, null); } };
+    $("eseFechar").onclick = (e) => { e.stopPropagation(); if (E.sujo && !confirm("A mudança ainda não foi salva. Fechar mesmo assim?")) return; fecharEse(); };
+    $("eseGravar").onclick = salvarEd;
+    $("eseRegra").onclick = usarRegra;
+    $("eseOrig").onclick = () => voltarOriginal(tr, meta);
     $("eseReplay").onclick = () => { if (!E.hip) return AX.toast("Ajuste o stop e o alvo primeiro.", "aviso"); tocar(E.hip, meta); };
     $("eseSalvar").onclick = async () => {
       if (!E.res) return;
-      const lista = await licoes(), r = E.res;
-      lista.push({ quando: Date.now(), ativo: meta.ativo, tf: +meta.tf, est: tr.est, dir: tr.dir, t_ent: tr.t_ent, fs: +E.fs.toFixed(3), ra: +E.ra.toFixed(2), antes: +(+O(tr).R).toFixed(2), depois: +r.R.toFixed(2),
+      const lista2 = await licoes(), r = E.res;
+      lista2.push({ quando: Date.now(), ativo: meta.ativo, tf: +meta.tf, est: tr.est, dir: tr.dir, t_ent: tr.t_ent, fs: +E.fs.toFixed(3), ra: +E.ra.toFixed(2), antes: +(+o.R).toFixed(2), depois: +r.R.toFixed(2),
         nota: String($("eseNota").value || "").slice(0, 200), geral: { n: E.g.n, antes: Math.round(E.g.antes), depois: Math.round(E.g.depois) } });
-      L.lista = lista.slice(-200);
-      try { await AX.api.set("licoes", L.lista); AX.toast("Lição salva. Ela aparece na aba IA, em Suas lições.", "ok"); renderLicoes(); }
+      L.lista = lista2.slice(-200);
+      try { await AX.api.set("licoes", L.lista); AX.toast("Lição salva. Ela aparece na aba Aprender, em Suas lições.", "ok"); renderLicoes(); }
       catch (e) { AX.toast("Não consegui salvar a lição: " + e.message, "erro"); }
     };
     montarHip(); pintarEse(); enquadrarEse();
@@ -344,15 +376,22 @@
   areaG.addEventListener("pointermove", (e) => {
     if (!E.drag) { if (!e.buttons && linhaSob(e)) areaG.style.cursor = "ns-resize"; return; }
     e.preventDefault(); e.stopImmediatePropagation();
-    if (!e.buttons) { E.drag = null; areaG.style.cursor = ""; return; }
+    if (!e.buttons) { soltarEse(e); return; }
     const r = grafEl.getBoundingClientRect(), p = AX.S.candle.coordinateToPrice(e.clientY - r.top);
     if (p == null || !(p > 0)) return;
     const tk = (AX.vivo.D && AX.vivo.D.meta.tick) || Math.pow(10, -E.meta.decimais), v = +(Math.round(p / tk) * tk).toFixed(E.meta.decimais + 2), t = E.tr;
     // o stop não atravessa a entrada para o lado do ganho, e o alvo não atravessa para o lado da perda
     if (E.drag === "stop") { if (t.dir * (t.ent - v) > tk / 2) E.stop = v; } else if (t.dir * (v - t.ent) > tk / 2) E.alvo = v;
+    E.sujo = true;
     montarHip(); pintarEse();
   }, true);
-  const soltarEse = (e) => { if (!E.drag) return; if (e) e.stopImmediatePropagation(); E.drag = null; areaG.style.cursor = ""; enquadrarEse(); salvarEd(); if (R.on) tocar(E.hip, E.meta); AX.redesenhar(); };
+  function soltarEse(e) {
+    if (!E.drag) return;
+    if (e) e.stopImmediatePropagation();
+    E.drag = null; E.sujo = true; areaG.style.cursor = ""; enquadrarEse(); situacao();
+    if (R.on && E.hip) tocar(E.hip, E.meta);
+    AX.redesenhar();
+  }
   areaG.addEventListener("pointerup", soltarEse, true);
   areaG.addEventListener("pointercancel", soltarEse, true);
   areaG.addEventListener("click", (e) => { if (E.drag) e.stopImmediatePropagation(); }, true);
@@ -363,7 +402,7 @@
     const el = $("iaLicoes"); if (!el) return;
     const lista = await licoes(), D = AX.vivo.D;
     if (!lista.length) {
-      el.innerHTML = `<div class="card"><div class="rot">SUAS LIÇÕES</div><div class="nota">Nenhuma ainda. Na aba Ao vivo, clique numa operação da lista e use <b>E se…</b> para corrigir o stop e o alvo; salve como lição e ela aparece aqui, com o teste do ajuste em todas as operações da estratégia.</div></div>`;
+      el.innerHTML = `<div class="card"><div class="rot">SUAS LIÇÕES</div><div class="nota">Nenhuma ainda. Na aba Agora, clique numa operação da lista e use <b>E se…</b> para corrigir o stop e o alvo; salve como lição e ela aparece aqui, com o teste do ajuste em todas as operações da estratégia.</div></div>`;
       return;
     }
     const porEst = {};
@@ -377,16 +416,22 @@
         ${g && g.n ? ` Aplicado às ${g.n} operações deste ativo e período: de <b class="${AX.cls(g.antes)}">${AX.dinheiro(g.antes, D, true)}</b> para <b class="${AX.cls(g.depois)}">${AX.dinheiro(g.depois, D, true)}</b> (${g.viraram} perdas viraram ganho, ${g.pioraram} ganhos viraram perda).` : " Sem operações desta estratégia no ativo e período de agora."}
         ${ls.filter((x) => x.nota).slice(-3).map((x) => `<br>“${AX.esc(x.nota)}”`).join("")}</span></div></div>`;
     }
-    h += `<div class="nota">O ajuste ainda não entra sozinho nos sinais ao vivo: quando um deles melhorar o conjunto em mais de um ativo e período, use os botões de gestão e as proteções do stop (aba Plano) que mais se aproximam dele.</div>
+    h += `<div class="nota">Para o robô passar a operar com um ajuste, abra uma operação da estratégia, faça o ajuste no E se… e use <b>📐 Usar como regra</b>: ele vale nas operações passadas, na aberta e nas próximas, inclusive nos testes ao vivo.</div>
       <div class="botoes finos"><button id="licLimpar">Apagar as lições</button></div></div>`;
     el.innerHTML = h;
     $("licLimpar").onclick = async () => { if (!confirm("Apagar todas as suas lições?")) return; L.lista = []; try { await AX.api.set("licoes", []); } catch (e) { /* ok */ } renderLicoes(); };
   }
 
   AX.replay = { tocar, fechar, ativo: () => R.on, painelEse, refazer, generalizar, hipotese: () => (E.tr && E.box ? E.hip : null), editando: () => !!(E.tr && E.box), fecharEse,
-    edicao: (tr, meta) => (ED.mapa && ED.mapa[chaveEd(tr, meta)]) || null, aplicarEdicoes };
+    edicao: (tr, meta) => edDe(tr, meta) };
   AX.on("carregado", carregarEd);
-  AX.on("aba", (n) => { if (n !== "vivo") fecharEse(); if (R.on && n !== "vivo") fechar(); if (n === "ia") renderLicoes(); });
+  AX.on("dadosVivo", () => { if (ED.mapa) completarEd(); else carregarEd(); });
+  AX.on("aba", (n) => {
+    if (n !== "vivo") fecharEse();
+    // o replay fecha sem repintar o gráfico ao vivo quando a aba nova é a Simulação (ela mostra os candles dela)
+    if (R.on && n !== "vivo") { if (n === "sim") { clearTimeout(R.relogio); R.on = false; AX.emReplay = false; AX.chart.applyOptions({ timeScale: { shiftVisibleRangeOnNewBar: true } }); if (barra) barra.classList.add("oculto"); } else fechar(); }
+    if (n === "ia") renderLicoes();
+  });
   AX.on("mudou", () => { fecharEse(); fechar(); if (AX.aba === "ia") setTimeout(renderLicoes, 1500); });
   AX.on("dadosVivo", () => { if (AX.aba === "ia") renderLicoes(); });
   AX.on("tecla", (e) => { if (R.on && e.key === "Escape") fechar(); if (R.on && e.key === " ") { e.preventDefault(); barra.querySelector("[data-a=pausa]").click(); } });

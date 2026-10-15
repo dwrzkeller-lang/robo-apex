@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assinatura · Robô Apex</title>
+<link rel="icon" type="image/png" href="icone.png">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="entrar.css">
+</head>
+<body>
+<main class="en-tela">
+  <div class="en-janela">
+    <header class="en-topo">
+      <img src="icone.png" alt="" width="64" height="64">
+      <div><h1>ROBÔ APEX</h1><p>estratégias de day trade · B3 · opções · cripto</p></div>
+    </header>
+    <section class="en-form">
+      <h2 class="en-titulo">Falta ativar a sua assinatura</h2>
+      <p class="nota" id="asOla">Carregando…</p>
+      <div class="as-plano"><b id="asPreco">R$ 49,99/mês</b><span>acesso completo: todas as estratégias, testes, boleta simulada, replay, cripto e opções</span></div>
+      <div class="botoes"><a class="primario as-bt" id="asComprar" href="#" target="_blank" rel="noopener">Assinar agora</a></div>
+      <div class="botoes"><button type="button" id="asJaPaguei">Já paguei: conferir de novo</button></div>
+      <p class="nota">O pagamento é feito pela plataforma de pagamento (Hotmart), que confirma a compra para o robô em alguns minutos. Use o mesmo e-mail desta conta. Cancelamento e reembolso são feitos por lá.</p>
+      <div class="erro oculto" id="asErro"></div>
+      <button type="button" class="en-link" id="asSair">Sair</button>
+    </section>
+    <footer class="en-rodape">Ferramenta de estudo e análise. Não é recomendação de investimento; resultado passado não garante o futuro.</footer>
+  </div>
+</main>
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  async function ver() {
+    try {
+      const r = await fetch("/api/site/minha", { credentials: "same-origin" });
+      const j = await r.json();
+      if (r.status === 401) return location.replace("/");
+      if (j.ativa) return location.replace("/");
+      $("asOla").textContent = "Olá, " + (j.usuario.nome || j.usuario.email) + ". A sua conta está criada; para usar o robô, ative a assinatura.";
+      $("asPreco").textContent = (j.site && j.site.preco) || "R$ 49,99/mês";
+      if (j.checkout) $("asComprar").href = j.checkout; else { $("asComprar").removeAttribute("href"); $("asComprar").textContent = "Pagamento ainda não configurado: fale com o suporte"; }
+    } catch (e) { $("asErro").textContent = "Não consegui falar com o servidor."; $("asErro").classList.remove("oculto"); }
+  }
+  $("asJaPaguei").onclick = ver;
+  $("asSair").onclick = async () => { try { await fetch("/api/acesso/sair", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}", credentials: "same-origin" }); } catch (e) { /* ok */ } location.replace("/"); };
+  ver();
+  setInterval(ver, 30000);
+})();
+</script>
+</body>
+</html>

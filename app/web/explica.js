@@ -1,4 +1,4 @@
-/* ROBÔ APEX — "Como funciona": minijanela que explica cada estratégia passo a passo, para quem opera e não programa.
+/* ROBÔ APEX: "Como funciona": minijanela que explica cada estratégia passo a passo, para quem opera e não programa.
    AX.explica.abrir("E2") abre (com "TODAS", explica o modo TODAS juntas; um segundo argumento negativo já abre do lado
    da venda); AX.explica.fechar(), Esc ou um clique no fundo escuro fecham. O módulo cria o próprio HTML na primeira vez
    e não depende de nada do index.html.

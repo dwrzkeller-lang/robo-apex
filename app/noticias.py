@@ -26,6 +26,26 @@ FONTES = [
     ("Google Notícias", "https://news.google.com/rss/search?q=Ibovespa+OR+d%C3%B3lar+OR+Copom+OR+Selic+OR+IPCA+OR+Haddad+OR+Gal%C3%ADpolo&hl=pt-BR&gl=BR&ceid=BR:pt-419"),
 ]
 
+FONTES_CRIPTO = [
+    ("Cointelegraph Brasil", "https://cointelegraph.com.br/rss"),
+    ("CriptoFácil", "https://www.criptofacil.com/feed/"),
+    ("Investing.com Cripto", "https://br.investing.com/rss/news_301.rss"),
+    ("Portal do Bitcoin", "https://portaldobitcoin.uol.com.br/feed/"),
+    ("Livecoins", "https://livecoins.com.br/feed/"),
+    ("CoinDesk", "https://www.coindesk.com/arc/outboundfeeds/rss/"),
+    ("Google Notícias", "https://news.google.com/rss/search?q=bitcoin+OR+ethereum+OR+criptomoedas+OR+Binance&hl=pt-BR&gl=BR&ceid=BR:pt-419"),
+]
+REGRAS_CRIPTO = [
+    (5, "BTC ETH", ["etf de bitcoin", "etf de ether", "bitcoin etf", "ether etf", "sec ", "regulacao", "regulamentacao", "proibe", "banimento"]),
+    (5, "BTC ETH", ["fed ", "fomc", "powell", "juros nos eua", "payroll", "inflacao nos eua", "cpi"]),
+    (4, "BTC ETH", ["hack", "ataque hacker", "exploit", "falencia", "insolvencia", "liquidacao", "liquidacoes", "colapso"]),
+    (4, "BTC", ["halving", "microstrategy", "strategy compra", "blackrock", "reserva estrategica", "tesouro americano"]),
+    (3, "BTC ETH", ["binance", "coinbase", "tether", "usdt", "stablecoin", "circle"]),
+    (3, "ETH", ["ethereum", "ether ", "eth "]),
+    (2, "BTC", ["bitcoin", "btc"]),
+    (2, "SOL XRP DOGE", ["solana", "xrp", "ripple", "dogecoin", "memecoin", "altcoin"]),
+]
+
 # (peso, ativos afetados, palavras) - palavras sem acento e em minusculas
 REGRAS = [
     (5, "WIN WDO", ["copom", "selic", "taxa de juros", "decisao de juros", "galipolo", "banco central eleva", "banco central corta", "banco central mantem"]),
@@ -44,6 +64,7 @@ REGRAS = [
 ]
 
 _cache = dict(t=0.0, dados=None)
+_cache_cr = dict(t=0.0, dados=None)
 _trava = threading.Lock()
 
 
@@ -98,15 +119,18 @@ def _ler(nome, url):
         if nome == "Google Notícias" and " - " in titulo:
             titulo, fonte = titulo.rsplit(" - ", 1)
             fonte = fonte.strip() + " (via Google)"
+        link = (link or "").strip()
+        if not re.match(r"^https?://", link, re.I):
+            link = ""                                          # so endereco da web (nada de "javascript:" vindo de um feed)
         if titulo and quando:
-            itens.append(dict(titulo=titulo, link=(link or "").strip(), fonte=fonte, t=quando))
+            itens.append(dict(titulo=titulo, link=link, fonte=fonte, t=quando))
     return itens
 
 
-def _classificar(it):
+def _classificar(it, regras=None):
     txt = " " + _norm(it["titulo"]) + " "
     peso, ativos, motivos = 0, set(), []
-    for p, ats, palavras in REGRAS:
+    for p, ats, palavras in regras or REGRAS:
         for w in palavras:
             if w in txt:
                 peso += p
@@ -123,13 +147,15 @@ def _classificar(it):
     return it
 
 
-def buscar(forcar=False):
+def buscar(forcar=False, mercado="b3"):
+    cripto = mercado == "cripto"
+    cache, fontes, regras = (_cache_cr, FONTES_CRIPTO, REGRAS_CRIPTO) if cripto else (_cache, FONTES, REGRAS)
     with _trava:
-        if not forcar and _cache["dados"] and time.time() - _cache["t"] < 45:
-            return _cache["dados"]
+        if not forcar and cache["dados"] and time.time() - cache["t"] < 45:
+            return cache["dados"]
     itens, erros = [], []
-    with cf.ThreadPoolExecutor(len(FONTES)) as ex:
-        futuros = {ex.submit(_ler, n, u): n for n, u in FONTES}
+    with cf.ThreadPoolExecutor(len(fontes)) as ex:
+        futuros = {ex.submit(_ler, n, u): n for n, u in fontes}
         for f in cf.as_completed(futuros):
             try:
                 itens += f.result()
@@ -147,8 +173,8 @@ def buscar(forcar=False):
         if chave in vistos:
             continue
         vistos.add(chave)
-        out.append(_classificar(it))
-    dados = dict(itens=out[:250], erros=erros, atualizado=agora, fontes=[n for n, _ in FONTES])
+        out.append(_classificar(it, regras))
+    dados = dict(itens=out[:250], erros=erros, atualizado=agora, fontes=[n for n, _ in fontes], mercado="cripto" if cripto else "b3")
     with _trava:
-        _cache.update(t=agora, dados=dados)
+        cache.update(t=agora, dados=dados)
     return dados

@@ -10,14 +10,14 @@
 </head>
 <body>
 
-<!-- ROBÔ APEX — tela de entrada. O servidor entrega esta página em "/" enquanto não há sessão válida (ou enquanto a
+<!-- ROBÔ APEX: tela de entrada. O servidor entrega esta página em "/" enquanto não há sessão válida (ou enquanto a
      senha ainda é a provisória). O entrar.js pergunta a situação em /api/acesso/estado e mostra só um dos blocos
      marcados com data-tela; os outros ficam com a classe "oculto". -->
 <main class="en-tela">
   <div class="en-janela">
     <header class="en-topo">
       <img src="icone.png" alt="" width="64" height="64">
-      <div><h1>ROBÔ APEX</h1><p>day trade informativo · não envia ordens</p></div>
+      <div><h1>ROBÔ APEX</h1><p>estratégias de day trade · B3 · opções · cripto</p></div>
     </header>
 
     <noscript><div class="erro">Esta tela precisa do JavaScript ligado no navegador.</div></noscript>
@@ -44,6 +44,7 @@
         <div class="erro oculto" role="alert" data-erro></div>
         <div class="botoes"><button type="submit" class="primario" data-ocupado="Entrando…">Entrar</button></div>
       </form>
+      <button type="button" class="en-link oculto" id="enIrCadastro">Ainda não tem conta? <b>Criar conta</b></button>
       <details class="en-esqueci">
         <summary>Esqueci a senha</summary>
         <p><b>Usuário:</b> peça ao administrador para redefinir (ele gera uma senha provisória).</p>
@@ -98,7 +99,32 @@
       </form>
     </section>
 
-    <footer class="en-rodape">Seus dados e senhas ficam só neste computador. <span id="enVersao"></span></footer>
+    <!-- ============================== cadastro (site com cadastro aberto) ============================== -->
+    <section class="oculto" data-tela="cadastro">
+      <form class="en-form" id="enCadastro" novalidate aria-labelledby="enTitCad">
+        <h2 class="en-titulo" id="enTitCad">Criar conta</h2>
+        <label class="campo" for="enCadNome"><span>Seu nome</span><input type="text" id="enCadNome" name="nome" autocomplete="name" maxlength="60" required></label>
+        <label class="campo" for="enCadEmail"><span>E-mail (o mesmo da compra)</span>
+          <input type="email" id="enCadEmail" name="email" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="200" required></label>
+        <label class="campo" for="enCadNova"><span>Crie uma senha</span>
+          <input type="password" id="enCadNova" name="nova" autocomplete="new-password" maxlength="200" required data-senha></label>
+        <label class="campo" for="enCadRepetir"><span>Repita a senha</span>
+          <input type="password" id="enCadRepetir" name="repetir" autocomplete="new-password" maxlength="200" required data-senha></label>
+        <ul class="en-regras"><li data-regra="tamanho">pelo menos 8 caracteres</li><li data-regra="iguais">as duas iguais</li></ul>
+        <label class="chk"><input type="checkbox" data-mostrar> mostrar senha</label>
+        <div class="en-termos-tit">TERMOS DE USO E AVISO DE RISCO <small>(leia até o fim)</small></div>
+        <pre class="en-termos" id="enTermos" tabindex="0">carregando…</pre>
+        <label class="chk en-aceite"><input type="checkbox" name="termos" disabled> <span>Li e aceito os <b>Termos de Uso</b>.</span></label>
+        <label class="chk en-aceite"><input type="checkbox" name="risco" disabled> <span>Entendo que o Robô Apex é uma <b>ferramenta de estudo e análise</b>, não é recomendação de investimento, não garante ganho e que <b>posso perder dinheiro</b>. As decisões e as ordens são minhas.</span></label>
+        <label class="chk en-aceite"><input type="checkbox" name="maior" disabled> <span>Tenho <b>18 anos ou mais</b>.</span></label>
+        <p class="nota" id="enTermosDica">Role os termos até o fim para liberar as caixas.</p>
+        <div class="erro oculto" role="alert" data-erro></div>
+        <div class="botoes"><button type="submit" class="primario" data-ocupado="Criando…">Criar conta</button></div>
+        <button type="button" class="en-link" id="enVoltarEntrar">Já tenho conta: entrar</button>
+      </form>
+    </section>
+
+    <footer class="en-rodape"><span id="enRodape">Seus dados e senhas ficam só neste computador.</span> <span id="enVersao"></span></footer>
   </div>
 </main>
 

@@ -29,6 +29,7 @@ BLOQUEIO = 300                     # ...bloqueiam o e-mail por 5 minutos (dobra 
 LINHAS_REGISTRO = 5000
 EMAIL_OK = re.compile(r"^[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9.\-]{1,190}\.[A-Za-z]{2,24}$")
 ID_OK = re.compile(r"^[a-z0-9]{1,24}$")
+MAX_USUARIOS = 20000
 
 
 class Negado(Exception):
@@ -161,7 +162,8 @@ class Acessos:
     @staticmethod
     def publico(u):
         return dict(id=u["id"], email=u["email"], nome=u.get("nome") or "", papel=u.get("papel", "usuario"), ativo=bool(u.get("ativo", True)),
-                    provisoria=bool(u.get("provisoria")), semSenha=u.get("senha") is None, criado=u.get("criado"), ultimo=u.get("ultimo"))
+                    provisoria=bool(u.get("provisoria")), semSenha=u.get("senha") is None, criado=u.get("criado"), ultimo=u.get("ultimo"),
+                    assinatura=u.get("assinatura"), aceite=u.get("aceite"))
 
     def estado(self):
         """O que a tela de entrada precisa saber antes do login."""
@@ -340,8 +342,8 @@ class Acessos:
         with self.trava:
             if self._por_email(email):
                 raise Negado("Já existe um usuário com este e-mail.")
-            if len(self.usuarios) >= 200:
-                raise Negado("Limite de 200 usuários.")
+            if len(self.usuarios) >= MAX_USUARIOS:
+                raise Negado("Limite de %d usuários." % MAX_USUARIOS)
             uid = secrets.token_hex(6)
             u = dict(id=uid, email=email, nome=str(nome or "").strip()[:60] or email.split("@")[0], papel=papel, ativo=True,
                      senha=None, provisoria=True, criado=time.time(), ultimo=None)
@@ -351,6 +353,47 @@ class Acessos:
             self._gravar_usuarios()
             self.registrar("usuario_criado", admin["email"], "%s (%s)" % (email, papel), ip)
             return self.publico(u), prov
+
+    # ------------------------------------------------------------------ cadastro pelo site e assinatura
+    def cadastrar(self, nome, email, senha, aceite, ip="", assinatura=None):
+        """Conta criada pela propria pessoa (cadastro aberto), com o aceite dos termos guardado (versao, data e IP)."""
+        email = (email or "").strip().lower()[:200]
+        if not EMAIL_OK.match(email):
+            raise Negado("E-mail inválido.")
+        nome = str(nome or "").strip()[:60]
+        if len(nome) < 2:
+            raise Negado("Escreva o seu nome.")
+        if not aceite or not aceite.get("versao") or not aceite.get("termos") or not aceite.get("risco") or not aceite.get("maior"):
+            raise Negado("Para criar a conta é preciso aceitar os termos, o aviso de risco e confirmar ser maior de 18 anos.")
+        erro = senha_valida(senha, email)
+        if erro:
+            raise Negado(erro)
+        with self.trava:
+            if self._por_email(email):
+                raise Negado("Já existe uma conta com este e-mail. Entre com ela (ou peça ao suporte para redefinir a senha).")
+            if len(self.usuarios) >= MAX_USUARIOS:
+                raise Negado("Cadastro fechado no momento.")
+            u = dict(id=secrets.token_hex(6), email=email, nome=nome, papel="usuario", ativo=True, senha=None, provisoria=False,
+                     criado=time.time(), ultimo=time.time(), origem="cadastro",
+                     aceite=dict(versao=str(aceite["versao"])[:20], quando=time.time(), ip=ip),
+                     assinatura=assinatura or dict(status="inativa", ate=0, origem="", transacao=""))
+            self._definir(u, senha)
+            self.usuarios.append(u)
+            self._gravar_usuarios()
+            self.registrar("cadastro", email, "termos versão %s aceitos" % aceite["versao"], ip)
+            return self._abrir_sessao(u, False, ip)
+
+    def definir_assinatura(self, email, status, ate, origem, transacao="", admin=None, ip=""):
+        """Liga/desliga a assinatura de quem tem este e-mail. Devolve True se a conta existe."""
+        with self.trava:
+            u = self._por_email(email)
+            if u is None:
+                return False
+            u["assinatura"] = dict(status=status, ate=ate, origem=origem, transacao=transacao, quando=time.time())
+            self._gravar_usuarios()
+            self.registrar("assinatura", admin["email"] if admin else origem, "%s: %s até %s" % (u["email"], status,
+                           time.strftime("%d/%m/%Y", time.gmtime((ate or 0) - 3 * 3600)) if ate else "-"), ip)
+            return True
 
     def _admins_ativos(self):
         return [u for u in self.usuarios if u.get("papel") == "admin" and u.get("ativo", True)]

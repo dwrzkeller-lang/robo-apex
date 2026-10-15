@@ -1,4 +1,4 @@
-/* ROBÔ APEX — operações e testes ao vivo.
+/* ROBÔ APEX: operações e testes ao vivo.
    (1) Desenha cada operação no gráfico (entrada, stop, alvos, saída).
    (2) Lista as operações na aba Ao vivo e explica passo a passo como cada uma foi feita.
    (3) TESTE AO VIVO: liga uma estratégia em modo simulado (sem dinheiro) a partir de agora. Quem roda o teste é o
@@ -173,11 +173,12 @@
     AX.redesenhar(); renderOps();
     if (editava && SEL && $("opEse")) $("opEse").click();
   }
-  AX.ops = { atualizar: () => renderOps(), selecionar: (tr, meta) => selecionar(tr, meta, true), limpar: () => { if (SEL) { SEL = null; AX.redesenhar(); renderOps(); } },
+  AX.ops = { ligarTeste: () => ligar(), atualizar: () => renderOps(), recarregarTestes: () => AX.testesRecarregar && AX.testesRecarregar(), selecionar: (tr, meta) => selecionar(tr, meta, true), limpar: () => { if (SEL) { SEL = null; AX.redesenhar(); renderOps(); } },
     abrir: (n) => { const d = document.querySelectorAll("#cardOps .op")[n - 1]; if (d) d.click(); } };      // link direto: ?op=2
 
   // ================================================================ 2. lista de operações + "como foi feita"
   const NA_MAO = { entrada: "entrada feita na mão", saida: "saída feita na mão", ajuste: "stop ou alvo movido na mão" };
+  const editada = (t) => t.manual === "edicao";
   function comoFoi(t, meta, aberta) {
     const q = t.q != null ? t.q : meta.contratos, din = (v) => AX.dinheiro(v, { meta }), f = (v) => AX.fmt(v, meta.decimais);
     const stop = t.stop_ini ?? t.stop, riscoDin = !aberta && t.R && t.dinheiro ? Math.abs(t.dinheiro / t.R) : t.risco * meta.valorPonto * q + 2 * meta.custo * q;
@@ -191,7 +192,7 @@
       ["3 · Stop", `${f(stop)}${aberta && t.stop !== stop ? ` → movido para <b>${f(t.stop)}</b>` : ""} · risco ${f(t.risco)} pts = ${din(riscoDin)}`],
       ["4 · Alvo", t.alvo != null ? `${parciais.length ? parciais.join(", ") + ", final em " : ""}${f(t.alvo)}${razao ? ` · ${AX.num(razao, 1)} : 1` : ""}` : parciais.length ? `${parciais.join(", ")}; o resto ${semFixo}` : semFixo],
       aberta ? ["5 · Agora", `aberta · <b class="${AX.cls(t.R)}">${AX.res(t.R, AX.dinDeR(t, meta, t.R), { meta })}</b>${t.parcial ? " · parcial feita, stop no 0x0" : ""}${t.sair ? " · sai na abertura do próximo candle (" + AX.esc(t.sair) + ")" : ""}`]
-        : ["5 · Saída", `${hora(t.t_sai)} a <b>${f(t.sai)}</b> · ${AX.esc(t.motivo)} → <b class="${AX.cls(t.R)}">${AX.res2(t.R, t.dinheiro, { meta })}</b>${t.orig ? ` <span class="neutro">(✎ sua edição; o robô sozinho: ${AX.dinheiro(t.orig.dinheiro, { meta }, true)}, ${AX.esc(t.orig.motivo)})</span>` : ""}${t.parcial ? " · com parcial" : ""}`],
+        : ["5 · Saída", `${hora(t.t_sai)} a <b>${f(t.sai)}</b> · ${AX.esc(t.motivo)} → <b class="${AX.cls(t.R)}">${AX.res2(t.R, t.dinheiro, { meta })}</b>${editada(t) ? (() => { const e = AX.replay && AX.replay.edicao(t, meta), o = e && e.orig; return ` <span class="neutro">(✎ com a sua edição${o && o.dinheiro != null ? `; o robô sozinho: ${AX.dinheiro(o.dinheiro, { meta }, true)}, ${AX.esc(o.motivo || "")}` : ""})</span>`; })() : ""}${t.parcial ? " · com parcial" : ""}`],
     ];
     if (t.ia) linhas.push(["IA", `quando o sinal apareceu, dava <b>${AX.num(100 * t.ia[0], 0)}%</b> de chance de ganho (esperado <span class="${AX.cls(t.ia[1])}">${AX.R(t.ia[1])}</span>). Nota de um modelo que ainda não conhecia esta operação.`]);
     if (NA_MAO[t.manual]) linhas.push(["✋ Na mão", NA_MAO[t.manual] + ": esta operação não é a estratégia pura."]);
@@ -207,7 +208,6 @@
     const x = T.atual(), r = x && T.det && T.det.id === x.id ? T.det : null;
     const vista = AX.pref.opsVista === "teste" && r ? "teste" : "per";
     const fonte = vista === "teste" ? r : D, meta = fonte.meta;
-    if (fonte !== D && AX.replay && AX.replay.aplicarEdicoes) AX.replay.aplicarEdicoes(fonte);
     const abertas = fonte.abertas || [], fechadas = fonte.trades;
     if (!r && !fechadas.length && !abertas.length) { el.classList.add("oculto"); return; }
     el.classList.remove("oculto");
@@ -221,7 +221,7 @@
       return `<div class="op${sel ? " sel" : ""}" data-j="${j}">
           <span class="op-h">${AX.quandoT(t.t_ent, meta.intraday)}</span><span class="op-e">${t.est}</span>
           <span class="${t.dir > 0 ? "bom" : "ruim"}">${t.dir > 0 ? "C" : "V"}</span>
-          <span class="op-m">${t.orig ? `<span class="op-ed" data-dica="Operação editada por você no E se…. O resultado mostrado é o da sua edição; o robô sozinho fez ${AX.dinheiro(t.orig.dinheiro, { meta }, true)} (${AX.esc(t.orig.motivo)}).">✎</span> ` : ""}${aberta ? '<i class="luz vivo"></i> aberta' : AX.esc(t.motivo)}${t.manual ? " ✋" : ""}</span>
+          <span class="op-m">${editada(t) ? `<span class="op-ed" data-dica="Operação editada por você no E se…: o resultado já é o da sua edição.">✎</span> ` : ""}${aberta ? '<i class="luz vivo"></i> aberta' : AX.esc(t.motivo)}${t.manual && !editada(t) ? " ✋" : ""}</span>
           <b class="${AX.cls(t.R)}">${AX.emR() ? AX.R(t.R, 1) : ""}</b><b class="op-d ${AX.cls(din)}">${AX.dinheiro(din, { meta }, true)}</b>
         </div>${sel ? comoFoi(t, meta, aberta) : ""}`;
     };
@@ -278,6 +278,7 @@
     memoV = { D, det: r, v };
     return v;
   }
+  AX.testesRecarregar = () => { T.det = null; ciclo(true); };
   AX.testes = { cobre: (m) => T.lista.some((x) => !x.ate && x.res && combo(x) === combo(m)), lista: () => T.lista, vivo, sinais: () => T.sinais };
 
   // ---------------------------------------------------------------- conversa com o servidor
@@ -364,10 +365,11 @@
     if (bt) bt.disabled = true;
     try {
       await pedir({ acao: "ligar", ativo: p.ativo, tf: +p.tf, est: p.est, gestao: p.gestao, contratos: p.contratos, capital: p.capital, maxstops: p.maxstops,
-        tam: p.tam, risco: p.risco, lossDia: p.lossDia, metaDia: p.metaDia, seletivo: !!p.seletivo, prot: p.prot || [] });      // o plano fica gravado no teste
+        tam: p.tam, risco: p.risco, lossDia: p.lossDia, metaDia: p.metaDia, seletivo: !!p.seletivo, prot: p.prot || [],
+        cods: p.est === "TODAS" ? (p.minhas || []).join(",") : "", regra: AX.regraTxt(), brl: p.emReais !== false });      // o plano fica gravado no teste
       AX.pref.opsVista = "teste"; AX.salvarPref();
       AX.som("ordem");
-      AX.toast("Teste ao vivo ligado: o Sentinela registra as operações a partir do próximo candle, mesmo com esta tela fechada.", "ok");
+      AX.toast("Teste ao vivo ligado: o robô registra as operações a partir do próximo candle, mesmo com esta tela fechada.", "ok");
     } catch (e) { AX.toast(e.message, "erro"); }
     T.det = null; tudo(); ciclo(true);
   }
@@ -451,7 +453,7 @@
   }
 
   // ---------------------------------------------------------------- cartão do teste ao vivo
-  const DICA_TESTE = "Teste ao vivo: a estratégia roda a partir de agora em modo simulado (sem dinheiro e sem enviar ordem). Cada operação fica registrada, com aviso sonoro. Quem roda é o Sentinela, dentro do robô: pode trocar de ativo, de aba ou fechar esta janela que o teste continua (o robô precisa ficar aberto).";
+  const DICA_TESTE = "Teste ao vivo: a estratégia roda a partir de agora em modo simulado (sem dinheiro e sem enviar ordem). Cada operação fica registrada, com aviso sonoro. Você pode trocar de ativo, de aba ou fechar esta janela que o teste continua (o programa do robô precisa ficar aberto).";
   function estadoTxt(rs) {
     if (rs.estado === "operacao") return `em operação: ${rs.dir > 0 ? "comprado" : "vendido"} <b class="${AX.cls(rs.R)}">${AX.R(rs.R)}</b>`;
     if (rs.estado === "ordem") return `<b>${rs.dir > 0 ? "compra" : "venda"} armada</b>`;
@@ -471,7 +473,7 @@
     if (!T.pronto) h = cab("", "TESTE AO VIVO", T.erro ? "" : "carregando…") + (T.erro ? `<div class="erro">⚠ ${AX.esc(T.erro)}</div>` : "");
     else if (!x) {
       h = cab("", "TESTE AO VIVO", "simulado · sem dinheiro") +
-        `<button id="tLigar" class="primario largo" ${csv ? "disabled" : ""}>▶ Ligar ${AX.esc(nomeCombo(p))} · ${AX.esc(AX.rotAtivo(p.ativo))} · ${tfTxt(p.tf)}</button>
+        `<button id="tLigar" class="primario largo" ${csv ? "disabled" : ""}>▶ Ligar teste ao vivo: ${AX.esc(nomeCombo(p))} · ${AX.esc(AX.rotAtivo(p.ativo))} · ${tfTxt(p.tf)}</button>
         <div class="nota">${csv ? "Arquivo CSV não recebe candles novos: escolha um ativo ao vivo." : "Deixa a estratégia rodando a partir de agora: cada operação fica registrada aqui e no gráfico, com aviso sonoro. Dá para mover o stop e o alvo, entrar e sair na mão."}</div>`;
     } else if (!rs) {
       h = cab("", "TESTE AO VIVO", x.erro ? "" : "calculando…") + (x.erro ? `<div class="erro">⚠ ${AX.esc(x.erro)}</div><div class="botoes"><button id="tApagar">Apagar teste</button></div>` : "");
@@ -528,13 +530,13 @@
   }
 
   // ================================================================ 4. central de sinais (Sentinela)
-  const DICA_SENTINELA = "O Sentinela é a parte do robô que roda os testes ao vivo. Ele confere cada teste ligado a cada poucos segundos e registra aqui o que aconteceu: ordem armada, entrada e saída, com a chance estimada pela IA. Continua trabalhando com esta janela fechada; para ser avisado no celular, ligue os avisos no botão da sua conta.";
+  const DICA_SENTINELA = "O que os seus testes ao vivo fizeram por último: ordem armada, entrada e saída, com o resultado em reais. O robô confere os testes a cada poucos segundos, mesmo com esta janela fechada. Para receber no celular, ligue os avisos no botão da sua conta.";
   let vistoT = null;
   function renderSinais() {
-    const el = $("cardSinais"), ativos = T.lista.filter((x) => !x.ate);
-    if (!T.pronto || (!ativos.length && !T.sinais.length)) { el.classList.add("oculto"); return; }
+    const el = $("cardSinais"), ativos = T.lista.filter((x) => !x.ate), ids = new Set(T.lista.map((x) => x.id));
+    const lista = T.sinais.filter((e) => ids.has(e.teste)).reverse(), mostra = lista.slice(0, T.todos ? 40 : 4);
+    if (!T.pronto || !lista.length) { el.classList.add("oculto"); return; }
     el.classList.remove("oculto");
-    const lista = T.sinais.slice().reverse(), mostra = lista.slice(0, T.todos ? 40 : 5);
     const novos = lista.filter((e) => e.seq > T.visto).length;
     const hoje = AX.diaBR(Date.now() / 1000);
     const linha = (ev, j) => {
@@ -542,17 +544,17 @@
       const cls = ev.tipo === "saida" ? (ev.ganho ? "ganho" : "perda") : ev.tipo;
       const oque = ev.tipo === "ordem" ? `<b class="${ev.dir > 0 ? "cmp" : "vnd"}">${lado}</b> armada ${ev.gatilho == null ? "a mercado" : (ev.ordem === "limite" ? "limitada em " : ev.dir > 0 ? "acima de " : "abaixo de ") + f(ev.gatilho)}`
         : ev.tipo === "entrada" ? `<b class="${ev.dir > 0 ? "cmp" : "vnd"}">${lado}</b> executada a ${f(ev.ent)}`
-          : `saiu: ${AX.esc(ev.motivo || "")} <b class="${AX.cls(ev.R)}">${AX.res2(ev.R, ev.dinheiro, { meta: { moeda: ev.moeda } })}</b>`;
+          : `saiu (${AX.esc(ev.motivo || "")}): <b class="${AX.cls(ev.R)}">${AX.res2(ev.R, ev.dinheiro, { meta: { moeda: ev.moeda } })}</b>`;
       const ia = ev.ia && ev.tipo !== "saida" ? `<span class="sn-ia ${ev.iaOk ? "ok" : ""}" data-dica="Chance de ganho estimada pela IA quando o sinal apareceu${ev.iaOk ? " (modelo aprovado fora da amostra neste ativo)." : ". Neste ativo a IA ainda não acertou mais que o acaso: é só leitura."}">IA ${AX.num(100 * ev.ia[0], 0)}%</span>` : "";
       return `<div class="sn ${cls}${ev.seq > T.visto ? " novo" : ""}" data-j="${j}" data-dica="Abrir este ativo e este teste no gráfico">
         <i class="sn-p"></i><span class="sn-h">${dia === hoje ? "" : dia + " "}${AX.horaBR(ev.quando)}</span>
         <span class="sn-a">${AX.esc(AX.rotAtivo(ev.ativo))} · ${AX.esc(ev.nomeTf)} · ${AX.esc(ev.est)}</span><span class="sn-t">${oque}</span>${ia}</div>`;
     };
-    el.innerHTML = `<div class="rot"><i class="radar${ativos.length ? " on" : ""}"></i>SENTINELA · CENTRAL DE SINAIS ${AX.q(DICA_SENTINELA)}
-        <span class="dir">${ativos.length ? ativos.length + (ativos.length > 1 ? " testes vigiando" : " teste vigiando") : "nenhum teste ligado"}${novos ? ` · <b class="alerta">${novos} novo${novos > 1 ? "s" : ""}</b>` : ""}</span></div>
+    el.innerHTML = `<div class="rot"><i class="radar${ativos.length ? " on" : ""}"></i>ÚLTIMOS AVISOS DOS SEUS TESTES ${AX.q(DICA_SENTINELA)}
+        <span class="dir">${ativos.length ? ativos.length + (ativos.length > 1 ? " testes ligados" : " teste ligado") : "nenhum teste ligado"}${novos ? ` · <b class="alerta">${novos} novo${novos > 1 ? "s" : ""}</b>` : ""}</span></div>
       ${mostra.length ? `<div class="sinais">${mostra.map(linha).join("")}</div>` : '<div class="nota">Nenhum sinal ainda. Quando um teste armar uma ordem, entrar ou sair, aparece aqui e toca o aviso.</div>'}
       ${T.avisoErro ? `<div class="aviso-custo">⚠ Não consegui mandar o aviso para o celular: ${AX.esc(T.avisoErro)}</div>` : ""}
-      <div class="sn-pe">${lista.length > 5 ? `<button class="mini-btn" id="snMais">${T.todos ? "mostrar menos" : "ver os últimos " + Math.min(40, lista.length)}</button>` : ""}
+      <div class="sn-pe">${lista.length > 5 ? `<button class="mini-btn" id="snMais">${T.todos ? "mostrar menos" : "ver mais " + Math.min(40, lista.length)}</button>` : ""}
         <button class="mini-btn" id="snAvisos" data-dica="Abre os avisos da sua conta: receber cada sinal no celular pelo Telegram e o aviso do Windows.">🔔 Avisos no celular</button></div>`;
     el.querySelectorAll(".sn").forEach((d) => (d.onclick = () => {
       const ev = mostra[+d.dataset.j], x = T.lista.find((y) => y.id === ev.teste);

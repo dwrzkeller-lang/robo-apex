@@ -1,4 +1,4 @@
-/* ROBÔ APEX — VOLUME POR PREÇO: a "escadinha" de preços estilo Profit, por cima do lado direito do gráfico.
+/* ROBÔ APEX: VOLUME POR PREÇO: a "escadinha" de preços estilo Profit, por cima do lado direito do gráfico.
    Para cada faixa de preço mostra o volume negociado ali, a divisão estimada entre compra e venda, e quantas entradas
    das estratégias aconteceram naquela faixa (com o resultado). Destaca o POC (preço com mais volume), a área de valor
    de 70% (VAH/VAL) e os principais nós de volume abaixo (pontos de compra) e acima (pontos de venda) do preço atual.
@@ -213,7 +213,7 @@
 
   // números curtos para a coluna: 12,4k · 1,2M · 3,4B (o valor inteiro vai na dica da linha)
   function curto(v, modo) {
-    if (!fin(v)) return "—";
+    if (!fin(v)) return "-";
     if (modo === "tempo") return num(v, 0);
     const a = Math.abs(v);
     if (a >= 1e9) return num(v / 1e9, 1) + "B";

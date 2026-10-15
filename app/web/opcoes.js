@@ -1,4 +1,4 @@
-/* ROBÔ APEX — aba Opções (B3). Para aprender e enxergar oportunidades: o robô não envia ordem nenhuma.
+/* ROBÔ APEX: aba Opções (B3). Para aprender e enxergar oportunidades: o robô não envia ordem nenhuma.
    Mostra o ativo-objeto, a grade de um vencimento (calls à esquerda, puts à direita), 5 estruturas clássicas montadas
    com séries reais (com gráfico de resultado, passo a passo, riscos e conferência das regras), um montador livre,
    uma triagem de oportunidades e um glossário. Toda conta (Black-Scholes, VI, gregas, resultado) vem do servidor.
@@ -17,22 +17,22 @@
   const ic = (d) => `<svg class="ic" viewBox="0 0 24 24">${d}</svg>`;
   const n2 = (v) => AX.num(v, 2);
   const rs = (v, sinal = false) => {
-    if (v == null || isNaN(v)) return "—";
+    if (v == null || isNaN(v)) return "-";
     return (v < 0 ? "−" : sinal && v > 0 ? "+" : "") + "R$ " + Math.abs(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
-  const inteiro = (v) => (v == null || isNaN(v) ? "—" : Math.round(v).toLocaleString("pt-BR"));
+  const inteiro = (v) => (v == null || isNaN(v) ? "-" : Math.round(v).toLocaleString("pt-BR"));
   const curto = (v) => {                       // 1.234.500 -> 1,2 mi
-    if (v == null || isNaN(v)) return "—";
+    if (v == null || isNaN(v)) return "-";
     const a = Math.abs(v);
     if (a >= 1e9) return AX.num(v / 1e9, 1) + " bi";
     if (a >= 1e6) return AX.num(v / 1e6, 1) + " mi";
     if (a >= 1e4) return AX.num(v / 1e3, 0) + " mil";
     return inteiro(v);
   };
-  const vol = (v, d = 1) => (v == null ? "—" : AX.pct(100 * v, d));          // 0,3507 -> 35,1%
-  const dataBR = (iso, ano = false) => (iso && iso.length >= 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}${ano ? "/" + iso.slice(0, 4) : ""}` : "—");
+  const vol = (v, d = 1) => (v == null ? "-" : AX.pct(100 * v, d));          // 0,3507 -> 35,1%
+  const dataBR = (iso, ano = false) => (iso && iso.length >= 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}${ano ? "/" + iso.slice(0, 4) : ""}` : "-");
   const hora = (s) => { const m = /(\d{2}:\d{2})/.exec(s || ""); return m ? m[1] : ""; };
-  const sinalNum = (v, d = 2) => (v == null ? "—" : (v > 0 ? "+" : v < 0 ? "−" : "") + AX.num(Math.abs(v), d));
+  const sinalNum = (v, d = 2) => (v == null ? "-" : (v > 0 ? "+" : v < 0 ? "−" : "") + AX.num(Math.abs(v), d));
   const url = (rota, p) => "/api/opcoes/" + rota + (p ? "?" + new URLSearchParams(p).toString() : "");
 
   // ---------------------------------------------------------------- esqueleto
@@ -62,8 +62,8 @@
         <form class="op-busca"><input maxlength="6" placeholder="outro: ex. SUZB3" aria-label="Outro ativo" autocomplete="off" spellcheck="false"><button type="submit">Ver</button></form></div>`;
     if (!p) { el.innerHTML = h + `<div class="nota">carregando ${esc(S.ativo)}…</div></div>`; return; }
     const b = p.base, t = b.tendencia || {}, dl = p.download || {};
-    const seloT = { alta: ["verde", "▲ ALTA"], baixa: ["vermelho", "▼ BAIXA"], lateral: ["neutro", "◆ SEM TENDÊNCIA"], sem: ["neutro", "SEM DADOS"] }[t.cod] || ["neutro", "—"];
-    h += `<div class="op-preco"><b>${esc(p.ativo)}</b><span class="op-val">${b.preco == null ? "—" : rs(b.preco)}</span>
+    const seloT = { alta: ["verde", "▲ ALTA"], baixa: ["vermelho", "▼ BAIXA"], lateral: ["neutro", "◆ SEM TENDÊNCIA"], sem: ["neutro", "SEM DADOS"] }[t.cod] || ["neutro", "-"];
+    h += `<div class="op-preco"><b>${esc(p.ativo)}</b><span class="op-val">${b.preco == null ? "-" : rs(b.preco)}</span>
         ${b.var == null ? "" : `<span class="${AX.cls(b.var)}">${b.var > 0 ? "▲ +" : b.var < 0 ? "▼ −" : ""}${AX.num(Math.abs(b.var), 2)}%</span>`}
         <span class="op-quando">${b.hora ? "às " + esc(hora(b.hora)) + " · " : ""}${esc(b.fonte || "sem cotação")}</span></div>
       <div class="op-tiles">
@@ -97,13 +97,13 @@
   // ---------------------------------------------------------------- grade
   const marca = (x) => (x.fonte === "agora" ? "" : x.fonte === "fech" ? "<sup>f</sup>" : x.fonte === "ref" ? "<sup>r</sup>" : "");
   function ladoTd(x, espelho) {
-    if (!x) return '<td class="n op-vz" colspan="4">—</td>';
+    if (!x) return '<td class="n op-vz" colspan="4">-</td>';
     const itm = x.mon === "ITM" ? " op-itm" : "";
     const cel = [
       `<td class="n${itm}">${x.neg ? inteiro(x.neg) : '<span class="op-fraco">0</span>'}</td>`,
       `<td class="n${itm}">${vol(x.vi)}</td>`,
-      `<td class="n${itm}">${x.delta == null ? "—" : n2(x.delta)}</td>`,
-      `<td class="n op-pr${itm}"><span class="${x.semNeg ? "op-fraco" : ""}">${x.preco == null ? "—" : n2(x.preco)}</span>${marca(x)}</td>`];
+      `<td class="n${itm}">${x.delta == null ? "-" : n2(x.delta)}</td>`,
+      `<td class="n op-pr${itm}"><span class="${x.semNeg ? "op-fraco" : ""}">${x.preco == null ? "-" : n2(x.preco)}</span>${marca(x)}</td>`];
     return (espelho ? cel.reverse() : cel).join("");
   }
   function renderGrade() {
@@ -154,18 +154,18 @@
     const li = (r, v, d) => `<div><small>${r}${d ? q(d) : ""}</small><b>${v}</b></div>`;
     return `<div class="op-det-l"><div class="op-det-t">${nome} <b>${esc(x.tk)}</b> <span class="chip">${esc(x.estilo)}</span> <span class="chip">${esc(x.mon)}</span>${x.semNeg ? ' <span class="chip esticada">sem negócio</span>' : ""}</div>
       <div class="op-det-g">
-        ${li("Prêmio", x.preco == null ? "—" : rs(x.preco), "Fonte: " + fonte + ". Por lote de 100: " + rs(x.preco == null ? null : x.preco * 100) + ".")}
+        ${li("Prêmio", x.preco == null ? "-" : rs(x.preco), "Fonte: " + fonte + ". Por lote de 100: " + rs(x.preco == null ? null : x.preco * 100) + ".")}
         ${li("Valor intrínseco", rs(x.intr), "A parte do prêmio que já é dinheiro: quanto a opção valeria se vencesse agora. Zero para opções fora do dinheiro.")}
         ${li("Valor do tempo", rs(x.tempo), "O resto do prêmio: o que se paga pela chance de a ação andar até o vencimento. Essa parte vai a zero no vencimento.")}
         ${li("VI", vol(x.vi), "Volatilidade implícita desta série.")}
-        ${li("Delta", x.delta == null ? "—" : AX.num(x.delta, 3), "Se a ação subir R$ 1,00, o prêmio muda mais ou menos isto (em R$ por ação).")}
-        ${li("Gamma", x.gamma == null ? "—" : AX.num(x.gamma, 4), "Quanto o delta muda quando a ação anda R$ 1,00. Alto perto do dinheiro e do vencimento: o risco muda rápido.")}
-        ${li("Theta / dia", x.theta == null ? "—" : rs(x.theta), "Quanto o prêmio perde por dia útil só pela passagem do tempo, com tudo o mais parado. Ruim para quem comprou, bom para quem vendeu.")}
-        ${li("Vega / ponto", x.vega == null ? "—" : rs(x.vega), "Quanto o prêmio muda se a volatilidade implícita subir 1 ponto percentual.")}
-        ${li("Negócios", inteiro(x.neg), "No último pregão. Volume financeiro: " + (x.vol == null ? "—" : "R$ " + curto(x.vol)) + ".")}
+        ${li("Delta", x.delta == null ? "-" : AX.num(x.delta, 3), "Se a ação subir R$ 1,00, o prêmio muda mais ou menos isto (em R$ por ação).")}
+        ${li("Gamma", x.gamma == null ? "-" : AX.num(x.gamma, 4), "Quanto o delta muda quando a ação anda R$ 1,00. Alto perto do dinheiro e do vencimento: o risco muda rápido.")}
+        ${li("Theta / dia", x.theta == null ? "-" : rs(x.theta), "Quanto o prêmio perde por dia útil só pela passagem do tempo, com tudo o mais parado. Ruim para quem comprou, bom para quem vendeu.")}
+        ${li("Vega / ponto", x.vega == null ? "-" : rs(x.vega), "Quanto o prêmio muda se a volatilidade implícita subir 1 ponto percentual.")}
+        ${li("Negócios", inteiro(x.neg), "No último pregão. Volume financeiro: " + (x.vol == null ? "-" : "R$ " + curto(x.vol)) + ".")}
         ${li("Em aberto", curto(x.oi), "Posições em aberto: contratos que existem hoje nesta série (coberto: " + curto(x.coberto) + "; descoberto: " + curto(x.descoberto) + "). Muito contrato em aberto costuma significar série mais fácil de negociar.")}
-        ${li("Mín. / máx.", x.min == null ? "—" : n2(x.min) + " / " + n2(x.max), "Do último pregão.")}
-        ${li("Referência", x.ref == null ? "—" : rs(x.ref), "Preço de referência calculado pela B3 no fechamento.")}
+        ${li("Mín. / máx.", x.min == null ? "-" : n2(x.min) + " / " + n2(x.max), "Do último pregão.")}
+        ${li("Referência", x.ref == null ? "-" : rs(x.ref), "Preço de referência calculado pela B3 no fechamento.")}
       </div>
       <div class="botoes finos"><button data-ac="add" data-tk="${esc(x.tk)}" data-lado="compra">+ Comprar no montador</button><button data-ac="add" data-tk="${esc(x.tk)}" data-lado="venda">+ Vender no montador</button></div></div>`;
   }
@@ -248,8 +248,8 @@
       <div class="tile"><small>${liq >= 0 ? "Recebe agora" : "Paga agora"}${q("Saldo dos prêmios das opções, por lote de 100, antes dos custos. Crédito = entra dinheiro na montagem; débito = sai. Receber na montagem não é lucro: o resultado só se define no vencimento ou quando você desmonta.")}</small><b>${rs(Math.abs(liq))}</b><em>${liq >= 0 ? "crédito" : "débito"} · custos B3 ≈ ${rs(r.custos)}${q("Estimativa de 0,134% sobre o prêmio de cada perna (emolumentos, registro e liquidação). Corretagem, imposto de renda e a diferença entre compra e venda NÃO estão incluídos.")}</em></div>
       <div class="tile"><small>Ganho máximo${q("O melhor resultado possível no vencimento, já com os custos estimados. É um teto, não o resultado esperado.")}</small><b class="${semTeto ? "" : "bom"}">${semTeto ? "sem teto" : rs(r.ganhoMax, true)}</b><em>${r.retorno == null ? "no vencimento" : AX.num(r.retorno, 1) + "% do capital" + (r.retornoAno == null ? "" : " · " + AX.num(r.retornoAno, 0) + "% a.a.")}${r.retornoAno == null ? "" : q("A taxa ao ano só repete a conta do período como se desse para refazer a mesma operação o ano inteiro com o mesmo resultado, o que não acontece. Serve apenas para comparar com o CDI.")}</em></div>
       <div class="tile"><small>Perda máxima${q("O pior resultado possível no vencimento, já com os custos estimados. Em estruturas com ação, considera a ação indo a zero.")}</small><b class="ruim">${semPiso ? "SEM LIMITE" : rs(-r.perdaMax)}</b><em>${semPiso ? "o prejuízo cresce sem parar" : "pior caso no vencimento"}</em></div>
-      <div class="tile"><small>Empate${q("Preço da ação no vencimento em que a estrutura sai no zero a zero (já com custos estimados).")}</small><b>${(r.empates || []).length ? r.empates.map((e) => n2(e)).join(" e ") : "—"}</b><em>preço da ação no vencimento</em></div>
-      <div class="tile"><small>Chance de lucro${q("Conta aproximada de modelo: probabilidade de a ação terminar na faixa de lucro, supondo distribuição lognormal com a VI de agora (base N(d2) do Black-Scholes). Não é previsão. O mercado real tem quedas bruscas mais frequentes do que o modelo supõe. E chance alta quase sempre vem com ganho pequeno e perda grande.")}</small><b>${r.prob == null ? "—" : "≈ " + AX.num(r.prob, 0) + "%"}</b><em>estimativa de modelo</em></div>
+      <div class="tile"><small>Empate${q("Preço da ação no vencimento em que a estrutura sai no zero a zero (já com custos estimados).")}</small><b>${(r.empates || []).length ? r.empates.map((e) => n2(e)).join(" e ") : "-"}</b><em>preço da ação no vencimento</em></div>
+      <div class="tile"><small>Chance de lucro${q("Conta aproximada de modelo: probabilidade de a ação terminar na faixa de lucro, supondo distribuição lognormal com a VI de agora (base N(d2) do Black-Scholes). Não é previsão. O mercado real tem quedas bruscas mais frequentes do que o modelo supõe. E chance alta quase sempre vem com ganho pequeno e perda grande.")}</small><b>${r.prob == null ? "-" : "≈ " + AX.num(r.prob, 0) + "%"}</b><em>estimativa de modelo</em></div>
       <div class="tile"><small>Capital / garantia${q(r.capitalTxt || "")}</small><b>${r.capital == null ? "margem" : rs(r.capital)}</b><em>${r.capital == null ? "exigida pela corretora" : "para 1 lote (100)"}</em></div>
     </div>`;
   }
@@ -257,8 +257,8 @@
   function pernasTab(r) {
     return `<table class="tab op-pernas"><tr><th>Perna</th><th>Papel</th><th class="n">Strike</th><th class="n">Preço</th><th class="n">Delta</th><th class="n">Neg.</th></tr>
       ${(r.pernas || []).map((p) => `<tr><td><b>${esc(NOME_LADO[p.lado] || p.lado)}</b> ${p.qtd * 100} ${p.tipo === "acao" ? "ações" : esc(p.tipo) + "s"}</td><td>${esc(p.tk)}</td>
-        <td class="n">${p.k == null ? "—" : n2(p.k)}</td><td class="n">${n2(p.preco)}${p.fonte === "fech" ? "<sup>f</sup>" : p.fonte === "ref" ? "<sup>r</sup>" : ""}</td>
-        <td class="n">${p.delta == null ? "—" : n2(p.delta)}</td><td class="n">${p.neg == null ? "—" : inteiro(p.neg)}</td></tr>`).join("")}</table>`;
+        <td class="n">${p.k == null ? "-" : n2(p.k)}</td><td class="n">${n2(p.preco)}${p.fonte === "fech" ? "<sup>f</sup>" : p.fonte === "ref" ? "<sup>r</sup>" : ""}</td>
+        <td class="n">${p.delta == null ? "-" : n2(p.delta)}</td><td class="n">${p.neg == null ? "-" : inteiro(p.neg)}</td></tr>`).join("")}</table>`;
   }
   const det = (chave, titulo, corpo, aberto = false) => `<details data-ab="${esc(chave)}"${(chave in S.abertos ? S.abertos[chave] : aberto) ? " open" : ""}><summary>${titulo}</summary>${corpo}</details>`;
 
@@ -297,7 +297,7 @@
     }
     h += `<table class="tab op-pernas"><tr><th>Lado</th><th>Papel</th><th class="n">Strike</th><th class="n">Lotes</th><th class="n">Preço${q("Em branco, o robô usa o preço da grade. Digite outro valor para simular o preço que você acha que conseguiria.")}</th><th></th></tr>
       ${S.pernas.map((p, i) => `<tr><td><div class="seg mini"><button class="${p.lado === "compra" ? "on" : ""}" data-ac="lado" data-i="${i}" data-v="compra">Compra</button><button class="${p.lado === "venda" ? "on" : ""}" data-ac="lado" data-i="${i}" data-v="venda">Venda</button></div></td>
-        <td>${p.tipo === "acao" ? "ações " + esc(g.ativo) : esc(p.tipo) + " " + esc(p.tk)}</td><td class="n">${p.k == null ? "—" : n2(p.k)}</td>
+        <td>${p.tipo === "acao" ? "ações " + esc(g.ativo) : esc(p.tipo) + " " + esc(p.tk)}</td><td class="n">${p.k == null ? "-" : n2(p.k)}</td>
         <td class="n"><input class="op-in" type="number" min="1" max="1000" step="1" value="${+p.qtd || 1}" data-ac="qtd" data-i="${i}" aria-label="Lotes"></td>
         <td class="n"><input class="op-in" type="number" min="0.01" step="0.01" value="${p.preco == null ? "" : +p.preco}" placeholder="${p.ref == null ? "" : n2(p.ref)}" data-ac="preco" data-i="${i}" aria-label="Preço"></td>
         <td class="n"><button class="mini-btn" data-ac="rm" data-i="${i}" aria-label="Remover perna">✕</button></td></tr>`).join("")}</table>
@@ -338,7 +338,7 @@
     else if (S.opSeg === "vi") {
       h += `<table class="tab"><tr><th>Ativo</th><th class="n">Fech.</th><th class="n">VI${q("VI no dinheiro, no vencimento com mais negócios entre 8 e 60 dias úteis.")}</th><th class="n">Vol. hist. 21</th><th class="n">VI ÷ hist.${q("Acima de 1: o mercado está cobrando mais volatilidade do que a ação mostrou no último mês (opções relativamente caras). Abaixo de 1: relativamente baratas. Normalmente há motivo: resultado chegando, notícia, eleição.")}</th><th>Vencimento</th></tr>
         ${lista.map((x) => `<tr class="clic" data-ac="ir" data-v="${esc(x.ativo)}" data-venc="${esc(x.venc)}"><td><b>${esc(x.ativo)}</b></td><td class="n">${n2(x.spot)}</td><td class="n">${vol(x.viAtm)}</td><td class="n">${vol(x.hv21)}</td>
-          <td class="n"><b>${x.razao == null ? "—" : AX.num(x.razao, 2)}</b> <span class="neutro">${x.razao == null ? "" : x.razao >= 1.15 ? "cara" : x.razao <= 0.9 ? "barata" : "na média"}</span></td><td>${dataBR(x.venc)} · ${x.du} d.u.</td></tr>`).join("")}</table>`;
+          <td class="n"><b>${x.razao == null ? "-" : AX.num(x.razao, 2)}</b> <span class="neutro">${x.razao == null ? "" : x.razao >= 1.15 ? "cara" : x.razao <= 0.9 ? "barata" : "na média"}</span></td><td>${dataBR(x.venc)} · ${x.du} d.u.</td></tr>`).join("")}</table>`;
     } else if (S.opSeg === "volume") {
       h += `<div class="rolagem"><table class="tab"><tr><th>Série</th><th>Tipo</th><th class="n">Strike</th><th class="n">Dist.</th><th>Venc.</th><th class="n">Último</th><th class="n">Neg.</th><th class="n">Volume</th><th class="n">Em aberto</th></tr>
         ${lista.map((x) => `<tr class="clic" data-ac="ir" data-v="${esc(x.ativo)}" data-venc="${esc(x.venc)}"><td><b>${esc(x.tk)}</b> <span class="neutro">${esc(x.ativo)}</span></td><td>${esc(x.tipo)}</td><td class="n">${n2(x.k)}</td><td class="n">${sinalNum(x.dist, 1)}%</td>

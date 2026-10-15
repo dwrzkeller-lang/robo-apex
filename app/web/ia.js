@@ -1,4 +1,4 @@
-/* ROBÔ APEX — aba IA. Mostra o que o robô aprendeu com as operações já encerradas deste ativo e tempo gráfico:
+/* ROBÔ APEX: aba IA. Mostra o que o robô aprendeu com as operações já encerradas deste ativo e tempo gráfico:
    a nota da IA medida FORA da amostra (em operações que ela ainda não conhecia), o que teria acontecido seguindo as
    notas dela, as lições que os dados sustentam, o que deu errado que poderia ter dado certo, o que mais pesa na nota e
    o diário de aprendizado. Se a IA não acerta mais que o acaso, a tela diz isso com todas as letras. */
@@ -67,8 +67,8 @@
       const dif = n ? n.alto.mediaR - n.baixo.mediaR : null;
       h += `<div class="tiles">
         <div class="tile"><small>Estudadas${AX.q("Operações encerradas de todas as estratégias, cada uma sozinha, no histórico inteiro deste ativo e tempo gráfico. Precisa de " + d.minimo + " para começar.")}</small><b>${AX.num(d.n, 0)}</b><em>${d.base && d.base.acerto != null ? "operações · acerto " + pct(d.base.acerto) + " · média " + R(d.base.mediaR) : "de " + d.minimo + " operações necessárias"}</em></div>
-        <div class="tile"><small>Ordenação${AX.q("De cada 100 pares formados por uma operação que ganhou e uma que perdeu, em quantos a IA tinha dado nota maior para a que ganhou. 50% é o mesmo que jogar moeda. Medido só em operações que ela ainda não conhecia.")}</small><b>${n && n.auc != null ? pct(100 * n.auc, 1) : "—"}</b><em>de acerto · 50% é o acaso</em></div>
-        <div class="tile"><small>Alta − baixa${AX.q("Resultado médio do terço de operações com as maiores notas menos o do terço com as menores, fora da amostra. Se a IA sabe alguma coisa, este número é positivo e se repete nas duas metades do período.")}</small><b class="${AX.cls(dif)}">${dif == null ? "—" : R(dif)}</b><em>${n ? "nota alta menos nota baixa · metades " + R(n.metades[0]) + " e " + R(n.metades[1]) : "sem prova ainda"}</em></div>
+        <div class="tile"><small>Ordenação${AX.q("De cada 100 pares formados por uma operação que ganhou e uma que perdeu, em quantos a IA tinha dado nota maior para a que ganhou. 50% é o mesmo que jogar moeda. Medido só em operações que ela ainda não conhecia.")}</small><b>${n && n.auc != null ? pct(100 * n.auc, 1) : "-"}</b><em>de acerto · 50% é o acaso</em></div>
+        <div class="tile"><small>Alta − baixa${AX.q("Resultado médio do terço de operações com as maiores notas menos o do terço com as menores, fora da amostra. Se a IA sabe alguma coisa, este número é positivo e se repete nas duas metades do período.")}</small><b class="${AX.cls(dif)}">${dif == null ? "-" : R(dif)}</b><em>${n ? "nota alta menos nota baixa · metades " + R(n.metades[0]) + " e " + R(n.metades[1]) : "sem prova ainda"}</em></div>
       </div>`;
       if (n && n.auc != null) {
         const lo = 0.4, hi = 0.65, pos = (x) => Math.max(0, Math.min(100, (100 * (x - lo)) / (hi - lo)));
@@ -88,7 +88,7 @@
       const max = Math.max(0.01, ...linhas.map(([, x]) => Math.abs(x.mediaR || 0)));
       h += `<div class="card"><div class="rot">${ic('<path d="M4 19h16M7 16V9M12 16V5M17 16v-4"/>')}SE VOCÊ TIVESSE SEGUIDO A IA ${AX.q("A prova fora da amostra: o histórico é cortado em 6 blocos de tempo; para cada bloco a IA treina só com as operações que já tinham terminado antes dele e dá nota às do bloco. “Aprovava” = valor esperado maior que zero. Os resultados são por operação, em múltiplos do risco (R), já com custos.")}<span class="dir">${n.n} operações de prova</span></div>
         <table class="tab ia-tab"><tr><th>Grupo</th><th class="n">Ops</th><th class="n">Média</th><th></th></tr>
-        ${linhas.map(([nome, x]) => `<tr><td>${nome}</td><td class="n">${x.n}</td><td class="n ${AX.cls(x.mediaR)}">${x.n ? R(x.mediaR) : "—"}</td><td class="ia-b">${x.n ? barra(x.mediaR, max) : ""}</td></tr>`).join("")}</table>
+        ${linhas.map(([nome, x]) => `<tr><td>${nome}</td><td class="n">${x.n}</td><td class="n ${AX.cls(x.mediaR)}">${x.n ? R(x.mediaR) : "-"}</td><td class="ia-b">${x.n ? barra(x.mediaR, max) : ""}</td></tr>`).join("")}</table>
         <div class="nota">${n.comprovada ? "As aprovadas renderam mais que as reprovadas no período de prova." : n.favor.n && n.favor.mediaR > n.todas.mediaR ? "As aprovadas foram um pouco melhores, mas a diferença ainda cabe no acaso (ou não se repetiu nas duas metades)." : "Filtrar pelas notas da IA não melhorou o resultado no período de prova."} Mesmo aprovada, a IA só melhora a escolha entre operações de uma estratégia: ela não transforma em lucrativa uma estratégia que perde.</div></div>`;
     }
 
@@ -152,10 +152,11 @@
     const el = $("iaAjuste");
     el.innerHTML = '<div class="nota">testando as gestões e as proteções nas duas metades do histórico…</div>';
     let j;
-    try { j = await AX.json("/api/ajuste?" + AX.parametros(), { tempo: 240000 }); }
-    catch (e) { el.innerHTML = `<div class="nota ruim">${AX.esc(e.message)}</div>`; return; }
-    if (!$("iaAjuste")) return;
-    const D = { meta: { moeda: j.moeda } }, din = (v) => (v == null ? "—" : AX.dinheiro(v, D, true));
+    const pedido = AX.parametros(), vez = (ajustar.vez = (ajustar.vez || 0) + 1);     // resposta de um pedido antigo é descartada
+    try { j = await AX.json("/api/ajuste?" + pedido, { tempo: 240000 }); }
+    catch (e) { if (vez === ajustar.vez && $("iaAjuste")) $("iaAjuste").innerHTML = `<div class="nota ruim">${AX.esc(e.message)}</div>`; return; }
+    if (!$("iaAjuste") || vez !== ajustar.vez || pedido !== AX.parametros()) return;
+    const D = { meta: { moeda: j.moeda } }, din = (v) => (v == null ? "-" : AX.dinheiro(v, D, true));
     const pr = (x) => (x.prot.length ? x.prot.map((k) => ({ corte: "corte antecipado", forca: "perdeu força", folga: "folga", tol: "tolerância" }[k] || k)).join(" + ") : "sem proteção");
     const lin = (x, rot) => `<tr><td>${rot}<br><small class="neutro">${AX.esc(x.nome)} · ${AX.esc(pr(x))}</small></td>
       <td class="n">${x.treino.n}<br><b class="${AX.cls(x.treino.media)}">${din(x.treino.media)}</b></td>

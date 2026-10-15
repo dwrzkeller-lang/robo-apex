@@ -1,4 +1,4 @@
-/* ROBÔ APEX — ferramentas de desenho estilo TradingView/Profit. A barra da esquerda é montada aqui, em grupos com menu:
+/* ROBÔ APEX: ferramentas de desenho estilo TradingView/Profit. A barra da esquerda é montada aqui, em grupos com menu:
    linhas (tendência, raio, estendida, seta, horizontal, raio horizontal, vertical, canal), Fibonacci (retração e
    projeção), formas, posição comprada/vendida, régua, pincel, texto e borracha. Com o cursor: clicar seleciona, arrastar
    move, as bolinhas ajustam; Ctrl+C / Ctrl+V / Ctrl+D copiam, colam e duplicam; Ctrl+Z / Ctrl+Y desfazem e refazem.
@@ -139,7 +139,7 @@
     return T[k] + (i - k) * (T[k + 1] - T[k]);
   }
   // A biblioteca só converte índice INTEIRO em x (para índice quebrado ela devolve 0, e o ponto ia parar na borda esquerda).
-  // Como x é uma reta em função do índice, meço dois inteiros e calculo qualquer ponto por ela — é o que mantém no lugar
+  // Como x é uma reta em função do índice, meço dois inteiros e calculo qualquer ponto por ela: é o que mantém no lugar
   // um desenho feito no 5 min quando ele é visto no 60 min, e o que deixa o pincel liso.
   function medirPainel() {
     const ts = eixoT(), a = ts.logicalToCoordinate(0), b = ts.logicalToCoordinate(1);
@@ -406,7 +406,7 @@
   bEsp.appendChild(bTraco);
   barra.append(bCor, bEsp, cria("span", "dz-div dz-estilo"), bDup, bCop, bDel);
   area.appendChild(barra);
-  // a cor muda ao vivo enquanto o seletor está aberto; o retrato do histórico (um só) fica para quando ele fecha —
+  // a cor muda ao vivo enquanto o seletor está aberto; o retrato do histórico (um só) fica para quando ele fecha:
   // ou para quando a seleção muda, caso o navegador não avise o fechamento
   const firmarCor = () => { if (corViva) { corViva = false; gravar(); } };
   bCor.oninput = () => { const d = porId(selecionado); if (d) { d.cor = bCor.value; corViva = true; sujar(); } };
@@ -1062,7 +1062,7 @@
           ctx.strokeStyle = CLARO; ctx.lineWidth = sel ? 2 : 1.5; brilho(CLARO); linha(x1, yE, x2, yE);
           if (x2 < 0 || x1 > Wp) break;
           const ganho = Math.abs(d.alvo - d.ent), risco = Math.abs(d.ent - d.stop), vp = AX.valorPontoR(), xm = (x1 + x2) / 2;
-          const razao = risco > 0 ? (ganho / risco).toFixed(1).replace(".", ",") : "—";
+          const razao = risco > 0 ? (ganho / risco).toFixed(1).replace(".", ",") : "-";
           rotuloMeio(`Alvo ${AX.fmt(d.alvo)} · ${AX.fmt(ganho)} pts · ${AX.reais(ganho * vp)}/contr.`, xm, yA < yE ? yA - 3 : yA + 17, VERDE);
           rotuloMeio(`Stop ${AX.fmt(d.stop)} · ${AX.fmt(risco)} pts · ${AX.reais(risco * vp)}/contr.`, xm, yS < yE ? yS - 3 : yS + 17, VERM);
           rotuloMeio(`${F.pos > 0 ? "Compra" : "Venda"} ${AX.fmt(d.ent)} · retorno/risco ${razao} : 1`, xm, yA < yE ? yE - 3 : yE + 17, CLARO);

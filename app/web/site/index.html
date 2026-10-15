@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Robô Apex · estratégias de day trade para B3, opções e cripto</title>
+<meta name="description" content="Mais de 20 estratégias de day trade com entrada, stop e alvo no gráfico, teste no passado com custos reais, replay de cada operação, boleta simulada ao vivo, cripto e opções. R$ 49,99 por mês.">
+<meta property="og:title" content="Robô Apex · estratégias de day trade">
+<meta property="og:description" content="Veja onde cada estratégia entra e sai, teste antes de arriscar e treine ao vivo na boleta simulada.">
+<meta property="og:image" content="img/app_grafico.png">
+<link rel="icon" type="image/png" href="../icone-64.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #04060c; --bg2: #0a0f1a; --linha: rgba(148, 163, 184, .14); --txt: #e8eef8; --txt2: #9aa7bc;
+  --ciano: #22d3ee; --violeta: #8b5cf6; --verde: #2ef2a8; --verm: #ff4d6a; --ouro: #ffd23f;
+  --grad: linear-gradient(135deg, #22d3ee, #8b5cf6);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--txt); font: 16px/1.6 Inter, "Segoe UI", system-ui, sans-serif; overflow-x: hidden; }
+a { color: inherit; }
+h1, h2, h3 { font-family: "Space Grotesk", Inter, sans-serif; line-height: 1.12; margin: 0; letter-spacing: -.5px; }
+.envolve { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
+.fundo-grade { position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  background-image: linear-gradient(rgba(148, 163, 184, .05) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, .05) 1px, transparent 1px);
+  background-size: 48px 48px; mask-image: radial-gradient(ellipse 80% 60% at 50% 20%, #000 30%, transparent 75%); }
+.fundo-luz { position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(800px 500px at 15% 0%, rgba(139, 92, 246, .22), transparent 60%), radial-gradient(800px 600px at 90% 30%, rgba(34, 211, 238, .14), transparent 60%); }
+
+/* topo */
+.nav { position: sticky; top: 0; z-index: 50; backdrop-filter: blur(14px); background: rgba(4, 6, 12, .72); border-bottom: 1px solid var(--linha); }
+.nav .envolve { display: flex; align-items: center; justify-content: space-between; height: 68px; }
+.marca { display: flex; align-items: center; gap: 10px; font-family: "Space Grotesk"; font-weight: 700; letter-spacing: 2.5px; text-decoration: none; }
+.marca img { width: 36px; height: 36px; border-radius: 10px; box-shadow: 0 0 18px rgba(34, 211, 238, .4); }
+.nav nav { display: flex; gap: 26px; font-size: 14px; color: var(--txt2); }
+.nav nav a { text-decoration: none; }
+.nav nav a:hover { color: var(--txt); }
+.bt { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 26px; border-radius: 14px; font-weight: 800; text-decoration: none; border: 0; cursor: pointer; font-size: 16px; transition: transform .15s, filter .15s, box-shadow .15s; }
+.bt:hover { transform: translateY(-2px); filter: brightness(1.08); }
+.bt-pri { background: var(--grad); color: #04101a; box-shadow: 0 10px 40px rgba(34, 211, 238, .35), 0 0 0 1px rgba(255, 255, 255, .1) inset; }
+.bt-sec { background: rgba(255, 255, 255, .05); color: var(--txt); border: 1px solid var(--linha); }
+.bt-peq { padding: 10px 18px; font-size: 14px; border-radius: 11px; }
+@media (max-width: 860px) { .nav nav { display: none; } }
+
+/* hero */
+.hero { padding: 72px 0 40px; }
+.hero .envolve { display: grid; grid-template-columns: 1.05fr 1fr; gap: 48px; align-items: center; }
+.selo-topo { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 999px;
+  background: rgba(34, 211, 238, .08); border: 1px solid rgba(34, 211, 238, .35); color: #a5f3fc; }
+.selo-topo i { width: 8px; height: 8px; border-radius: 50%; background: var(--verde); box-shadow: 0 0 10px var(--verde); animation: pisca 1.6s infinite; }
+@keyframes pisca { 50% { opacity: .3; } }
+.hero h1 { font-size: clamp(40px, 5.2vw, 68px); margin: 18px 0 18px; }
+.hero h1 em { font-style: normal; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero p.lead { font-size: 19px; color: #c3cee0; max-width: 560px; margin: 0 0 28px; }
+.hero .ctas { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.hero .mini { margin-top: 16px; font-size: 13px; color: var(--txt2); }
+.hero .mini b { color: var(--txt); }
+.tela-hero { position: relative; border-radius: 22px; padding: 10px; background: linear-gradient(160deg, rgba(34, 211, 238, .35), rgba(139, 92, 246, .35));
+  box-shadow: 0 30px 90px rgba(0, 0, 0, .6), 0 0 80px rgba(34, 211, 238, .18); }
+.tela-hero canvas { display: block; width: 100%; height: 360px; border-radius: 16px; background: #070b14; }
+.tela-hero .legenda-anim { position: absolute; left: 22px; bottom: 18px; font-size: 11px; color: var(--txt2); background: rgba(4, 6, 12, .7); padding: 3px 8px; border-radius: 6px; }
+.flutua { position: absolute; padding: 10px 14px; border-radius: 14px; background: rgba(10, 15, 26, .92); border: 1px solid var(--linha); backdrop-filter: blur(10px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .5); font-size: 13px; animation: sobe 6s ease-in-out infinite; }
+.flutua b { display: block; font-size: 18px; font-family: "Space Grotesk"; }
+.flutua.f1 { top: -18px; right: -14px; }
+.flutua.f2 { bottom: -22px; left: -18px; animation-delay: -3s; }
+@keyframes sobe { 50% { transform: translateY(-10px); } }
+@media (max-width: 980px) { .hero .envolve { grid-template-columns: 1fr; } .flutua { display: none; } }
+
+/* faixa que passa */
+.faixa { border-block: 1px solid var(--linha); background: rgba(10, 15, 26, .7); overflow: hidden; padding: 14px 0; }
+.faixa-trilho { display: flex; gap: 48px; width: max-content; animation: corre 45s linear infinite; }
+.faixa:hover .faixa-trilho { animation-play-state: paused; }
+.faixa span { white-space: nowrap; font-weight: 600; color: #c8d3e3; display: inline-flex; align-items: center; gap: 10px; }
+.faixa span::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--grad); }
+.faixa .dep { color: #fff; }
+.faixa .dep b { color: var(--verde); }
+@keyframes corre { to { transform: translateX(-50%); } }
+
+/* secoes */
+section.bloco { padding: 90px 0; }
+.titulo-sec { text-align: center; max-width: 760px; margin: 0 auto 48px; }
+.titulo-sec small { color: var(--ciano); font-weight: 800; letter-spacing: 2px; font-size: 13px; }
+.titulo-sec h2 { font-size: clamp(30px, 3.6vw, 46px); margin: 10px 0 14px; }
+.titulo-sec p { color: var(--txt2); font-size: 18px; margin: 0; }
+.print { border-radius: 18px; overflow: hidden; border: 1px solid var(--linha); box-shadow: 0 30px 80px rgba(0, 0, 0, .55); background: #070b14; }
+.print img { display: block; width: 100%; height: auto; }
+.duplas { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+.dupla-txt h3 { font-size: 26px; margin: 18px 0 10px; }
+.dupla-txt p { color: var(--txt2); margin: 0; }
+.vitrine-grande { margin-bottom: 36px; }
+@media (max-width: 860px) { .duplas { grid-template-columns: 1fr; } }
+
+.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.card { padding: 26px; border-radius: 18px; background: linear-gradient(180deg, rgba(20, 28, 46, .7), rgba(10, 15, 26, .8)); border: 1px solid var(--linha);
+  transition: transform .2s, border-color .2s; }
+.card:hover { transform: translateY(-4px); border-color: rgba(34, 211, 238, .45); }
+.card .ic { width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; font-size: 22px; background: rgba(34, 211, 238, .1); border: 1px solid rgba(34, 211, 238, .3); margin-bottom: 14px; }
+.card h3 { font-size: 20px; margin-bottom: 8px; }
+.card p { margin: 0; color: var(--txt2); font-size: 15px; }
+@media (max-width: 980px) { .cards { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) { .cards { grid-template-columns: 1fr; } }
+
+.numeros { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 10px; }
+.numeros div { text-align: center; padding: 22px 10px; border-radius: 16px; border: 1px solid var(--linha); background: rgba(10, 15, 26, .7); }
+.numeros b { display: block; font-family: "Space Grotesk"; font-size: 40px; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.numeros span { color: var(--txt2); font-size: 14px; }
+@media (max-width: 760px) { .numeros { grid-template-columns: 1fr 1fr; } }
+
+.passos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; counter-reset: p; }
+.passos div { padding: 26px; border-radius: 18px; border: 1px solid var(--linha); background: rgba(10, 15, 26, .7); position: relative; }
+.passos div::before { counter-increment: p; content: counter(p); position: absolute; top: -18px; left: 22px; width: 38px; height: 38px; border-radius: 12px;
+  display: grid; place-items: center; font-weight: 800; background: var(--grad); color: #04101a; font-family: "Space Grotesk"; }
+.passos h3 { font-size: 20px; margin: 8px 0 8px; }
+.passos p { color: var(--txt2); margin: 0; }
+@media (max-width: 860px) { .passos { grid-template-columns: 1fr; gap: 30px; } }
+
+.resultado-caixa { display: grid; grid-template-columns: 1.3fr 1fr; gap: 28px; align-items: center; }
+.resultado-caixa ul { padding-left: 18px; color: #c8d3e3; }
+.resultado-caixa li { margin: 8px 0; }
+.aviso-honesto { margin-top: 18px; padding: 14px 16px; border-radius: 14px; border: 1px solid rgba(255, 210, 63, .4); background: rgba(255, 210, 63, .06); color: #f6e7b0; font-size: 14px; }
+@media (max-width: 860px) { .resultado-caixa { grid-template-columns: 1fr; } }
+
+/* preco */
+.preco-box { max-width: 520px; margin: 0 auto; padding: 36px; border-radius: 26px; text-align: center; position: relative;
+  background: linear-gradient(180deg, rgba(20, 28, 46, .92), rgba(8, 12, 22, .96)); border: 1px solid rgba(34, 211, 238, .45);
+  box-shadow: 0 30px 100px rgba(34, 211, 238, .18), 0 0 0 1px rgba(139, 92, 246, .25) inset; }
+.preco-box .rotulo { display: inline-block; padding: 6px 14px; border-radius: 999px; background: var(--grad); color: #04101a; font-weight: 800; font-size: 13px; }
+.preco-box .valor { font-family: "Space Grotesk"; font-size: 64px; font-weight: 700; margin: 16px 0 0; }
+.preco-box .valor small { font-size: 20px; color: var(--txt2); font-weight: 500; }
+.preco-box ul { list-style: none; padding: 0; margin: 22px 0 28px; text-align: left; }
+.preco-box li { padding: 7px 0 7px 30px; position: relative; border-bottom: 1px solid var(--linha); }
+.preco-box li::before { content: "✓"; position: absolute; left: 4px; color: var(--verde); font-weight: 800; }
+.preco-box .bt { width: 100%; font-size: 18px; padding: 18px; }
+.preco-box .garantia { margin-top: 14px; font-size: 13px; color: var(--txt2); }
+
+/* perguntas */
+.perguntas { max-width: 820px; margin: 0 auto; }
+details.pq { border: 1px solid var(--linha); border-radius: 14px; padding: 16px 20px; margin-bottom: 10px; background: rgba(10, 15, 26, .7); }
+details.pq summary { cursor: pointer; font-weight: 700; font-size: 17px; list-style: none; }
+details.pq summary::after { content: "+"; float: right; color: var(--ciano); font-size: 22px; line-height: 1; }
+details.pq[open] summary::after { content: "−"; }
+details.pq p { color: var(--txt2); margin: 12px 0 0; }
+
+/* rodape */
+footer { border-top: 1px solid var(--linha); padding: 40px 0 60px; color: var(--txt2); font-size: 14px; }
+.risco { padding: 22px; border-radius: 16px; border: 1px solid rgba(255, 77, 106, .35); background: rgba(255, 77, 106, .05); color: #f3c9d1; margin-bottom: 26px; }
+.risco b { color: #fff; }
+footer .linhas { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+footer a { color: var(--txt2); }
+.fixo-celular { display: none; }
+@media (max-width: 640px) { .fixo-celular { display: block; position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 60; } .fixo-celular .bt { width: 100%; } }
+.aparece { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s ease; }
+.aparece.on { opacity: 1; transform: none; }
+</style>
+</head>
+<body>
+<div class="fundo-grade"></div><div class="fundo-luz"></div>
+
+<header class="nav">
+  <div class="envolve">
+    <a class="marca" href="#"><img src="../icone-64.png" alt="">ROBÔ APEX</a>
+    <nav><a href="#como">Como funciona</a><a href="#recursos">Recursos</a><a href="#resultados">Resultados</a><a href="#preco">Preço</a><a href="#perguntas">Dúvidas</a></nav>
+    <div><a class="bt bt-sec bt-peq" data-app="/entrar">Entrar</a> <a class="bt bt-pri bt-peq" data-app="/entrar?cadastro=1">Começar agora</a></div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="envolve">
+    <div>
+      <span class="selo-topo"><i></i>B3 · opções · cripto · 23 estratégias prontas</span>
+      <h1>Pare de operar no escuro. <em>Veja a estratégia antes de arriscar.</em></h1>
+      <p class="lead">O Robô Apex mostra no gráfico onde cada estratégia entra, onde fica o stop e onde estão os alvos. Você testa no passado com os custos de verdade, assiste o replay de cada operação e treina ao vivo numa boleta simulada, sem colocar dinheiro.</p>
+      <div class="ctas">
+        <a class="bt bt-pri" data-app="/entrar?cadastro=1">Quero o Robô Apex · R$ 49,99/mês</a>
+        <a class="bt bt-sec" href="#como">Ver como funciona</a>
+      </div>
+      <div class="mini"><b>Cancele quando quiser.</b> 7 dias de garantia pela plataforma de pagamento.</div>
+    </div>
+    <div class="tela-hero">
+      <canvas id="anim" aria-label="Animação de um gráfico com uma operação marcada"></canvas>
+      <span class="legenda-anim">ilustração</span>
+      <div class="flutua f1"><small>Entrada, stop e alvo</small><b>tudo no gráfico</b></div>
+      <div class="flutua f2"><small>Testar estratégia</small><b>5, 15 e 60 min</b></div>
+    </div>
+  </div>
+</section>
+
+<div class="faixa" aria-label="Destaques"><div class="faixa-trilho" id="faixa"></div></div>
+
+<section class="bloco" id="como">
+  <div class="envolve">
+    <div class="titulo-sec aparece"><small>O ROBÔ EM AÇÃO</small><h2>Cada operação explicada, do sinal à saída</h2>
+      <p>Prints reais do robô. Os nomes das estratégias estão borrados de propósito: elas ficam para quem assina.</p></div>
+    <div class="print vitrine-grande aparece"><img src="img/app_grafico.png" alt="Tela do Robô Apex com operações marcadas no gráfico"></div>
+    <div class="duplas">
+      <div class="aparece"><div class="print"><img src="img/app_testar.png" alt="Janela Testar estratégia"></div>
+        <div class="dupla-txt"><h3>Teste antes de arriscar</h3><p>Escolha a estratégia e veja como ela foi em 5, 15 e 60 minutos: resultado em reais, mês a mês, semana a semana, maior ganho e maior perda. Com os custos e o escorregamento já descontados.</p></div></div>
+      <div class="aparece"><div class="print"><img src="img/app_boleta.png" alt="Boleta simulada e mercado cripto"></div>
+        <div class="dupla-txt"><h3>Treine ao vivo, sem dinheiro</h3><p>A boleta simulada compra e vende na hora, com contratos, stop e alvo, a mercado, limitada ou stop. O resultado aparece em reais, igual numa corretora. Funciona em ações, mini índice, mini dólar e cripto.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="bloco" id="recursos" style="padding-top:20px">
+  <div class="envolve">
+    <div class="titulo-sec aparece"><small>RECURSOS</small><h2>Tudo o que um trader precisa para estudar de verdade</h2></div>
+    <div class="cards">
+      <div class="card aparece"><div class="ic">📈</div><h3>23 estratégias prontas</h3><p>Clássicas do mercado e as mais usadas no TradingView: Fibonacci, pivô, rompimento, Supertrend, Squeeze, Tartarugas, VWAP e outras. Escolha as suas favoritas.</p></div>
+      <div class="card aparece"><div class="ic">▶</div><h3>Replay da entrada</h3><p>Assista a operação candle a candle, de antes do sinal até a saída, com a explicação de cada etapa. Velocidade de 1x a 10x.</p></div>
+      <div class="card aparece"><div class="ic">✎</div><h3>E se eu tivesse feito diferente?</h3><p>Arraste o stop e o alvo no gráfico e veja o que teria acontecido. Gostou? Salve como regra e a estratégia passa a operar assim.</p></div>
+      <div class="card aparece"><div class="ic">🛡</div><h3>Gestão e stop lado a lado</h3><p>Compare alvo fixo, parcial, trailing e stop curto numa tabela só, e escolha a combinação que perde menos para ganhar o mesmo.</p></div>
+      <div class="card aparece"><div class="ic">📡</div><h3>Teste ao vivo com aviso</h3><p>Deixe a estratégia rodando: o robô registra cada sinal, entrada e saída e avisa no computador e no celular.</p></div>
+      <div class="card aparece"><div class="ic">₿</div><h3>Cripto 24 horas</h3><p>Bitcoin, Ethereum, Solana e outras em tempo real, com as mesmas estratégias, gestão, testes e notícias de cripto.</p></div>
+      <div class="card aparece"><div class="ic">🧩</div><h3>Opções da B3</h3><p>Grade de calls e puts, gregas, volatilidade e estruturas prontas com o gráfico de ganho e perda.</p></div>
+      <div class="card aparece"><div class="ic">🔌</div><h3>Conecte o seu MetaTrader</h3><p>Quer automatizar? Conecte a sua conta pelo MetaTrader 5, primeiro em conta demo. Você liga, você desliga, com limite de lote e de perda no dia.</p></div>
+      <div class="card aparece"><div class="ic">🧠</div><h3>IA que aprende com você</h3><p>Cada ajuste que você faz vira lição. O robô testa se a correção funciona no conjunto ou só naquela operação.</p></div>
+    </div>
+    <div class="numeros aparece" style="margin-top:34px">
+      <div><b>23</b><span>estratégias prontas</span></div>
+      <div><b>40+</b><span>ativos: B3, mundo e cripto</span></div>
+      <div><b>10</b><span>gestões de saída para comparar</span></div>
+      <div><b>0</b><span>reais para treinar na boleta</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="bloco" id="resultados">
+  <div class="envolve">
+    <div class="titulo-sec aparece"><small>RESULTADOS DE VERDADE</small><h2>Números reais da simulação, com o lado bom e o lado ruim</h2>
+      <p>O robô não esconde nada: mostra onde a estratégia ganhou e onde perdeu, com custos. É assim que você descobre o que funciona para você.</p></div>
+    <div class="resultado-caixa">
+      <div class="print aparece"><img src="img/app_resultado.png" alt="Resultado do período, gestão e stops comparados"></div>
+      <div class="aparece">
+        <h3 style="font-size:26px">O que você vê em cada estratégia</h3>
+        <ul>
+          <li>Resultado em reais no período que você escolher, com custos.</li>
+          <li>Acerto, ganho médio, perda média e a pior queda.</li>
+          <li>O resultado de cada gestão com cada tipo de stop, lado a lado.</li>
+          <li>O dia a dia num calendário e as operações uma por uma.</li>
+        </ul>
+        <div class="aviso-honesto"><b>Transparência:</b> os prints são de simulações com dados passados. Em outros ativos, tempos gráficos e períodos a mesma estratégia pode dar prejuízo, e o robô mostra isso também. Resultado passado não garante resultado futuro.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="bloco" style="padding-top:30px">
+  <div class="envolve">
+    <div class="titulo-sec aparece"><small>COMO COMEÇAR</small><h2>Três passos e você está estudando</h2></div>
+    <div class="passos">
+      <div class="aparece"><h3>Crie a sua conta</h3><p>Cadastro rápido e assinatura mensal de R$ 49,99. Sem fidelidade.</p></div>
+      <div class="aparece"><h3>Escolha mercado e estratégia</h3><p>Bolsa, opções ou cripto. Um tutorial de 1 minuto mostra o caminho na primeira vez.</p></div>
+      <div class="aparece"><h3>Teste, assista e treine</h3><p>Rode o teste, veja o replay das operações e pratique na boleta simulada até ter confiança.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="bloco" id="preco">
+  <div class="envolve">
+    <div class="preco-box aparece">
+      <span class="rotulo">ACESSO COMPLETO</span>
+      <div class="valor">R$ 49,99<small>/mês</small></div>
+      <ul>
+        <li>As 23 estratégias, e as novas que chegarem</li>
+        <li>Testar estratégia, replay e editor E se</li>
+        <li>Boleta simulada ao vivo, sem limite</li>
+        <li>Ações da B3, mini índice, mini dólar, opções e cripto</li>
+        <li>Testes ao vivo com aviso no celular</li>
+        <li>Conexão com MetaTrader 5 (conta demo ou real, por sua conta)</li>
+        <li>Atualizações incluídas</li>
+      </ul>
+      <a class="bt bt-pri" data-app="/entrar?cadastro=1">Assinar agora</a>
+      <div class="garantia">Pagamento seguro pela plataforma de pagamento. 7 dias de garantia. Cancele quando quiser.</div>
+    </div>
+  </div>
+</section>
+
+<section class="bloco" id="perguntas" style="padding-top:20px">
+  <div class="envolve">
+    <div class="titulo-sec aparece"><small>DÚVIDAS</small><h2>Perguntas frequentes</h2></div>
+    <div class="perguntas">
+      <details class="pq"><summary>O robô garante lucro?</summary><p>Não. Nenhuma estratégia garante lucro, e quem promete isso está mentindo. O Robô Apex é uma ferramenta de estudo e análise: mostra como cada estratégia se comportou, com custos, para você decidir com informação.</p></details>
+      <details class="pq"><summary>O robô opera sozinho na minha conta?</summary><p>Só se você quiser. Por padrão ele apenas analisa e simula. Se você conectar o seu MetaTrader 5 na aba Conectar, as ordens saem do seu MetaTrader, na sua conta, depois de você aceitar um termo e ligar o envio. Começa travado em conta demo.</p></details>
+      <details class="pq"><summary>Preciso ter conta em corretora?</summary><p>Para estudar, testar e treinar na boleta simulada, não. Para automatizar, sim: uma corretora com MetaTrader 5.</p></details>
+      <details class="pq"><summary>Os dados são em tempo real?</summary><p>Cripto: sim, direto da Binance. Ações e mini contratos da B3 nos dados gratuitos chegam com cerca de 15 minutos de atraso. Conectando o seu MetaTrader, o robô usa os dados da sua corretora em tempo real.</p></details>
+      <details class="pq"><summary>Funciona no celular?</summary><p>O site funciona no navegador do computador e do celular. A experiência completa, com gráfico grande, é melhor no computador.</p></details>
+      <details class="pq"><summary>Posso cancelar?</summary><p>Quando quiser, pela plataforma de pagamento. Nos primeiros 7 dias você pode pedir o reembolso.</p></details>
+      <details class="pq"><summary>Isso é recomendação de investimento?</summary><p>Não. O Robô Apex não é consultoria, não é analista de valores mobiliários e não recomenda comprar ou vender nada. As decisões são sempre suas.</p></details>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="envolve">
+    <div class="risco"><b>Aviso de risco.</b> Day trade envolve alto risco e a maioria das pessoas perde dinheiro. O Robô Apex é uma ferramenta de estudo e análise de estratégias. Não é recomendação de investimento, não garante resultado e não se responsabiliza por valores perdidos. Não obrigamos nem influenciamos ninguém a adquirir o robô ou a operar no mercado. Simulações e resultados passados não garantem resultados futuros. Opere apenas com dinheiro que você pode perder.</div>
+    <div class="linhas">
+      <span>© <span id="ano"></span> Robô Apex · <a href="termos.html">Termos de uso</a> · <a href="privacidade.html">Privacidade</a></span>
+      <span>Suporte: <a href="mailto:suporte@exemplo.com.br" id="email-suporte">suporte@exemplo.com.br</a></span>
+    </div>
+  </div>
+</footer>
+<div class="fixo-celular"><a class="bt bt-pri" data-app="/entrar?cadastro=1">Assinar · R$ 49,99/mês</a></div>
+
+<script>
+(() => {
+  "use strict";
+  // Endereco do robo online. Vazio = a pagina e servida pelo proprio robo (mesmo dominio).
+  const APP = "";
+  document.querySelectorAll("[data-app]").forEach((a) => (a.href = APP + a.dataset.app));
+  document.getElementById("ano").textContent = new Date().getFullYear();
+
+  // Faixa que passa: destaques do produto e, abaixo, os depoimentos. SO coloque depoimentos REAIS, de quem usou de verdade
+  // e autorizou por escrito (nome ou iniciais e cidade). Depoimento inventado e propaganda enganosa (CDC art. 37).
+  const DESTAQUES = ["23 estratégias de day trade", "Entrada, stop e alvo no gráfico", "Replay de cada operação", "Boleta simulada ao vivo",
+    "Testar em 5, 15 e 60 minutos", "Gestão e stop lado a lado", "Cripto 24 horas", "Opções da B3", "Conexão com MetaTrader 5", "Resultado em reais, com custos"];
+  const DEPOIMENTOS = [
+    // { nome: "Carlos M., Campinas", texto: "Escreva aqui o que a pessoa disse, com as palavras dela." },
+  ];
+  const itens = DESTAQUES.map((t) => `<span>${t}</span>`).concat(DEPOIMENTOS.map((d) => `<span class="dep">“${d.texto}” <b>${d.nome}</b></span>`));
+  const faixa = document.getElementById("faixa");
+  faixa.innerHTML = itens.join("") + itens.join("");
+
+  // aparece ao rolar
+  const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("on"); io.unobserve(e.target); } }), { threshold: .12 });
+  document.querySelectorAll(".aparece").forEach((el) => io.observe(el));
+
+  // grafico animado do topo (ilustracao): candles andando, uma compra com stop e alvo e a saida no alvo
+  const cv = document.getElementById("anim"), ctx = cv.getContext("2d");
+  let W, H, dpr;
+  function medir() { dpr = window.devicePixelRatio || 1; W = cv.clientWidth; H = cv.clientHeight; cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
+  medir(); window.addEventListener("resize", medir);
+  const velas = [];
+  let p = 100, semente = 7;
+  const rnd = () => { semente = (semente * 9301 + 49297) % 233280; return semente / 233280; };
+  function nova(tendencia) { const o = p, c = o + (rnd() - .5 + tendencia) * 1.6, h = Math.max(o, c) + rnd() * .8, l = Math.min(o, c) - rnd() * .8; p = c; velas.push({ o, h, l, c }); }
+  for (let i = 0; i < 70; i++) nova(i > 40 ? .18 : -.02);
+  let t = 0, fase = 0;
+  function quadro() {
+    t++;
+    if (t % 28 === 0) { nova(fase < 25 ? .22 : fase < 40 ? -.05 : .08); velas.shift(); fase = (fase + 1) % 60; }
+    ctx.clearRect(0, 0, W, H);
+    const n = velas.length, mn = Math.min(...velas.map((v) => v.l)) - 1, mx = Math.max(...velas.map((v) => v.h)) + 1;
+    const y = (v) => 14 + (mx - v) / (mx - mn) * (H - 28), x = (i) => 10 + i * (W - 20) / n, w = Math.max(3, (W - 20) / n * .6);
+    ctx.strokeStyle = "rgba(148,163,184,.08)"; ctx.lineWidth = 1;
+    for (let g = 1; g < 6; g++) { ctx.beginPath(); ctx.moveTo(0, g * H / 6); ctx.lineTo(W, g * H / 6); ctx.stroke(); }
+    // media
+    ctx.strokeStyle = "#4795f1"; ctx.lineWidth = 2; ctx.beginPath();
+    velas.forEach((v, i) => { const s = velas.slice(Math.max(0, i - 9), i + 1); const m = s.reduce((a, b) => a + b.c, 0) / s.length; i ? ctx.lineTo(x(i) + w / 2, y(m)) : ctx.moveTo(x(i) + w / 2, y(m)); });
+    ctx.stroke();
+    velas.forEach((v, i) => {
+      const cor = v.c >= v.o ? "#26d6a0" : "#ff5470";
+      ctx.strokeStyle = cor; ctx.beginPath(); ctx.moveTo(x(i) + w / 2, y(v.h)); ctx.lineTo(x(i) + w / 2, y(v.l)); ctx.stroke();
+      ctx.fillStyle = cor; ctx.fillRect(x(i), Math.min(y(v.o), y(v.c)), w, Math.max(1.5, Math.abs(y(v.o) - y(v.c))));
+    });
+    // operacao
+    const ie = n - 26, ent = velas[ie].h + .2, stop = ent - 2.2, alvo = ent + 4.6, xe = x(ie), xf = W - 12;
+    ctx.fillStyle = "rgba(46,242,168,.10)"; ctx.fillRect(xe, y(alvo), xf - xe, y(ent) - y(alvo));
+    ctx.fillStyle = "rgba(255,77,106,.10)"; ctx.fillRect(xe, y(ent), xf - xe, y(stop) - y(ent));
+    const linha = (v, cor, txt) => { ctx.strokeStyle = cor; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(xe, y(v)); ctx.lineTo(xf, y(v)); ctx.stroke(); ctx.setLineDash([]);
+      ctx.font = "700 11px Inter, sans-serif"; const tw = ctx.measureText(txt).width + 12; ctx.fillStyle = cor; ctx.fillRect(xf - tw, y(v) - 9, tw, 18); ctx.fillStyle = "#04101a"; ctx.fillText(txt, xf - tw + 6, y(v) + 4); };
+    linha(alvo, "#2ef2a8", "ALVO"); linha(stop, "#ff4d6a", "STOP"); linha(ent, "#22d3ee", "COMPRA");
+    ctx.fillStyle = "#ffd23f"; ctx.font = "700 11px Inter, sans-serif"; ctx.fillText("SINAL", xe - 12, y(velas[ie - 1].l) + 18);
+    requestAnimationFrame(quadro);
+  }
+  requestAnimationFrame(quadro);
+})();
+</script>
+</body>
+</html>

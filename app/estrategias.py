@@ -235,7 +235,7 @@ def eficiencia(c, p=ER_PERIODO):
 
 # Modo seletivo (opcional): menos operacoes, so no contexto que se saiu melhor nos testes com 41 mil operacoes em 12 ativos
 SELETIVO_TENDENCIA = ("E1", "E2", "E3", "E4", "E5", "E9", "E12", "E13", "E14", "E15", "E16", "E17", "E18")   # correcao/rompimento: a favor do diario E tendencia limpa
-SELETIVO_DIRECAO = ("E7", "E11")                              # momentum do dia: so a favor do diario
+SELETIVO_DIRECAO = ("E7", "E11", "E19", "E20", "E21", "E22")                              # momentum do dia: so a favor do diario
 
 
 def passa_seletivo(G, cod, i, direcao):
@@ -1066,6 +1066,213 @@ def e18_atencao(G, i):
     return bool(r) and G.l[i] <= G.h[r[3]] + 0.5 * G.atr[i] and G.c[i] > G.h[r[3]] - 0.3 * G.atr[i] and e18_reteste(G, i) is None
 
 
+# ------------------------------------------------------------------------------------------ E19 a E23: risco curto, ganho longo
+# Cinco classicos que perdem pouco quando erram e deixam o ganho correr: acertam menos vezes, ganham mais quando acertam.
+# Os indicadores sao calculados uma vez por grafico (e refeitos quando o ultimo candle muda).
+def _serie(G, nome, fn):
+    chave = (G.n, G.c[-1], G.h[-1], G.l[-1])
+    memo = G.__dict__.setdefault("_series", {})
+    v = memo.get(nome)
+    if v is None or v[0] != chave:
+        v = memo[nome] = (chave, fn())
+    return v[1]
+
+
+def _supertrend(G, per=10, mult=2.0):
+    """Supertrend (ATR de 10, 2x): linha de baixo quando sobe (dir +1), linha de cima quando cai (dir -1)."""
+    h, l, c, n = G.h, G.l, G.c, G.n
+    a = atr(h, l, c, per)
+    linha, dirs = [None] * n, [0] * n
+    up = dn = None
+    d = 1
+    for i in range(n):
+        if a[i] is None:
+            continue
+        hl2 = (h[i] + l[i]) / 2.0
+        bu, bd = hl2 - mult * a[i], hl2 + mult * a[i]
+        if up is not None and c[i - 1] > up:
+            bu = max(bu, up)                                   # a linha de baixo so sobe enquanto a alta continua
+        if dn is not None and c[i - 1] < dn:
+            bd = min(bd, dn)                                   # a de cima so desce enquanto a baixa continua
+        if dn is not None and c[i] > dn:
+            d = 1
+        elif up is not None and c[i] < up:
+            d = -1
+        up, dn = bu, bd
+        dirs[i], linha[i] = d, (bu if d > 0 else bd)
+    return linha, dirs
+
+
+def _squeeze(G, per=20, kb=2.0, kk=1.5):
+    """TTM Squeeze / Squeeze Momentum: Bollinger (20, 2) dentro do Keltner (20, 1,5 ATR) = compressao.
+    Momento = regressao linear (20) de: fechamento - media(media(maxima, minima de 20), MM20)."""
+    h, l, c, n = G.h, G.l, G.c, G.n
+    a = atr(h, l, c, per)
+    on, mom = [False] * n, [None] * n
+    x_med = (per - 1) / 2.0
+    sxx = sum((k - x_med) ** 2 for k in range(per))
+    base = [None] * n
+    for i in range(per - 1, n):
+        jan = c[i - per + 1:i + 1]
+        m = sum(jan) / per
+        dp = (sum((v - m) ** 2 for v in jan) / per) ** 0.5
+        if a[i] is not None:
+            on[i] = (m + kb * dp) < (m + kk * a[i]) and (m - kb * dp) > (m - kk * a[i])
+        meio = (max(h[i - per + 1:i + 1]) + min(l[i - per + 1:i + 1])) / 2.0
+        base[i] = c[i] - (meio + m) / 2.0
+    for i in range(2 * per - 2, n):
+        ys = base[i - per + 1:i + 1]
+        y_med = sum(ys) / per
+        inc = sum((k - x_med) * (ys[k] - y_med) for k in range(per)) / sxx
+        mom[i] = y_med + inc * (per - 1 - x_med)             # valor da reta de regressao no ultimo candle
+    return on, mom
+
+
+RISCO_MAX_NOVAS = 1.5                           # E19 a E21: o stop nunca fica a mais de 1,5 ATR da entrada
+SQZ_MIN = 6                                     # candles seguidos de compressao antes do disparo
+DON_ENTRA, DON_SAI = 20, 10                     # Donchian/Tartarugas: rompe a maxima de 20, sai na minima de 10
+SOUP_JAN, SOUP_IDADE = 20, 4                    # Turtle Soup: minima de 20 candles feita ha pelo menos 4
+
+
+def e19_supertrend(G, i):
+    """Virada do Supertrend para alta, a favor da MM200: compra acima do candle da virada, stop na linha do Supertrend."""
+    if G.c[i] <= G.mm200[i]:
+        return None
+    linha, dirs = _serie(G, "st", lambda: _supertrend(G))
+    if not (dirs[i] > 0 and dirs[i - 1] < 0) or linha[i] is None:
+        return None
+    ent = G.acima(G.h[i] + G.tick)
+    stop = G.abaixo(max(linha[i], ent - RISCO_MAX_NOVAS * G.atr[i]) - G.tick)      # a linha, mas nunca mais longe que 1,5 ATR
+    if not _risco_ok(G, i, ent, stop, 0.3, RISCO_MAX_NOVAS + 0.1):
+        return None
+    return dict(tipo="stop", gatilho=ent, stop=stop, validade=2, info="Supertrend virou para %s" % _lado(G, "alta", "baixa"))
+
+
+def e19_saida(G, i, pos):
+    linha, dirs = _serie(G, "st", lambda: _supertrend(G))
+    if dirs[i] < 0:
+        return "o Supertrend virou contra"
+    return None
+
+
+def e19_atencao(G, i):
+    linha, dirs = _serie(G, "st", lambda: _supertrend(G))
+    return G.c[i] > G.mm200[i] and dirs[i] < 0 and linha[i] is not None and linha[i] - G.c[i] < 0.5 * G.atr[i]
+
+
+def e20_squeeze(G, i):
+    """Squeeze disparando para cima: depois de 6+ candles de compressao, a Bollinger sai do Keltner com o momento positivo
+    e subindo. Compra acima do candle do disparo; stop abaixo da minima da compressao (fica curto, a faixa estava apertada)."""
+    on, mom = _serie(G, "sqz", lambda: _squeeze(G))
+    if on[i] or mom[i] is None or mom[i - 1] is None:
+        return None
+    k = i - 1
+    while k >= 0 and on[k]:
+        k -= 1
+    dur = i - 1 - k
+    if dur < SQZ_MIN or not (mom[i] > 0 and mom[i] > mom[i - 1]) or G.c[i] <= G.mm20[i]:
+        return None
+    ent = G.acima(G.h[i] + G.tick)
+    stop = G.abaixo(max(min(G.l[i - 4:i + 1]), ent - RISCO_MAX_NOVAS * G.atr[i]) - G.tick)      # minima dos 5 ultimos, ate 1,5 ATR
+    if not _risco_ok(G, i, ent, stop, 0.3, RISCO_MAX_NOVAS + 0.1):
+        return None
+    return dict(tipo="stop", gatilho=ent, stop=stop, validade=2, info="squeeze de %d candles disparou para %s" % (dur, _lado(G, "cima", "baixo")))
+
+
+def e20_saida(G, i, pos):
+    on, mom = _serie(G, "sqz", lambda: _squeeze(G))
+    if mom[i] is not None and mom[i - 1] is not None and mom[i - 2] is not None and mom[i] < mom[i - 1] < mom[i - 2]:
+        return "o momento perdeu força (2 candles caindo)"
+    if mom[i] is not None and mom[i] < 0:
+        return "o momento virou contra"
+    return None
+
+
+def e20_atencao(G, i):
+    on, mom = _serie(G, "sqz", lambda: _squeeze(G))
+    if not on[i]:
+        return False
+    k = i
+    while k >= 0 and on[k]:
+        k -= 1
+    return i - k >= SQZ_MIN and mom[i] is not None and mom[i] > 0
+
+
+def e21_donchian(G, i):
+    """Rompimento de 20 candles (Tartarugas, Donchian): compra stop 1 tick acima da maxima dos ultimos 20, a favor da
+    MM200. Stop no mais perto entre a minima dos ultimos 10 e 1,5 ATR. Sai quando fecha abaixo da minima de 10."""
+    if i < DON_ENTRA + 1 or G.c[i] <= G.mm200[i] or G.mm20[i] <= G.mm20[i - 5]:
+        return None
+    topo = max(G.h[i - DON_ENTRA + 1:i + 1])
+    if topo - G.c[i] > 0.6 * G.atr[i]:
+        return None                                             # longe do rompimento: nao arma
+    ent = G.acima(topo + G.tick)
+    piso = min(G.l[i - DON_SAI + 1:i + 1])
+    stop = G.abaixo(max(piso, ent - RISCO_MAX_NOVAS * G.atr[i]) - G.tick)
+    if not _risco_ok(G, i, ent, stop, 0.3, RISCO_MAX_NOVAS + 0.1):
+        return None
+    return dict(tipo="stop", gatilho=ent, stop=stop, validade=1, info="rompimento da máxima de %d candles" % DON_ENTRA)
+
+
+def e21_saida(G, i, pos):
+    if i - pos["i_ent"] >= 1 and G.c[i] < min(G.l[i - DON_SAI:i]):
+        return "fechou abaixo da mínima de %d candles" % DON_SAI
+    return None
+
+
+def e21_atencao(G, i):
+    if i < DON_ENTRA + 1 or G.c[i] <= G.mm200[i]:
+        return False
+    topo = max(G.h[i - DON_ENTRA + 1:i + 1])
+    return topo - G.c[i] <= 1.2 * G.atr[i] and e21_donchian(G, i) is None
+
+
+def e22_nr7(G, i):
+    """NR7 de Toby Crabel: o candle de menor amplitude dos ultimos 7, a favor da tendencia. Compra 1 tick acima dele;
+    stop abaixo dele (ao menos 0,5 ATR, para o custo nao comer o risco); alvo em 3 vezes o risco."""
+    if not (G.c[i] > G.mm20[i] > G.mm200[i]) or G.mm20[i] <= G.mm20[i - 5]:
+        return None
+    amp = G.h[i] - G.l[i]
+    if amp <= 0 or any(G.h[k] - G.l[k] <= amp for k in range(i - 6, i)):
+        return None
+    ent = G.acima(G.h[i] + G.tick)
+    stop = G.abaixo(min(G.l[i], ent - 0.5 * G.atr[i]) - G.tick)
+    if not _risco_ok(G, i, ent, stop, 0.3, 1.5):
+        return None
+    return dict(tipo="stop", gatilho=ent, stop=stop, validade=2, info="NR7: menor candle dos últimos 7")
+
+
+def e22_atencao(G, i):
+    if not (G.c[i] > G.mm20[i] > G.mm200[i]):
+        return False
+    amp = G.h[i] - G.l[i]
+    return amp > 0 and sum(1 for k in range(i - 6, i) if G.h[k] - G.l[k] <= amp) <= 1 and e22_nr7(G, i) is None
+
+
+def e23_turtle_soup(G, i):
+    """Turtle Soup (Linda Raschke): o preco faz minima nova de 20 candles (a anterior feita ha 4 ou mais) e fecha de
+    volta acima dela: quem vendeu o rompimento ficou preso. Compra acima do candle; stop 1 tick abaixo da minima nova."""
+    if i < SOUP_JAN + 2:
+        return None
+    jan = range(i - SOUP_JAN, i)
+    k = min(jan, key=lambda j: (G.l[j], -j))
+    velha = G.l[k]
+    if i - k < SOUP_IDADE or not (G.l[i] < velha and G.c[i] > velha) or G.c[i] <= G.o[i]:
+        return None
+    ent = G.acima(G.h[i] + G.tick)
+    stop = G.abaixo(G.l[i] - G.tick)
+    if not _risco_ok(G, i, ent, stop, 0.3, 1.5):
+        return None
+    return dict(tipo="stop", gatilho=ent, stop=stop, validade=2, info="falso rompimento da %s de %d candles" % (_lado(G, "mínima", "máxima"), SOUP_JAN))
+
+
+def e23_atencao(G, i):
+    if i < SOUP_JAN + 2:
+        return False
+    velha = min(G.l[i - SOUP_JAN:i])
+    return G.l[i] < velha and e23_turtle_soup(G, i) is None
+
+
 # ------------------------------------------------------------------------------------------ catalogo
 ESTRATEGIAS = {
     "E1": dict(nome="Halt na MM20", autor="Mario Pisani + Oliver Velez", fn=e1_halt_mm20, aten=e1_atencao,
@@ -1198,7 +1405,7 @@ ESTRATEGIAS = {
                 ideal="60 min em tendência limpa. No nosso teste (135 operações em 11 ativos, com custos) NÃO superou a E2: perdeu em média "
                       "0,39R por operação (60 min: 0,18R). Arma pouco, porque exige risco curto e alvo de pelo menos 2:1",
                 regras=["Médias simples alinhadas: MM9 > MM20 > MM200 e MM20 subindo (venda: o inverso)",
-                        "Impulso de pelo menos 1,5 ATR; correção de 2 a 9 candles entre 23,6% e 50%, sem fechar abaixo dos 50% nem furar a MM20",
+                        "Impulso de pelo menos 1,5 ATR; correção de 1 a 8 candles entre 23,6% e 50%, sem fechar abaixo dos 50% nem passar mais de 0,25 ATR abaixo da MM20",
                         "Gatilho: candle de alta que fecha acima da máxima do candle anterior; compra 1 tick acima dele (vale 3 candles)",
                         "Stop CURTO: logo abaixo do fundo da correção (0,1 ATR + 1 tick), e não no início da pernada. Risco entre 0,3 e 1 ATR",
                         "Três alvos: o topo do impulso, 127,2% e 161,8% da pernada. Só arma se o alvo 2 pagar pelo menos 2 vezes o risco",
@@ -1211,8 +1418,8 @@ ESTRATEGIAS = {
                       "0,17R da E9; no WIN e WDO ficou perto do zero, mas com só 13 operações (amostra pequena demais)",
                 regras=["Mesma leitura do OGRO: MM9 > MM20 > MM200, pernada de pelo menos 2 ATR e correção de 23,6% a 50%",
                         "Compra no rompimento do pivô (1 tick acima do topo da pernada), valendo 1 candle",
-                        "Stop CURTO: abaixo da mínima dos 2 últimos candles antes do rompimento (nunca abaixo do fundo da correção). Risco de 0,3 a 1,2 ATR",
-                        "Três alvos na projeção de Fibonacci a partir do fundo da correção: 61,8%, 100% e 161,8%",
+                        "Stop CURTO: 0,1 ATR abaixo da mínima dos 2 últimos candles antes do rompimento (nunca abaixo do fundo da correção). Risco de 0,3 a 1,2 ATR",
+                        "Três alvos na projeção de Fibonacci a partir do fundo da correção: 61,8%, 100% e 161,8% (se o de 61,8% ficar abaixo da entrada, o alvo 1 vira 1 vez o risco)",
                         "Só arma se o alvo 2 pagar pelo menos 2 vezes o risco",
                         "Um terço em cada alvo; no alvo 1 o stop vai para a entrada, no alvo 2 vai para o alvo 1"]),
     "E16": dict(nome="Pivô de fundos ascendentes", autor="Leitura de estrutura (fundos e topos ascendentes) + projeção de Fibonacci em cima do topo",
@@ -1245,11 +1452,52 @@ ESTRATEGIAS = {
                       "fraca das três. Fica no robô para estudo do reteste, não como recomendação",
                 regras=["Tendência a favor: preço e MM20 acima da MM200 (venda: o inverso)",
                         "Mesma estrutura da E16, mas o topo B JÁ foi rompido por um candle que fechou acima dele",
-                        "Em até 15 candles o preço volta e encosta em B (de 0,3 ATR acima a 0,6 ATR abaixo), sem fechar de volta abaixo dele",
+                        "Em até 15 candles o preço volta e encosta em B (de 0,3 ATR acima a 0,6 ATR abaixo), sem fechar mais de 0,3 ATR abaixo dele",
                         "Gatilho: candle de alta que fecha acima da máxima do anterior e acima de B; compra 1 tick acima dele (vale 2 candles)",
                         "Stop logo abaixo do fundo do reteste (0,1 ATR + 1 tick)",
                         "Alvos na projeção em cima de B: B + 61,8%, B + 100% e B + 161,8%. Só arma se o alvo 1 pagar pelo menos o risco",
                         "Um terço em cada alvo; no alvo 1 o stop vai para a entrada, no alvo 2 vai para o alvo 1"]),
+    "E19": dict(nome="Supertrend: virada a favor", autor="Supertrend (Olivier Seban), um dos indicadores mais usados do TradingView",
+                fn=e19_supertrend, aten=e19_atencao, gestao="propria", saida=e19_saida, intraday=False, sem_ntsl=True,
+                aguardando="Supertrend ainda contra, com o preço perto de virar, do lado certo da MM200",
+                ideal="WIN e WDO. No nosso teste (2.747 operações em 11 ativos, com custos) perdeu em média 0,13R por operação; no WIN e WDO ficou em +0,14R (260 operações, ainda sem prova estatística). Acerta 36% e ganha 1,2R quando acerta",
+                regras=["Supertrend de ATR 10 com multiplicador 2; compra só acima da MM200 (venda: só abaixo)",
+                        "Sinal: o candle em que o Supertrend vira para alta",
+                        "Compra 1 tick acima desse candle (vale 2 candles); stop na linha do Supertrend, mas nunca a mais de 1,5 ATR (perda curta)",
+                        "Sem alvo fixo: segue enquanto o Supertrend estiver a favor e sai quando ele vira contra",
+                        "Acerta pouco e ganha muito quando pega uma tendência: o resultado vem dos poucos movimentos longos"]),
+    "E20": dict(nome="Squeeze: compressão que dispara", autor="TTM Squeeze (John Carter) e Squeeze Momentum (LazyBear), dos scripts mais populares do TradingView",
+                fn=e20_squeeze, aten=e20_atencao, gestao="propria", saida=e20_saida, intraday=False, sem_ntsl=True,
+                aguardando="mercado comprimido (Bollinger dentro do Keltner) com o momento a favor, esperando o disparo",
+                ideal="60 min e WIN/WDO. No nosso teste (864 operações) perdeu em média 0,10R; em 60 min ficou no zero (+0,02R) e no WIN/WDO em +0,12R com só 109 operações. Perda média de 0,74R: o stop é curto",
+                regras=["Compressão: Bollinger (20, 2) inteira dentro do Keltner (20, 1,5 ATR) por 6 candles ou mais",
+                        "Sinal: o primeiro candle em que a Bollinger sai do Keltner, com o momento positivo e subindo e o preço acima da MM20",
+                        "Compra 1 tick acima do candle do disparo (vale 2 candles); stop abaixo da mínima dos 5 últimos candles, no máximo 1,5 ATR",
+                        "Sai quando o momento cai 2 candles seguidos ou fica negativo"]),
+    "E21": dict(nome="Tartarugas: rompimento de 20", autor="Canal de Donchian e as regras das Tartarugas (Richard Dennis)",
+                fn=e21_donchian, aten=e21_atencao, gestao="propria", saida=e21_saida, intraday=False, sem_ntsl=True,
+                aguardando="preço perto da máxima dos últimos 20 candles, a favor da MM200",
+                ideal="15 e 60 min. Foi a melhor das cinco novas: 5.446 operações, média de −0,04R (15 min no zero; WIN/WDO +0,08R). Acerta 38%, ganha 1,3R quando acerta e perde 0,84R quando erra",
+                regras=["A favor da tendência: preço acima da MM200 e MM20 subindo (venda: o inverso)",
+                        "Compra stop 1 tick acima da máxima dos últimos 20 candles quando o preço está a até 0,6 ATR dela",
+                        "Stop no mais perto entre a mínima dos últimos 10 candles e 1,5 ATR abaixo da entrada (as Tartarugas usavam 2 ATR; aqui é mais curto)",
+                        "Sai quando fecha abaixo da mínima dos últimos 10 candles (o stop acompanha a tendência)"]),
+    "E22": dict(nome="NR7: menor candle dos últimos 7", autor="Toby Crabel (Day Trading with Short Term Price Patterns, 1990)",
+                fn=e22_nr7, aten=e22_atencao, gestao="alvo3", saida=None, intraday=False, sem_ntsl=True,
+                aguardando="candle estreitando numa tendência de alta, perto de virar o menor dos últimos 7",
+                ideal="Para estudo. No nosso teste (4.242 operações) perdeu em média 0,27R: o candle estreito rompe muitas vezes para o lado errado. Quando acerta, ganha quase 2R",
+                regras=["Tendência: MM20 acima da MM200 e subindo, preço acima da MM20 (venda: o inverso)",
+                        "Sinal: o candle de menor amplitude dos últimos 7 (NR7)",
+                        "Compra 1 tick acima dele (vale 2 candles); stop abaixo dele, com pelo menos 0,5 ATR para o custo não comer o risco",
+                        "Alvo em 3 vezes o risco"]),
+    "E23": dict(nome="Turtle Soup: falso rompimento", autor="Linda Raschke e Larry Connors (Street Smarts, 1995)",
+                fn=e23_turtle_soup, aten=e23_atencao, gestao="alvo2", saida=None, intraday=False, sem_ntsl=True,
+                aguardando="preço furando a mínima de 20 candles, esperando o fechamento de volta",
+                ideal="15 e 60 min. No nosso teste (583 operações) perdeu em média 0,21R; em 15 e 60 min ficou perto de −0,1R",
+                regras=["A mínima de 20 candles anterior foi feita há pelo menos 4 candles",
+                        "Sinal: o candle faz mínima nova abaixo dela, mas fecha de volta acima e em alta (quem vendeu o rompimento ficou preso)",
+                        "Compra 1 tick acima desse candle (vale 2 candles); stop 1 tick abaixo da mínima nova (risco curto)",
+                        "Alvo em 2 vezes o risco. Venda: o espelho, na máxima de 20 candles"]),
 }
 
 GESTOES = {

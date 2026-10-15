@@ -1,4 +1,4 @@
-/* ROBÔ APEX — aba NOTÍCIAS: o que saiu nas últimas horas e pode mexer no WIN e no WDO.
+/* ROBÔ APEX: aba NOTÍCIAS: o que saiu nas últimas horas e pode mexer no WIN e no WDO.
    Busca a cada 60 s mesmo com outra aba aberta; notícia nova de ALTO impacto acende o contador e toca um aviso. */
 (() => {
   "use strict";
@@ -20,7 +20,9 @@
     if (N.carregando) return null;
     N.carregando = true;
     try {
-      const d = await AX.json("/api/noticias");
+      const mercado = AX.pref.mercado === "cripto" ? "cripto" : "b3";
+      const d = await AX.json("/api/noticias?mercado=" + mercado);
+      if (N.dados && N.dados.mercado !== d.mercado) { N.vistos.clear(); N.primeira = true; }
       AX.erro("erroNews", null);
       let novosAltos = 0;
       for (const it of d.itens) {
@@ -57,14 +59,14 @@
     if (!d) { $("newsLista").innerHTML = `<div class="vazio-bloco">Buscando notícias…</div>`; return; }
     const imp = $("newsImpacto").value, at = $("newsAtivo").value, busca = $("newsBusca").value.trim().toLowerCase();
     const lista = d.itens.filter((it) => (imp === "TODOS" || (imp === "ALTO" ? it.impacto === "ALTO" : it.impacto !== "BAIXO")) &&
-      (!at || it.ativos.includes(at)) && (!busca || it.titulo.toLowerCase().includes(busca)));
+      (!at || d.mercado === "cripto" || it.ativos.includes(at)) && (!busca || it.titulo.toLowerCase().includes(busca)));
     $("newsAtual").textContent = `atualizado ${hora(d.atualizado)} (Brasília) · ${lista.length} de ${d.itens.length}`;
     $("newsLista").innerHTML = (lista.length ? `<div class="news">` + lista.map((it) => {
       const cls = it.impacto === "MÉDIO" ? "MEDIO" : it.impacto;
       return `<div class="nitem ${cls} ${it.novo ? "novo" : ""}">
         <div class="meta"><span class="tag ${cls}">${it.impacto}</span>${it.ativos.map((a) => `<span class="tag at">${a}</span>`).join("")}
           <span>${hora(it.t)} · ${ha(it.t)}</span><span>· ${AX.esc(it.fonte)}</span>${it.novo ? `<span class="tag" style="color:var(--amar)">NOVA</span>` : ""}</div>
-        <div class="tit">${it.link ? `<a href="${AX.esc(it.link)}" target="_blank" rel="noopener noreferrer">${AX.esc(it.titulo)}</a>` : AX.esc(it.titulo)}</div>
+        <div class="tit">${it.link && /^https?:\/\//i.test(it.link) ? `<a href="${AX.esc(it.link)}" target="_blank" rel="noopener noreferrer">${AX.esc(it.titulo)}</a>` : AX.esc(it.titulo)}</div>
         ${it.motivos.length ? `<div class="meta">por: ${it.motivos.map(AX.esc).join(", ")}</div>` : ""}</div>`;
     }).join("") + `</div>` : `<div class="vazio-bloco">Nenhuma notícia com esse filtro.</div>`) +
       (d.erros.length ? `<div class="nota">Fontes fora do ar agora: ${d.erros.map(AX.esc).join(" · ")}</div>` : "");

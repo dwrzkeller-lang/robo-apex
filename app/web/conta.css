@@ -141,3 +141,13 @@ body.ct-aberta .toast { position: fixed; top: 10px; z-index: 60; }
   .ct-usuarios tr.ct-acoes { padding-top: 0; }
 }
 @media (max-width: 560px) { .ct-primeiro { display: none; } }       /* no topo apertado fica só o círculo com a inicial */
+
+/* vendas e site (administrador) */
+.ct-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ct-kpis > div { background: rgba(15, 22, 38, .7); border: 1px solid rgba(148, 163, 184, .13); border-radius: 10px; padding: 8px 10px; }
+.ct-kpis small { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--txt2); }
+.ct-kpis b { font-size: 20px; }
+.ct-barras { display: flex; align-items: flex-end; gap: 3px; height: 110px; padding: 4px 0; }
+.ct-barras > div { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 2px; }
+.ct-barras i { width: 100%; background: linear-gradient(180deg, #22d3ee, #8b5cf6); border-radius: 3px 3px 0 0; min-height: 3px; }
+.ct-barras small { font-size: 9px; color: var(--txt2); }

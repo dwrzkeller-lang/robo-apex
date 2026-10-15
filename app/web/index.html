@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="conta.css">
 <link rel="stylesheet" href="opcoes.css">
 <link rel="stylesheet" href="perfil.css">
+<link rel="stylesheet" href="tema.css">
 </head>
 <body>
 
@@ -19,7 +20,7 @@
   <div class="splash-janela">
     <div class="splash-topo">
       <img src="icone.png" alt="">
-      <div><b>ROBÔ APEX</b><small>day trade informativo · não envia ordens</small></div>
+      <div><b>ROBÔ APEX</b><small>estratégias de day trade · B3 · opções · cripto</small></div>
     </div>
     <ul class="splash-passos" id="splashPassos">
       <li data-p="dados">Carregando dados do mercado</li>
@@ -36,13 +37,16 @@
 <header class="topo">
   <div class="marca">
     <img class="logo" src="icone-64.png" alt="">
-    <div class="titulo">ROBÔ APEX</div>
+    <div class="marca-txt"><div class="titulo">ROBÔ APEX</div><div class="slogan">Day trade com estratégia · B3 · Opções · Cripto</div></div>
+  </div>
+  <div class="mercados" id="mercado" role="tablist" aria-label="Mercado">
+    <button data-m="b3" data-dica="Bolsa: mini índice (WIN), mini dólar (WDO) e ações da B3. Também dá para escolher índices, moedas e ouro lá de fora.">Bolsa</button>
+    <button data-m="opcoes" data-dica="Opções da B3: grade de calls e puts, gregas e estruturas prontas, com o gráfico do ativo-objeto ao lado.">Opções</button>
+    <button data-m="cripto" data-dica="Cripto: Bitcoin, Ethereum e outras moedas da Binance em tempo real, com as mesmas estratégias, gestão e testes.">Cripto</button>
   </div>
   <label class="campo"><span>Ativo <i class="q" data-dica="O que o gráfico e as estratégias vão analisar. WIN e WDO usam substitutos gratuitos (Ibovespa à vista e dólar) com cerca de 15 minutos de atraso; forex, ouro e índices lá de fora chegam mais rápido. Tempo real de verdade do WIN e do WDO só com a conexão do Profit."></i></span><select id="ativo"></select></label>
   <label class="campo"><span>Tempo <i class="q" data-dica="Tempo gráfico: quanto tempo dura cada candle. Nos testes, 60 minutos foi onde as estratégias se saíram menos mal, porque o custo pesa menos em cada operação."></i></span><select id="tf"></select></label>
-  <div class="campo"><span>Estratégia <i class="q" data-dica="A regra que procura entradas. Escolha uma para estudar sozinha, ou ▶ Todas para deixar as 13 procurando ao mesmo tempo (uma operação por vez). Para entender uma estratégia, use o botão “Como funciona” no painel."></i></span>
-    <div class="junto"><select id="est"></select><button id="btTodas" class="bt-todas" data-dica="Liga ou desliga o modo TODAS juntas: todas as estratégias procuram entrada ao mesmo tempo, com uma operação por vez. A primeira ordem que executar vale e as outras são canceladas.">▶ Todas</button></div>
-  </div>
+  <label class="campo"><span>Estratégia <i class="q" data-dica="A regra que procura entradas. Escolha uma para estudar sozinha ou ★ Minhas estratégias para deixar as suas favoritas procurando juntas (uma operação por vez). Para entender uma estratégia, use o botão “Como funciona” no painel."></i></span><select id="est"></select></label>
   <div class="campo"><span>Período <b id="periodoTxt" class="periodo-txt"></b> <i class="q" data-dica="Vale para a tela inteira: o gráfico mostra esse período e todos os números (resultado, acerto, pior queda, calendário, IA) são dele. O botão 📅 escolhe datas; com datas no passado a luz fica laranja (histórico)."></i></span>
     <div class="seg" id="periodo">
       <button data-p="hoje">Hoje</button><button data-p="5d">5 dias</button><button data-p="1m">1 mês</button>
@@ -51,7 +55,11 @@
   </div>
   <label class="campo pequeno"><span><span id="rotContratos">Contratos</span> <i class="q" data-dica="Quantidade de cada operação nas contas (contratos na B3, lotes em forex). Com o “Tamanho pelo risco” ligado na aba Plano, o robô calcula a quantidade sozinho e este campo fica desligado."></i></span><input type="number" id="contratos" min="1" step="1" value="1"></label>
   <button id="btAjustes" class="bt-icone" data-dica="Ajustes: capital, quantos stops param o dia, atualização ao vivo e sons.">⚙</button>
-  <button id="btRobo" class="bt-robo" data-dica="RODAR ROBÔ: testa todas as estratégias em 5, 15 e 60 minutos neste ativo e mostra qual está se encaixando melhor agora, com a projeção de ganho e de perda feita com as operações reais dela. Se nenhuma tiver histórico positivo, ele diz FICAR DE FORA. Não envia ordens.">⚡ RODAR ROBÔ</button>
+  <div class="acoes-topo">
+    <button id="btTestar" class="bt-testar" data-dica="Testar esta estratégia: roda a estratégia escolhida neste ativo, no período do topo, em 5, 15 e 60 minutos. Mostra quanto ganhou e perdeu, mês a mês e semana a semana, e deixa ligar o teste ao vivo.">▶ Testar<span class="lg"> estratégia</span></button>
+    <button id="btMinhas" class="bt-minhas" data-dica="Minhas estratégias: escolha as suas favoritas e veja de uma vez como cada uma foi neste ativo e o que cada uma está fazendo agora.">★ Minhas<span class="lg"> estratégias</span></button>
+  </div>
+  <button id="btTutorial" class="bt-icone" data-dica="Tutorial: um passeio de 1 minuto pelo robô.">?</button>
   <div class="status" id="statusDados"><i class="luz"></i><span>carregando…</span></div>
   <button id="btConta" class="bt-conta" type="button" aria-label="Conta" data-dica="Sua conta: trocar a senha, avisos no celular, usuários e registro de acessos (administrador) e sair."></button>
 </header>
@@ -110,26 +118,29 @@
 
   <aside class="painel" id="painel">
     <div class="abas" role="tablist">
-      <button data-aba="vivo" class="on" role="tab" data-dica="Ao vivo: o que fazer agora, o teste ao vivo, a central de sinais, o resultado no período e as operações."><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span>Ao vivo</span><b class="badge verde oculto" id="badgeTestes">0</b></button>
-      <button data-aba="ia" role="tab" data-dica="IA: o que o robô aprendeu com as operações deste ativo, a nota dela fora da amostra, as lições e o que deu errado que poderia ter dado certo."><svg viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="11" rx="2"/><path d="M12 7V3M9 12h.01M15 12h.01M9 15.5h6M2 11v4M22 11v4"/></svg><span>IA</span></button>
-      <button data-aba="plano" role="tab" data-dica="Plano: tamanho pelo risco, limite de perda e de ganho do dia, modo seletivo e a conta meta × realidade."><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg><span>Plano</span></button>
-      <button data-aba="sim" role="tab" data-dica="Simulação: o resultado do período com cada operação, e o replay candle a candle."><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l6 3.5-6 3.5z"/></svg><span>Simulação</span></button>
-      <button data-aba="cal" role="tab" data-dica="Calendário: o resultado de cada dia; clique no dia para ver as operações."><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/></svg><span>Calendário</span></button>
-      <button data-aba="cmp" role="tab" data-dica="Comparar: todas as estratégias em todos os ativos, no período escolhido."><svg viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-7"/></svg><span>Comparar</span></button>
-      <button data-aba="news" role="tab" data-dica="Notícias e agenda econômica: o que saiu e o que tem hora marcada para mexer no mercado."><svg viewBox="0 0 24 24"><path d="M5 5h11v14H7a2 2 0 01-2-2zM16 9h3v8a2 2 0 01-2 2M8 9h5M8 12.5h5M8 16h3"/></svg><span>Notícias</span><b class="badge oculto" id="badgeNews">0</b></button>
-      <button data-aba="opcoes" role="tab" data-dica="Opções da B3: grade de calls e puts, gregas, volatilidade e cinco estruturas clássicas com o gráfico de ganho e perda. Para aprender e achar oportunidades; não envia ordens."><svg viewBox="0 0 24 24"><path d="M3 18c4 0 5-12 9-12s5 12 9 12"/><path d="M3 12h18" stroke-dasharray="2 3"/></svg><span>Opções</span></button>
+      <button data-aba="vivo" class="on" role="tab" data-dica="Agora: o que a estratégia está fazendo neste momento, os seus testes ao vivo e as operações."><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span>Agora</span><b class="badge verde oculto" id="badgeTestes">0</b></button>
+      <button data-aba="sim" data-grupo="sim cal cmp" role="tab" data-dica="Resultado: quanto a estratégia fez no período, gestão e stops comparados, o dia a dia e a comparação entre estratégias."><svg viewBox="0 0 24 24"><path d="M4 19h16M7 16V9M12 16V5M17 16v-4"/></svg><span>Resultado</span></button>
+      <button data-aba="plano" role="tab" data-dica="Plano: quanto arriscar, quando parar o dia, as proteções do stop e as suas regras."><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg><span>Plano</span></button>
+      <button data-aba="ia" role="tab" data-dica="Aprender: o que a IA do robô aprendeu com as operações e as suas lições do E se."><svg viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="11" rx="3"/><path d="M12 3v4M9 12h.01M15 12h.01M9 15.5h6"/></svg><span>Aprender</span></button>
+      <button data-aba="news" role="tab" data-dica="Notícias e agenda: o que saiu e o que tem hora marcada para mexer no mercado."><svg viewBox="0 0 24 24"><path d="M5 5h11v14H7a2 2 0 01-2-2zM16 9h3v8a2 2 0 01-2 2M8 9h5M8 12.5h5M8 16h3"/></svg><span>Notícias</span><b class="badge oculto" id="badgeNews">0</b></button>
+      <button data-aba="conectar" role="tab" data-dica="Conectar: ligar o robô à sua conta da corretora (MetaTrader 5 ou Profit), sempre por você e com os seus limites."><svg viewBox="0 0 24 24"><path d="M9 7V3M15 7V3M7 7h10v4a5 5 0 01-10 0zM12 16v5"/></svg><span>Conectar</span></button>
+      <button data-aba="opcoes" class="so-opcoes" role="tab" data-dica="Opções da B3: grade de calls e puts, gregas, volatilidade e estruturas com o gráfico de ganho e perda."><svg viewBox="0 0 24 24"><path d="M4 18l6-8 4 5 6-9"/></svg><span>Opções</span></button>
+    </div>
+    <div class="subabas oculto" id="subRes" role="tablist">
+      <button data-aba="sim">Resumo e simulação</button><button data-aba="cal">Dia a dia</button><button data-aba="cmp">Comparar estratégias</button>
     </div>
 
     <!-- ============================== AO VIVO ============================== -->
     <section class="aba on" id="aba-vivo">
       <div class="erro oculto" id="erroVivo"></div>
-      <div class="card momento" id="cardVivo"><div class="estado">—</div></div>
+      <div class="card momento" id="cardVivo"><div class="estado">-</div></div>
       <div id="chipRobo"></div>
+      <div class="card boleta oculto" id="cardBoleta"></div>
+      <div class="card oculto" id="cardCripto"></div>
+      <div class="card resumo-curto" id="resumoCurto"></div>
       <div class="card" id="cardTeste"></div>
       <div class="card oculto" id="cardSinais"></div>
-      <div class="card" id="resumoVivo"></div>
       <div class="card oculto" id="cardOps"></div>
-      <div class="card oculto" id="tabelaVivo"></div>
     </section>
 
     <!-- ============================== IA ============================== -->
@@ -183,8 +194,10 @@
 
     <!-- ============================== SIMULAÇÃO ============================== -->
     <section class="aba" id="aba-sim">
+      <div class="card" id="resumoVivo"></div>
+      <div class="card oculto" id="tabelaVivo"></div>
       <div class="card">
-        <div class="rot">SIMULAR COM DADOS REAIS <span class="dir" id="simPeriodo"></span></div>
+        <div class="rot">SIMULAÇÃO CANDLE A CANDLE <span class="dir" id="simPeriodo"></span></div>
         <div class="nota">Usa o ativo, o tempo, a estratégia, o <b>período</b> e os contratos do topo. Capital fica em ⚙; a gestão, nos botões do painel Ao vivo.</div>
         <div class="botoes">
           <button id="btSimular" class="primario">Calcular resultado</button>
@@ -214,7 +227,7 @@
         <div class="rot">CALENDÁRIO <span class="dir" id="calFonteTxt"></span></div>
         <select id="calFiltro" class="largo"></select>
         <div class="cal-meses" id="calMeses"></div>
-        <div class="cal-nav"><button id="calAnt">◀</button><b id="calTitulo">—</b><button id="calProx">▶</button></div>
+        <div class="cal-nav"><button id="calAnt">◀</button><b id="calTitulo">-</b><button id="calProx">▶</button></div>
         <div class="cal-grade" id="calGrade"></div>
       </div>
       <div id="calResumo"></div>
@@ -237,7 +250,7 @@
     <!-- ============================== NOTÍCIAS ============================== -->
     <section class="aba" id="aba-news">
       <div class="card">
-        <div class="rot">NOTÍCIAS QUE MEXEM NO MERCADO <span class="dir" id="newsAtual">—</span></div>
+        <div class="rot">NOTÍCIAS QUE MEXEM NO MERCADO <span class="dir" id="newsAtual">-</span></div>
         <div class="grade3">
           <select id="newsImpacto" aria-label="Impacto"><option value="ALTO">Só alto impacto</option><option value="MEDIO" selected>Alto e médio</option><option value="TODOS">Todas</option></select>
           <select id="newsAtivo" aria-label="Mexe em"><option value="">WIN e WDO</option><option value="WIN">WIN (bolsa)</option><option value="WDO">WDO (dólar)</option></select>
@@ -248,6 +261,11 @@
       <div class="erro oculto" id="erroNews"></div>
       <div id="newsLista"></div>
       <div class="nota">Fontes: Banco Central, Valor, InfoMoney, Money Times, g1, E-Investidor, Investing e Google Notícias, a cada 60 s. O impacto é estimado por palavras-chave: confira antes de operar.</div>
+    </section>
+
+    <!-- ============================== CONECTAR (corretora) ============================== -->
+    <section class="aba" id="aba-conectar">
+      <div id="conConteudo"></div>
     </section>
 
     <!-- ============================== OPÇÕES DA B3 ============================== -->
@@ -267,7 +285,7 @@
 </div>
 
 <footer class="rodape">
-  <span>Robô <b>informativo</b>: não envia ordens. Resultado passado não garante o futuro.</span>
+  <span>Ferramenta de <b>estudo e análise</b>: as decisões e as ordens são suas. Resultado passado não garante o futuro.</span>
   <span class="base-status" id="baseStatus"></span>
 </footer>
 
@@ -278,7 +296,7 @@
 <script src="sim.js"></script>
 <script src="calendario.js"></script>
 <script src="comparar.js"></script>
-<script src="radar.js"></script>
+<script src="testar.js"></script>
 <script src="noticias.js"></script>
 <script src="desenho.js"></script>
 <script src="ops.js"></script>
@@ -289,5 +307,10 @@
 <script src="ia.js"></script>
 <script src="explica.js"></script>
 <script src="conta.js"></script>
+<script src="boleta.js"></script>
+<script src="mercado.js"></script>
+<script src="conectar.js"></script>
+<script src="tutorial.js"></script>
+<script src="vitrine.js"></script>
 </body>
 </html>

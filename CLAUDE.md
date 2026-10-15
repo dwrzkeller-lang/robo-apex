@@ -1,6 +1,7 @@
-# Robô Apex — guia para quem for mexer no código
+# Robô Apex: guia para quem for mexer no código
 
-Robô **informativo** de day trade: mostra sinais, simula e ensina. Servidor em Python (só biblioteca padrão) e tela em
+Robô de **estratégias de day trade** para ações da B3, opções e cripto: mostra sinais, simula, ensina e, se o usuário
+quiser, envia ordens pela conta DELE no MetaTrader 5 (EA), sempre por decisão dele. Servidor em Python (só biblioteca padrão) e tela em
 JavaScript puro com lightweight-charts 4. O dono não é programador e tem alunos usando: escreva para ele em português
 simples, sem jargão.
 
@@ -8,7 +9,11 @@ simples, sem jargão.
 
 - O projeto se chama **Robô Apex**. O nome antigo do projeto não pode reaparecer em código, textos, imagens ou releases
   (`ferramentas/conferir.py` verifica).
-- O robô **não envia ordens reais**. A ponte com o Profit (`app/profit.py`) é só simulador.
+- Ordens reais só pelo EA do MetaTrader 5 (`app/web/RoboApex.mq5` + `app/corretora.py`): o usuário instala, aceita o
+  termo e liga; vem travado em conta DEMO, com lote máximo, perda máxima no dia e liga/desliga. O robô nunca recebe
+  senha de corretora. A ponte com o Profit (`app/profit.py`) é só simulador.
+- Propaganda: nada de depoimento inventado, resultado escolhido a dedo sem contexto ou promessa de ganho (CDC art. 37,
+  CVM). A página de vendas (`app/web/site`) mostra prints reais com o aviso de simulação.
 - Nada de promessa de resultado nem de "infalível". Toda estatística é com custos e escorregamento, e os textos dizem
   quando algo não tem vantagem comprovada. Não dar recomendação pessoal de investimento.
 - As estratégias **E2 e E9 não são alteradas**. Melhoria entra como estratégia nova (E14, E15…).
@@ -31,11 +36,17 @@ sem candles.
 ## Mapa
 
 - `app/robo_apex.py` — servidor HTTP, rotas `/api/*`, Sentinela (testes ao vivo), `VERSAO`.
-- `app/estrategias.py` (E1–E15, gestões), `app/simulador.py` (execução, custos, proteções), `app/ia.py`,
+- `app/estrategias.py` (E1–E23, gestões), `app/simulador.py` (execução, custos, proteções), `app/ia.py`,
   `app/auth.py`, `app/dados_fonte.py`, `app/opcoes.py`, `app/profit.py`, `app/avisos.py`.
+- `app/boleta.py` — boleta simulada (paper trading ao vivo). `app/corretora.py` — conexão MetaTrader 5 (termo, código,
+  candles do EA viram o ativo `MT5:<simbolo>`, sinal em texto para o EA). `app/assinaturas.py` — site online: termos,
+  cadastro, Hotmart, visitas. Modo online: `--publico --dominio X` (ver PUBLICAR-ONLINE.md).
 - `app/web/` — a tela. Tudo vive em `window.AX`: eventos `AX.on/emit`, camadas de desenho `AX.camadas.push((ctx,u)=>…)`,
   `AX.mostrar/avancar/atualizar` para o gráfico. `app.js` é o núcleo; `ops.js` operações e marcações; `replay.js`
-  replay da entrada e "E se…"; `desenho.js` ferramentas de desenho; `dicas.js` os "?".
+  replay da entrada e "E se…" (as edições ficam em `estado_edicoes.json` e o SERVIDOR as aplica como ajustes; "Usar como
+  regra" vira o parâmetro `regra` = fator do stop e alvo em R por estratégia); `testar.js` (Testar estratégia e Minhas
+  estratégias); `boleta.js`; `mercado.js` (modo Cripto); `conectar.js`; `tutorial.js`; `vitrine.js` (`?vitrine=1` borra
+  o nome das estratégias para prints); `tema.css` (visual da 3.0); `desenho.js` ferramentas de desenho; `dicas.js` os "?".
 - `ntsl/` — scripts para o Profit, gerados por `ferramentas/gerar_ntsl.py`.
 - `ferramentas/backtest.py` — testes das estratégias com custos.
 

@@ -38,7 +38,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import agenda
 import auth
+import assinaturas
 import avisos
+import boleta
+import corretora
 import cripto
 import opcoes
 import profit
@@ -51,7 +54,7 @@ import radar
 from estrategias import AQUECIMENTO, ESTRATEGIAS, GESTOES, GESTOES_CURTO, atencao
 from simulador import PROTECOES, atualizar_ultimo, estatisticas, preparar, simular
 
-VERSAO = "2.6"
+VERSAO = "3.0"
 ARGS = sys.argv[1:]
 
 
@@ -91,8 +94,37 @@ def _cripto_viva(chave, tf):
     return df.vivo(("cr", chave, tf), fabrica, 4.0)
 
 
+_MT5_MEM = {}
+
+
+def _mt5(chave, tf):
+    """Candles que o EA mandou do MetaTrader 5 (dados da corretora, tempo real), agrupados no tempo grafico pedido.
+    Custos, horario e valor do ponto vem do ativo do robo escolhido na aba Conectar (WIN, WDO, PETR4...)."""
+    sim = chave[4:].upper()
+    minutos, versao = CONEX.minutos(sim)
+    if not minutos:
+        raise RuntimeError("Ainda não chegaram candles do MetaTrader para %s: ligue o EA no MetaTrader 5." % sim)
+    base_at = CONEX.ativo_de(sim)
+    cfg = dict(df.ATIVOS.get(base_at) or df.ATIVOS["WIN"])
+    cfg.update(nome="%s - MetaTrader 5 (dados da sua corretora, tempo real)" % sim, curto=sim, yahoo=None)
+    ck = (sim, tf)
+    v = _MT5_MEM.get(ck)
+    if v and v[0] == versao:
+        return v[1], v[2], cfg
+    B = df.agrupar(cfg, minutos, tf if tf in (1, 2, 5, 15, 30, 60) else 5)
+    B = df.marcar(B, v[1] if v else None)
+    fonte = "MetaTrader 5 · %s · dados da sua corretora em tempo real · custos do %s" % (sim, base_at)
+    _MT5_MEM[ck] = (versao, B, fonte)
+    return B, fonte, cfg
+
+
 def carregar(chave, tf):
     """(retrato dos candles, fonte, configuracao do ativo). Nao espera a internet depois da 1a carga."""
+    if chave.startswith("MT5:"):
+        B, fonte, cfg = _mt5(chave, tf)
+        if len(B["c"]) < AQUECIMENTO + 20:
+            raise RuntimeError("Poucos candles do MetaTrader ainda (%d). Deixe o EA ligado: ele manda o histórico de 1 minuto." % len(B["c"]))
+        return B, fonte, cfg
     if chave.startswith("CSV:"):
         nome = os.path.basename(chave[4:])
         arq = os.path.join(df.pasta_dados(BASE), nome)
@@ -116,7 +148,7 @@ def carregar(chave, tf):
 
 def idade_dados(chave, tf):
     """Segundos desde a ultima renovacao boa dos candles deste ativo (None para arquivo CSV)."""
-    if chave.startswith("CSV:"):
+    if chave.startswith("CSV:") or chave.startswith("MT5:"):
         return None
     ck = ("cr", chave, tf) if cripto.eh_cripto(chave) else df.chave_viva(BASE, chave, tf)
     return df.idade(ck)[0]
@@ -174,7 +206,8 @@ def simular_c(chave, tf, B, Gs, sc, cods, i_ini=None, i_fim=None, aberto=False, 
     vivo = i_fim is None or i_fim >= n - 1
     alvo = (n - 3) if vivo else i_fim
     ini = max(AQUECIMENTO, i_ini or 0)
-    pk = None if not plano else tuple(sorted((k, v) for k, v in plano.items() if v))
+    pk = None if not plano else tuple(sorted((k, json.dumps(v, sort_keys=True) if isinstance(v, (dict, list)) else v)
+                                             for k, v in plano.items() if v))
     ak = None if not ajustes else json.dumps(ajustes, sort_keys=True)
     key = (chave, tf, tuple(cods), gestao, float(contratos), max_stops, juntas, ini, com_atencao, pk, ak, None if vivo else i_fim)
     ck = _RET.get(key)
@@ -185,6 +218,8 @@ def simular_c(chave, tf, B, Gs, sc, cods, i_ini=None, i_fim=None, aberto=False, 
                 i_fim=None if vivo else i_fim, com_atencao=com_atencao, i_formando=(n - 1) if (aberto and vivo) else None,
                 plano=plano, tempos=B["t"], ajustes=ajustes, retomar=ret, ponto=alvo if alvo >= ini else None)
     p = r.pop("ponto", None)
+    for nome in ("trades", "ordens", "abertas"):
+        r[nome] = [dict(x) for x in r[nome]]
     if p is not None and (ck is None or p is not ck["ret"]):
         _RET[key] = dict(m=p["m"], fp=impressao(B, p["m"]), ret=p)
     if key in _RET:
@@ -314,9 +349,24 @@ def _resumo(st):
     return {k: st.get(k) for k in chaves}
 
 
+def regras_de(txt):
+    """'E2:1.5:3,E9:0.8:0' -> {'E2': (1.5, 3.0), 'E9': (0.8, 0.0)}: a "Minha regra" de cada estrategia (stop e alvo proprios)."""
+    out = {}
+    for parte in str(txt or "").split(","):
+        p = parte.split(":")
+        if len(p) == 3 and p[0] in ESTRATEGIAS:
+            try:
+                fs, ra = float(p[1]), float(p[2])
+            except ValueError:
+                continue
+            if 0.2 <= fs <= 5.0 and 0.0 <= ra <= 20.0:
+                out[p[0]] = (round(fs, 3), round(ra, 2))
+    return out
+
+
 def _plano(q, capital):
     """Regras do plano de trade que vem da tela (aba Plano): tamanho por risco, limite de perda e meta do dia, modo seletivo."""
-    return dict(tam="risco" if q.get("tam", ["fixo"])[0] == "risco" else "fixo", risco_pct=_float(q, "risco", 1.0, 0.05, 20.0),
+    return dict(regras=regras_de(q.get("regra", [""])[0]), tam="risco" if q.get("tam", ["fixo"])[0] == "risco" else "fixo", risco_pct=_float(q, "risco", 1.0, 0.05, 20.0),
                 capital=capital, loss_dia=_float(q, "lossDia", 0.0, 0.0, 1e9), meta_dia=_float(q, "metaDia", 0.0, 0.0, 1e9),
                 seletivo=q.get("seletivo", ["0"])[0] == "1",
                 prot=tuple(sorted(x for x in q.get("prot", [""])[0].split(",") if x in PROTECOES)))
@@ -344,7 +394,9 @@ def _pedido(q):
         if cambio:
             capital = capital / cambio
             pl = dict(pl, capital=capital, loss_dia=pl["loss_dia"] / cambio, meta_dia=pl["meta_dia"] / cambio)
-    return dict(chave=chave, tf=tf, est=est, todas=est == "TODAS", gestao=gestao, capital=capital,
+    minhas = [c for c in q.get("cods", [""])[0].split(",") if c in ESTRATEGIAS]
+    codigos = (minhas or list(ESTRATEGIAS)) if est == "TODAS" else [est]
+    return dict(chave=chave, tf=tf, est=est, todas=est == "TODAS", gestao=gestao, capital=capital, codigos=codigos,
                 contratos=_float(q, "contratos", 1.0, 0.01, 1e7), max_stops=int(_float(q, "maxstops", 2, 1, 50)),
                 plano=pl, cambio=cambio)
 
@@ -509,11 +561,51 @@ def api_ia(q):
 
 
 # ------------------------------------------------------------------------------------------ /api/sim
+def edicoes_de(uid, chave, tf):
+    """As edicoes do "E se..." deste usuario neste ativo e tempo, no formato de ajuste do simulador: o stop e o alvo
+    editados valem desde o candle do sinal (antes da entrada), entao a operacao inteira e refeita com eles."""
+    if not uid:
+        return []
+    arq = os.path.join(pasta_de(uid), "estado_edicoes.json")
+    try:
+        mt = os.path.getmtime(arq)
+    except OSError:
+        return []
+    ck = (uid, arq)
+    v = _ED_MEM.get(ck)
+    if not v or v[0] != mt:
+        v = _ED_MEM[ck] = (mt, _ler_json(arq, {}))
+    out = []
+    for k, e in (v[1] or {}).items():
+        try:
+            a, t, est, t_ent, d = k.split("|")
+            if a != chave or int(t) != int(tf) or not isinstance(e, dict) or not e.get("t_sinal") or est not in ESTRATEGIAS:
+                continue
+            ch = "%s|%d|%d" % (est, int(e["t_sinal"]), int(d))
+            if e.get("stop") is not None:
+                out.append(dict(t=int(e["t_sinal"]), tipo="stop", chave=ch, valor=float(e["stop"]), ed=True))
+            if e.get("alvo") is not None:
+                out.append(dict(t=int(e["t_sinal"]), tipo="alvo", chave=ch, valor=float(e["alvo"]), ed=True))
+        except (ValueError, TypeError, KeyError):
+            continue
+    return out
+
+
+_ED_MEM = {}
+
+
+def _ed_versao(uid):
+    try:
+        return os.path.getmtime(os.path.join(pasta_de(uid), "estado_edicoes.json"))
+    except OSError:
+        return 0
+
+
 def _rd(x, dec):
     return [None if v is None else round(v, dec) for v in x]
 
 
-def api_sim(q):
+def api_sim(q, uid=None):
     P = _pedido(q)
     chave, est, todas, gestao, capital, max_stops, pl = P["chave"], P["est"], P["todas"], P["gestao"], P["capital"], P["max_stops"], P["plano"]
     com_aten = q.get("aten", ["0"])[0] == "1"
@@ -537,18 +629,26 @@ def api_sim(q):
     de = None
     if mesma_janela and 4 <= c_n <= n and c_fp and c_fp == str(impressao(B, c_n - 3)) and i_ini <= c_n - 3:
         de = c_n - 2
-    codigos = list(ESTRATEGIAS) if todas else [est]
+    codigos = P["codigos"]
     with TRAVA:
         Gs = graficos(chave, tf, B, sc, aberto)
+        eds = edicoes_de(uid, chave, tf)
         r = simular_c(chave, tf, B, Gs, sc, codigos, i_ini, i_fim, aberto, gestao=gestao, contratos=contratos, max_stops=max_stops,
-                      juntas=todas, com_atencao=com_aten, plano=pl)
+                      juntas=todas, com_atencao=com_aten, plano=pl, ajustes=eds or None)
         dsai = lambda i: d[i]                                      # noqa: E731
         st = estatisticas(r["trades"], capital, dsai)
+        n_ed = sum(1 for x in r["trades"] + r["abertas"] if x.get("manual") == "edicao")
+        st_robo = None
+        if n_ed:                                                   # o mesmo periodo sem as edicoes: "o robo sozinho"
+            r0 = simular_c(chave, tf, B, Gs, sc, codigos, i_ini, i_fim, aberto, gestao=gestao, contratos=contratos,
+                           max_stops=max_stops, juntas=todas, plano=pl)
+            st_robo = _resumo(estatisticas(r0["trades"], capital, dsai))
+            st_robo["total"] = estatisticas(r0["trades"], capital, dsai).get("total", 0.0)
         por_est = {}
         if todas:
             for cod in r["codigos"]:
                 ri = simular_c(chave, tf, B, Gs, sc, [cod], i_ini, i_fim, aberto, gestao=gestao, contratos=contratos,
-                               max_stops=max_stops, plano=pl)
+                               max_stops=max_stops, plano=pl, ajustes=eds or None)
                 por_est[cod] = dict(isolada=_resumo(estatisticas(ri["trades"], capital, dsai)),
                                     naJunta=_resumo(estatisticas([x for x in r["trades"] if x["est"] == cod], capital, dsai)),
                                     # operacoes da estrategia sozinha (para o calendario): entrada, saida, lado, R, dinheiro, motivo, precos
@@ -582,14 +682,15 @@ def api_sim(q):
                 aoVivo=vivo, formando=aberto and vivo, temVolume=any(vol[-400:]),
                 tam=pl["tam"], riscoPct=pl["risco_pct"], lossDia=pl["loss_dia"], metaDia=pl["meta_dia"], seletivo=pl["seletivo"],
                 custoPct=sc.get("custo_pct", 0.0), cripto=bool(cfg.get("cripto")), curto=cfg.get("curto"), prot=list(pl["prot"]),
-                usdbrl=P.get("cambio"),
+                usdbrl=P.get("cambio") or _usdbrl(),
                 dia=r["dia"], ctx=ctx_ult,
                 foraDoPlano=sum(1 for o in r["ordens"] if o["status"] == "cancelada" and o["motivo"].startswith("risco acima do plano")),
                 iIni=r["ini"], iFim=r["fim"], dataIni=d[r["ini"]], dataFim=d[r["fim"]],
                 dataMin=d[AQUECIMENTO], dataMax=d[-1], ultimo=n - 1, codigos=r["codigos"],
                 sid=B.get("sid"), n=n, fp=str(impressao(B, n - 3)), idade=idade_dados(chave, tf), ia=ia_res,
                 iaSel=IA_estado(chave, tf, gestao, contratos))
-    out = dict(meta=meta, abertas=_sem_f(r["abertas"]), atenUlt=aten_ult, stats=st, porEst=por_est, contexto=contexto(chave))
+    out = dict(meta=meta, abertas=_sem_f(r["abertas"]), atenUlt=aten_ult, stats=st, porEst=por_est, contexto=contexto(chave),
+               edN=n_ed, statsRobo=st_robo)
     out.update(series)
     if de is None:
         out.update(trades=_sem_f(r["trades"]), ordens=_sem_f(r["ordens"]), aten={str(k): v for k, v in r["aten"].items()})
@@ -611,6 +712,131 @@ def IA_estado(chave, tf, gestao, contratos):
     return "%s:%d" % (v["estado"], v["n"]) if v else "-"
 
 
+# ------------------------------------------------------------------------------------------ testar estrategia / minhas estrategias
+def _semana(dd):
+    """AAAAMMDD -> segunda-feira da semana (AAAAMMDD)."""
+    x = date(dd // 10000, dd // 100 % 100, dd % 100)
+    return int((x - timedelta(days=x.weekday())).strftime("%Y%m%d"))
+
+
+def _resumo_teste(chave, tf_pedido, codigos, P, q, cfg_so=False):
+    """Simula `codigos` (juntas se forem varias) no ativo e tempo pedidos e devolve um resumo para a tela."""
+    B, fonte, cfg = carregar(chave, tf_pedido)
+    tf = B.get("tf", tf_pedido)
+    sc = df.sessao_cfg(cfg)
+    contratos = P["contratos"] if cfg.get("fracionado") else max(1.0, round(P["contratos"]))
+    d, t = B["d"], B["t"]
+    per = q.get("per", ["tudo"])[0]
+    i_ini, i_fim = janela(d, per if per in PERIODOS else "tudo", _int(q, "de", 0), _int(q, "ate", 0))
+    aberto = formando(B, cfg, chave)
+    with TRAVA:
+        Gs = graficos(chave, tf, B, sc, aberto)
+        r = simular_c(chave, tf, B, Gs, sc, codigos, i_ini, i_fim, aberto, gestao=P["gestao"], contratos=contratos,
+                      max_stops=P["max_stops"], juntas=len(codigos) > 1, plano=P["plano"])
+        aten = [c for c in codigos if atencao(Gs, c, i_fim)] if i_fim == len(t) - 1 else []
+    tr = r["trades"]
+    st = estatisticas(tr, P["capital"], lambda i: d[i])
+    meses, semanas = {}, {}
+    for x in tr:
+        dd = d[x["i_sai"]]
+        m = meses.setdefault(dd // 100, [0, 0.0, 0])
+        m[0] += 1; m[1] += x["dinheiro"]; m[2] += x["dinheiro"] > 0
+        w = semanas.setdefault(_semana(dd), [0, 0.0, 0])
+        w[0] += 1; w[1] += x["dinheiro"]; w[2] += x["dinheiro"] > 0
+    acum, curva = 0.0, []
+    for x in tr:
+        acum += x["dinheiro"]
+        curva.append(round(acum, 2))
+    if len(curva) > 120:
+        passo = len(curva) / 120.0
+        curva = [curva[int(k * passo)] for k in range(120)] + [curva[-1]]
+    pend = [o for o in r["ordens"] if o["status"] == "pendente"]
+    agora = ("operacao" if r["abertas"] else "ordem" if pend else "atencao" if aten else "aguardando")
+    ab = r["abertas"][0] if r["abertas"] else None
+    din = [x["dinheiro"] for x in tr]
+    return dict(tf=tf, nomeTf=df.NOME_TEMPO.get(tf, "%d min" % tf), n=st["n"], total=st.get("total", 0.0), acerto=st.get("acerto"),
+                media=st.get("mediaDin"), ddMax=st.get("ddMax", 0.0), veredito=st.get("veredito"), cor=st.get("cor"),
+                maiorGanho=max(din) if din else 0.0, maiorPerda=min(din) if din else 0.0,
+                perdaMedia=(sum(v for v in din if v <= 0) / max(1, sum(1 for v in din if v <= 0))) if din else 0.0,
+                ganhoMedio=(sum(v for v in din if v > 0) / max(1, sum(1 for v in din if v > 0))) if din else 0.0,
+                meses=[[k, v[0], round(v[1], 2), v[2]] for k, v in sorted(meses.items())],
+                semanas=[[k, v[0], round(v[1], 2), v[2]] for k, v in sorted(semanas.items())][-12:],
+                curva=curva, agora=agora,
+                aberta=dict(est=ab["est"], dir=ab["dir"], ent=ab["ent"], R=round(ab["R"], 3),
+                            dinheiro=round(ab["R"] * ab["risco"] * sc["valor_ponto"] * (ab.get("q") or contratos), 2)) if ab else None,
+                ultimas=[dict(est=x["est"], dir=x["dir"], t_ent=t[x["i_ent"]], t_sai=t[x["i_sai"]], ent=x["ent"], sai=x["sai"],
+                              motivo=x["motivo"], dinheiro=round(x["dinheiro"], 2)) for x in tr[-8:]][::-1],
+                dataIni=d[max(AQUECIMENTO, i_ini)], dataFim=d[i_fim], moeda=cfg.get("moeda", "R$"), decimais=cfg["decimais"],
+                intraday=tf < 1440, contratos=contratos)
+
+
+def api_testar(q):
+    """Testar ESTA estrategia: o periodo escolhido em 5, 15 e 60 min (e no tempo do topo, se for outro)."""
+    P = _pedido(q)
+    if P["todas"]:
+        raise ValueError("Escolha uma estratégia (não o modo Minhas estratégias juntas) para testar.")
+    tfs = [5, 15, 60]
+    if P["tf"] not in tfs:
+        tfs.append(P["tf"])
+    out = []
+    for tf in tfs:
+        try:
+            out.append(_resumo_teste(P["chave"], tf, [P["est"]], P, q))
+        except Exception as e:                                  # um tempo grafico sem dados nao derruba o resto
+            out.append(dict(tf=tf, nomeTf=df.NOME_TEMPO.get(tf, "%d min" % tf), erro=str(e)))
+    return dict(est=P["est"], ativo=P["chave"], tfAtual=P["tf"], tempos=out)
+
+
+def api_minhas(q):
+    """Minhas estrategias: cada uma sozinha no ativo e tempo do topo, com o resultado do periodo e o que esta fazendo agora."""
+    P = _pedido(q)
+    cods = [c for c in q.get("cods", [""])[0].split(",") if c in ESTRATEGIAS][:25]
+    if not cods:
+        raise ValueError("Escolha pelo menos uma estratégia.")
+    linhas = []
+    for c in cods:
+        try:
+            x = _resumo_teste(P["chave"], P["tf"], [c], P, q)
+            x.pop("curva", None); x.pop("semanas", None)
+            linhas.append(dict(x, est=c, nome=ESTRATEGIAS[c]["nome"]))
+        except Exception as e:
+            linhas.append(dict(est=c, nome=ESTRATEGIAS[c]["nome"], erro=str(e)))
+    juntas = None
+    if len(cods) > 1:
+        try:
+            juntas = _resumo_teste(P["chave"], P["tf"], cods, P, q)
+            juntas.pop("curva", None)
+        except Exception as e:
+            juntas = dict(erro=str(e))
+    return dict(ativo=P["chave"], tf=P["tf"], linhas=linhas, juntas=juntas)
+
+
+_MERCADO_CR = {"t": 0.0, "v": None}
+
+
+def api_cripto_mercado():
+    """As principais criptomoedas em 24 h (Binance): preco, variacao e volume. Guardado por 20 s."""
+    if _MERCADO_CR["v"] and time.time() - _MERCADO_CR["t"] < 20:
+        return _MERCADO_CR["v"]
+    syms = ["%sUSDT" % m for m, _ in CRIPTOS]
+    lista = cripto._get(cripto.SPOT, "/api/v3/ticker/24hr?symbols=" + urllib.parse.quote(json.dumps(syms, separators=(",", ":"))), timeout=12)
+    nomes = dict(CRIPTOS)
+    out = []
+    for x in lista if isinstance(lista, list) else []:
+        sym = x.get("symbol", "")
+        base = sym[:-4]
+        try:
+            out.append(dict(chave="BN:" + sym, moeda=base, nome=nomes.get(base, base), preco=float(x["lastPrice"]),
+                            var=float(x["priceChangePercent"]), volume=float(x["quoteVolume"]), alta=float(x["highPrice"]),
+                            baixa=float(x["lowPrice"])))
+        except (KeyError, TypeError, ValueError):
+            continue
+    out.sort(key=lambda z: -z["volume"])
+    v = dict(moedas=out, usdbrl=_usdbrl(), quando=int(time.time()))
+    _MERCADO_CR.update(t=time.time(), v=v)
+    return v
+
+
 # ------------------------------------------------------------------------------------------ gestoes lado a lado
 STOPS_LADO = (("base", ()), ("curto", ("curto",)), ("be20", ("be20",)), ("curto+be20", ("be20", "curto")))
 def api_gestoes(q):
@@ -623,11 +849,12 @@ def api_gestoes(q):
     d = B["d"]
     per = q.get("per", ["tudo"])[0]
     i_ini, i_fim = janela(d, per if per in PERIODOS else "tudo", _int(q, "de", 0), _int(q, "ate", 0))
-    codigos = list(ESTRATEGIAS) if P["todas"] else [P["est"]]
+    codigos = P["codigos"]
     aberto = formando(B, cfg, P["chave"])
     linhas = []
     # cada gestao (o que fazer com o ganho) com cada jeito de stop: o da estrategia, curto (1 ATR), 0x0 aos 20% e os dois
     outras = tuple(x for x in P["plano"]["prot"] if x not in ("curto", "be20"))
+    P["plano"] = dict(P["plano"], regras={})
     com_stops = q.get("stops", ["0"])[0] == "1"
     for g in GESTOES:
         linha = None
@@ -669,7 +896,7 @@ def api_ajuste(q):
     d = B["d"]
     n = len(d)
     meio = AQUECIMENTO + (n - AQUECIMENTO) // 2
-    codigos = list(ESTRATEGIAS) if P["todas"] else [P["est"]]
+    codigos = P["codigos"]
 
     def medir(g, prot, a, b):
         pl = dict(P["plano"], prot=prot)
@@ -728,10 +955,11 @@ def _gravar_json(arq, obj):
     os.replace(arq + ".tmp", arq)
 
 
-CAMPOS_TESTE = ("ativo", "tf", "est", "gestao", "contratos", "capital", "maxstops", "tam", "risco", "lossDia", "metaDia", "seletivo", "prot")
+CAMPOS_TESTE = ("ativo", "tf", "est", "gestao", "contratos", "capital", "maxstops", "tam", "risco", "lossDia", "metaDia", "seletivo", "prot",
+                "cods", "regra")
 
 
-def _calc_teste(x, B, fonte, cfg):
+def _calc_teste(x, B, fonte, cfg, uid=None):
     """Resultado de um teste ao vivo (simulado): a estrategia e ligada no candle `desde` e so entra depois dele."""
     chave, tf = x["ativo"], B.get("tf", x["tf"])
     est = x["est"]
@@ -744,7 +972,12 @@ def _calc_teste(x, B, fonte, cfg):
     capital = float(x.get("capital") or 10000.0)
     pl = dict(tam="risco" if x.get("tam") == "risco" else "fixo", risco_pct=float(x.get("risco") or 1.0), capital=capital,
               loss_dia=float(x.get("lossDia") or 0.0), meta_dia=float(x.get("metaDia") or 0.0), seletivo=bool(x.get("seletivo")),
-              prot=tuple(sorted(p for p in (x.get("prot") or []) if p in PROTECOES)))
+              prot=tuple(sorted(p for p in (x.get("prot") or []) if p in PROTECOES)), regras=regras_de(x.get("regra")))
+    if x.get("brl") and cfg.get("moeda") == "US$":
+        cambio = _usdbrl()
+        if cambio:
+            capital = capital / cambio
+            pl.update(capital=capital, loss_dia=pl["loss_dia"] / cambio, meta_dia=pl["meta_dia"] / cambio)
     t, d = B["t"], B["d"]
     n = len(t)
     desde, ate = int(x["desde"]), int(x.get("ate") or 0)
@@ -761,9 +994,10 @@ def _calc_teste(x, B, fonte, cfg):
     if i_ini > i_fim:
         return dict(meta=meta, trades=[], abertas=[], pend=[], ajPend=[], stats=estatisticas([], capital, lambda i: d[i]))
     ajustes = [a for a in (x.get("ajustes") or []) if isinstance(a, dict)]
+    ajustes = [a for a in edicoes_de(uid, chave, tf) if a["t"] >= desde] + ajustes      # edicoes do E se... nas operacoes do teste
     with TRAVA:
         Gs = graficos(chave, tf, B, sc, formando(B, cfg, chave))
-        codigos = list(ESTRATEGIAS) if todas else [est]
+        codigos = ([c for c in str(x.get("cods") or "").split(",") if c in ESTRATEGIAS] or list(ESTRATEGIAS)) if todas else [est]
         r = simular_c(chave, tf, B, Gs, sc, codigos, i_ini, i_fim, aberto, gestao=gestao, contratos=contratos,
                       max_stops=int(x.get("maxstops") or 2), juntas=todas, plano=pl, ajustes=ajustes or None)
     meta["dia"] = r["dia"]
@@ -818,6 +1052,7 @@ class Sentinela:
         self.trava = threading.RLock()
         self.listas, self.res, self.selo, self.rodou = {}, {}, {}, {}
         self.vez = {}                                 # (uid, id do teste) -> trava: um calculo por vez de cada teste
+        self.conferido = {}                           # (uid, id do teste) -> quando foi conferido com os candles de agora
         self.eventos = {}                             # uid -> deque dos ultimos eventos
         self.ult_seq = 0
         self.novo = threading.Condition()             # avisa quem esta esperando um evento novo (ver `esperar`)
@@ -910,7 +1145,9 @@ class Sentinela:
                  maxstops=max(1, min(50, int(p.get("maxstops") or 2))), desde=B["t"][-1], criado=int(time.time() * 1000), ate=0,
                  tam="risco" if p.get("tam") == "risco" else "fixo", risco=max(0.05, min(20.0, float(p.get("risco") or 1))),
                  lossDia=max(0.0, float(p.get("lossDia") or 0)), metaDia=max(0.0, float(p.get("metaDia") or 0)),
-                 seletivo=bool(p.get("seletivo")), prot=[z for z in (p.get("prot") or []) if z in PROTECOES], ajustes=[])
+                 seletivo=bool(p.get("seletivo")), prot=[z for z in (p.get("prot") or []) if z in PROTECOES], ajustes=[],
+                 cods=",".join(c for c in str(p.get("cods") or "").split(",") if c in ESTRATEGIAS), brl=bool(p.get("brl")),
+                 regra=",".join("%s:%g:%g" % (k, v[0], v[1]) for k, v in regras_de(p.get("regra")).items()))
         with self.trava:
             l = self.lista(uid)
             if len([y for y in l if not y.get("ate")]) >= 30:
@@ -921,6 +1158,33 @@ class Sentinela:
             l.append(x)
             self._gravar(uid)
         return x
+
+    def para_ea(self, uid, tid):
+        """(teste, resultado, quando foi conferido) para o EA, ou None."""
+        with self.trava:
+            x = next((y for y in self.lista(uid) if str(y["id"]) == str(tid)), None)
+            if x is None:
+                return None
+            k = (uid, x["id"])
+            r, q = self.res.get(k), self.conferido.get(k, 0)
+        if r is None:
+            r = self.rodar(uid, x)
+            q = self.conferido.get(k, 0)
+        return (x, r, q) if r else None
+
+    def trocar_regras(self, uid, txt):
+        """A "Minha regra" mudou na tela: vale tambem para os testes ao vivo ligados (a operacao aberta segue a regra nova)."""
+        txt = ",".join("%s:%g:%g" % (k, v[0], v[1]) for k, v in regras_de(txt).items())
+        with self.trava:
+            mudou = 0
+            for x in self.lista(uid):
+                if not x.get("ate") and (x.get("regra") or "") != txt:
+                    x["regra"] = txt
+                    self._esquecer(uid, x["id"])
+                    mudou += 1
+            if mudou:
+                self._gravar(uid)
+        return mudou
 
     def _achar(self, uid, tid):
         x = next((y for y in self.lista(uid) if str(y["id"]) == str(tid)), None)
@@ -937,7 +1201,13 @@ class Sentinela:
             x = self._achar(uid, tid)
             if not x.get("ate"):
                 r = self.res.get((uid, x["id"]))
-                x["ate"] = int((r and r["meta"]["ultimoT"]) or x["desde"])
+                ult = r and r["meta"]["ultimoT"]
+                if not ult:
+                    try:
+                        ult = carregar(x["ativo"], x["tf"])[0]["t"][-1]
+                    except Exception:
+                        ult = None
+                x["ate"] = int(ult or x["desde"])
                 self._esquecer(uid, x["id"])
                 self._gravar(uid)
             return x
@@ -960,7 +1230,7 @@ class Sentinela:
         if len(x.get("ajustes") or []) >= 60:
             raise ValueError("Limite de 60 ajustes manuais neste teste.")
         B, fonte, cfg = carregar(x["ativo"], x["tf"])
-        r = _calc_teste(x, B, fonte, cfg)
+        r = _calc_teste(x, B, fonte, cfg, uid)
         pos = next((a for a in r["abertas"] if _ch_ordem(a) == ch), None)
         od = next((o for o in r["pend"] if _ch_ordem(o) == ch), None)
         alvo_obj = pos or od
@@ -1017,20 +1287,25 @@ class Sentinela:
             try:
                 B, fonte, cfg = carregar(x["ativo"], x["tf"])
                 selo = (B.get("sid"), formando(B, cfg, x["ativo"]), x.get("ate"), len(x.get("ajustes") or []),
-                        IA_estado(x["ativo"], B.get("tf", x["tf"]), x.get("gestao", "padrao"), x.get("contratos", 1)))
+                        IA_estado(x["ativo"], B.get("tf", x["tf"]), x.get("gestao", "padrao"), x.get("contratos", 1)),
+                        _ed_versao(uid), x.get("regra") or "")
                 if not forcar and self.selo.get(k) == selo and k in self.res:
+                    self.conferido[k] = time.time()
                     return self.res[k]
-                r = _calc_teste(x, B, fonte, cfg)
+                r = _calc_teste(x, B, fonte, cfg, uid)
             except Exception as e:
                 x["erro"] = str(e)
                 return None
             with self.trava:
                 if x not in self.listas.get(uid, []):
                     return None
-                antes = self.res.get(k)
+                antes, selo_antes = self.res.get(k), self.selo.get(k)
                 self.res[k], self.selo[k] = r, selo
+                self.conferido[k] = time.time()
                 x.pop("erro", None)
-                if antes is not None and not x.get("ate"):
+                # edicao ou regra nova refaz o teste inteiro: o que mudou no passado nao vira aviso de "saiu agora"
+                so_regra = selo_antes is not None and selo_antes[:5] == selo[:5] and selo_antes[5:] != selo[5:]
+                if antes is not None and not x.get("ate") and not so_regra:
                     self._eventos(uid, x, _novidades(antes, r), r["meta"])
             return r
 
@@ -1172,7 +1447,7 @@ def api_metas(q):
     n = len(d)
     per = q.get("per", ["tudo"])[0]
     i_ini, i_fim = janela(d, per if per in PERIODOS else "tudo", _int(q, "de", 0), _int(q, "ate", 0))
-    codigos = list(ESTRATEGIAS) if P["todas"] else [P["est"]]
+    codigos = P["codigos"]
     aberto = formando(B, cfg, P["chave"])
     capital = P["capital"]
 
@@ -1286,9 +1561,29 @@ def _comparar(pedido):
             CMP["rodando"] = False
 
 
+CRIPTOS = (("BTC", "Bitcoin"), ("ETH", "Ethereum"), ("SOL", "Solana"), ("BNB", "BNB"), ("XRP", "XRP"), ("DOGE", "Dogecoin"),
+           ("ADA", "Cardano"), ("AVAX", "Avalanche"), ("LINK", "Chainlink"), ("TRX", "Tron"), ("LTC", "Litecoin"), ("DOT", "Polkadot"),
+           ("SUI", "Sui"), ("TON", "Toncoin"), ("PEPE", "Pepe"), ("SHIB", "Shiba Inu"))
+
+
 def config(usuario=None):
-    ativos = [dict(chave=k, nome=v["nome"], moeda=v["moeda"], lote=v["lote"], fracionado=v.get("fracionado", False))
-              for k, v in df.ATIVOS.items() if k not in historico.BINANCE]         # o mercado de cripto saiu da tela
+    out = _config(usuario)
+    if usuario and usuario.get("id"):
+        for sim in CONEX.simbolos_de(usuario["id"]):
+            a = CONEX.ativo_de(sim)
+            base_cfg = df.ATIVOS.get(a) or df.ATIVOS["WIN"]
+            out["ativos"].append(dict(chave="MT5:" + sim, nome="%s - MetaTrader 5 (sua corretora, tempo real)" % sim, moeda=base_cfg["moeda"],
+                                      lote=base_cfg["lote"], fracionado=base_cfg.get("fracionado", False), mercado=base_cfg.get("mercado", "b3"),
+                                      grupo="MetaTrader 5 (sua corretora)"))
+    return out
+
+
+def _config(usuario=None):
+    ativos = [dict(chave=k, nome=v["nome"], moeda=v["moeda"], lote=v["lote"], fracionado=v.get("fracionado", False),
+                   mercado=v.get("mercado", "mundo"), grupo=v.get("grupo", ""))
+              for k, v in df.ATIVOS.items() if k not in historico.BINANCE]         # cripto vem da Binance, abaixo
+    ativos += [dict(chave="BN:%sUSDT" % m, nome="%s/USDT - %s" % (m, n), moeda="US$", lote="fração da moeda", fracionado=True,
+                    mercado="cripto", grupo="Criptomoedas (Binance, tempo real)") for m, n in CRIPTOS]
     ativos += [dict(chave="CSV:" + n, nome="Arquivo: " + n, moeda="R$", lote="contrato", fracionado=False) for n in df.listar_csv(BASE)]
     ests = [dict(cod=k, nome=v["nome"], autor=v["autor"], regras=v["regras"], aguardando=v["aguardando"],
                  intraday=v["intraday"], gestao=v["gestao"], ideal=v.get("ideal", ""), semNtsl=bool(v.get("sem_ntsl")))
@@ -1299,9 +1594,11 @@ def config(usuario=None):
 
 
 # ------------------------------------------------------------------------------------------ HTTP
-PUBLICAS_GET = ("/api/acesso/estado",)
-PUBLICAS_POST = ("/api/acesso/entrar", "/api/acesso/primeiro", "/api/acesso/sair")
+PUBLICAS_GET = ("/api/acesso/estado", "/api/ea/sinal", "/api/site/termos")
+PUBLICAS_POST = ("/api/acesso/entrar", "/api/acesso/primeiro", "/api/acesso/sair", "/api/ea/estado", "/api/ea/candles",
+                 "/api/acesso/cadastrar", "/api/hotmart")
 COM_SENHA_PROVISORIA = ("/api/acesso/estado", "/api/acesso/sair", "/api/conta/senha")
+SEM_ASSINATURA = ("/api/acesso/estado", "/api/acesso/sair", "/api/conta/senha", "/api/conta", "/api/site/minha")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1323,21 +1620,37 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(dados)
 
+    def _texto(self, txt, code=200):
+        dados = txt.encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(dados)))
+        self.end_headers()
+        self.wfile.write(dados)
+
     def _corpo(self, limite):
         if "application/json" not in (self.headers.get("Content-Type") or "").lower():
             raise ValueError("pedido inválido")
         tam = int(self.headers.get("Content-Length", "0"))
         if tam <= 0 or tam > limite:
             raise ValueError("tamanho inválido")
-        return json.loads(self.rfile.read(tam).decode("utf-8"))
+        corpo = json.loads(self.rfile.read(tam).decode("utf-8"))
+        if not isinstance(corpo, (dict, list)) or (isinstance(corpo, list) and "/api/estado" not in self.path):
+            raise ValueError("pedido inválido")
+        return corpo
 
     # ---------------------------------------------------------------- acesso
     def _local(self):
-        """So atende pedidos feitos para este proprio computador (bloqueia sites externos apontando um nome para 127.0.0.1)."""
+        """So atende pedidos feitos para este proprio computador (bloqueia sites externos apontando um nome para 127.0.0.1).
+        No modo online (--publico) aceita tambem o dominio do site, com HTTPS."""
         host = (self.headers.get("Host") or "").lower()
-        ok = host in ("127.0.0.1:%d" % PORTA, "localhost:%d" % PORTA)
-        origem = self.headers.get("Origin")
-        if ok and origem and origem.lower() not in ("http://127.0.0.1:%d" % PORTA, "http://localhost:%d" % PORTA):
+        locais = ("127.0.0.1:%d" % PORTA, "localhost:%d" % PORTA)
+        doms = (DOMINIO, "www." + DOMINIO) if (PUBLICO and DOMINIO) else ()
+        ok = host in locais or host in doms
+        origem = (self.headers.get("Origin") or "").lower()
+        if ok and origem and origem not in ("http://127.0.0.1:%d" % PORTA, "http://localhost:%d" % PORTA) and \
+                origem not in tuple("https://" + d for d in doms):
             ok = False
         if not ok:
             self._json(dict(erro="pedido recusado"), 403)
@@ -1351,10 +1664,14 @@ class Handler(BaseHTTPRequestHandler):
         return None
 
     def _cookie(self, token, manter=False):
-        return "apex_s=%s; Path=/; HttpOnly; SameSite=Strict%s" % (token, "; Max-Age=%d" % auth.SESSAO_LONGA if manter else "")
+        return "apex_s=%s; Path=/; HttpOnly; SameSite=Strict%s%s" % (token, "; Max-Age=%d" % auth.SESSAO_LONGA if manter else "",
+                                                                   "; Secure" if PUBLICO else "")
 
     def _ip(self):
-        return self.client_address[0] if self.client_address else ""
+        ip = self.client_address[0] if self.client_address else ""
+        if PUBLICO and ip in ("127.0.0.1", "::1"):              # atras do proxy: o IP verdadeiro vem no cabecalho dele
+            ip = (self.headers.get("X-Forwarded-For") or ip).split(",")[0].strip()[:60]
+        return ip
 
     def _sessao(self, caminho, publicas):
         """Usuario da sessao, ou None depois de ja ter respondido 401/403."""
@@ -1366,6 +1683,9 @@ class Handler(BaseHTTPRequestHandler):
             return None
         if u["provisoria"] and caminho not in COM_SENHA_PROVISORIA:
             self._json(dict(erro="Troque a senha provisória antes de continuar.", trocar=True), 403)
+            return None
+        if not SITE.ativa(u) and caminho not in SEM_ASSINATURA and not caminho.startswith("/api/acesso/"):
+            self._json(dict(erro="Sua assinatura não está ativa.", assinar=True, checkout=SITE.checkout_para(u["email"], u.get("nome"))), 402)
             return None
         if caminho.startswith("/api/admin/") and u["papel"] != "admin":
             ACESSOS.registrar("admin_negado", u["email"], caminho, self._ip())
@@ -1393,6 +1713,31 @@ class Handler(BaseHTTPRequestHandler):
                 p = self._corpo(4000)
                 tok, usuario = ACESSOS.primeiro_acesso(p.get("senha"), ip)
                 return self._json(dict(ok=True, usuario=usuario), cookies=[self._cookie(tok)])
+            if cam == "/api/hotmart":
+                try:
+                    reg = SITE.hotmart(self.headers, self._corpo(200000), ACESSOS)
+                except PermissionError:
+                    ACESSOS.registrar("hotmart_negado", "", "hottok inválido", ip)
+                    return self._json(dict(erro="não autorizado"), 401)
+                ACESSOS.registrar("hotmart", reg.get("email", ""), "%s %s" % (reg.get("evento"), reg.get("transacao")), ip)
+                return self._json(dict(ok=True))
+            if cam == "/api/acesso/cadastrar":
+                if not SITE.cfg["cadastro_aberto"]:
+                    return self._json(dict(erro="O cadastro não está aberto. Fale com o administrador."), 403)
+                p = self._corpo(8000)
+                pend = SITE.pendente(p.get("email"))
+                assin = dict(status=pend[0], ate=pend[1], origem="hotmart", transacao="") if pend else None
+                tok, usuario = ACESSOS.cadastrar(p.get("nome"), p.get("email"), p.get("senha"), p.get("aceite") or {}, ip, assin)
+                return self._json(dict(ok=True, usuario=usuario, checkout=SITE.checkout_para(usuario["email"], usuario["nome"])),
+                                  cookies=[self._cookie(tok)])
+            if cam in ("/api/ea/estado", "/api/ea/candles"):
+                uid_ea = CONEX.uid_do_token(self.headers.get("X-Apex-Token") or q.get("token", [""])[0])
+                if not uid_ea:
+                    return self._texto("OK=0\nMOTIVO=código de conexão inválido\n", 403)
+                p = self._corpo(4 * 1024 * 1024)
+                if cam == "/api/ea/estado":
+                    return self._texto(CONEX.receber_estado(uid_ea, p))
+                return self._texto("OK=1\nRECEBIDOS=%d\n" % CONEX.receber_candles(uid_ea, p))
             if cam == "/api/acesso/sair":
                 ACESSOS.sair(self._token(), ip)
                 return self._json(dict(ok=True), cookies=["apex_s=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"])
@@ -1437,6 +1782,44 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     return self._json(dict(erro="ação desconhecida"), 400)
                 return self._json(TESTES.painel(uid, int(p.get("seq") or 0)))
+            if cam == "/api/boleta":
+                p = self._corpo(4000)
+                r = BOLETA.acao(uid, p)
+                if p.get("acao") in ("ordem", "zerar", "zerar_tudo", "inverter"):
+                    ACESSOS.registrar("boleta", u["email"], "%s %s %s" % (p.get("acao"), p.get("ativo", ""), p.get("tipo", "")), ip)
+                return self._json(r)
+            if cam == "/api/admin/site":
+                p = self._corpo(8000)
+                cfg = SITE.salvar(p)
+                ACESSOS.registrar("site_configurado", u["email"], ", ".join(sorted(k for k in p if k != "hottok")) + (" + hottok" if p.get("hottok") else ""), ip)
+                return self._json(dict(ok=True, cfg=cfg))
+            if cam == "/api/admin/assinatura":
+                p = self._corpo(2000)
+                alvo = next((x for x in ACESSOS.listar() if x["id"] == p.get("id")), None)
+                if not alvo:
+                    return self._json(dict(erro="usuário não encontrado"), 404)
+                dias = int(p.get("dias") or 0)
+                if dias > 0:
+                    base_t = max(time.time(), float(((alvo.get("assinatura") or {}).get("ate")) or 0))
+                    ACESSOS.definir_assinatura(alvo["email"], "ativa", base_t + dias * 86400, "admin", "", u, ip)
+                else:
+                    ACESSOS.definir_assinatura(alvo["email"], "inativa", time.time(), "admin", "", u, ip)
+                return self._json(dict(ok=True, usuarios=ACESSOS.listar()))
+            if cam == "/api/conexao":
+                p = self._corpo(4000)
+                if p.get("acao") == "ligar" and p.get("ligado"):
+                    tid = CONEX.publico(uid)["cfg"].get("teste")
+                    if tid and not any(str(x["id"]) == str(tid) and not x.get("ate") for x in TESTES.lista(uid)):
+                        return self._json(dict(erro="O teste escolhido não está mais ligado. Ligue um teste ao vivo e escolha ele aqui."), 400)
+                r = CONEX.acao(uid, p, ip)
+                ACESSOS.registrar("conexao", u["email"], str(p.get("acao")), ip)
+                return self._json(r)
+            if cam == "/api/regras":
+                p = self._corpo(4000)
+                txt = ",".join("%s:%g:%g" % (k, v[0], v[1]) for k, v in regras_de(p.get("regra")).items())
+                n = TESTES.trocar_regras(uid, txt)
+                ACESSOS.registrar("regra_trocada", u["email"], txt or "(nenhuma)", ip)
+                return self._json(dict(ok=True, regra=txt, testes=n))
             if cam == "/api/avisos":
                 p = self._corpo(4000)
                 cfg = TESTES.gravar_avisos(uid, p)
@@ -1497,8 +1880,17 @@ class Handler(BaseHTTPRequestHandler):
             if cam.startswith("/api/"):
                 return self._api_get(cam, q)
             u = ACESSOS.sessao(self._token())
-            if cam in ("/", "", "/index.html"):
-                caminho = "index.html" if (u and not u["provisoria"]) else "entrar.html"
+            pagina_app = lambda: ("assinar.html" if not SITE.ativa(u) else "index.html") if (u and not u["provisoria"]) else "entrar.html"   # noqa: E731
+            if PUBLICO and cam in ("/", "") and not u:
+                caminho = "site/index.html"                        # quem chega pelo endereco do site ve a pagina de vendas
+                SITE.visita(cam, self._ip(), self.headers.get("Referer"), self.headers.get("User-Agent") or "",
+                            "&".join(x for x in (url.query or "").split("&") if x.startswith("utm_")))
+            elif cam in ("/", "", "/index.html", "/app", "/entrar"):
+                caminho = pagina_app()
+            elif cam in ("/site", "/site/") or (cam.startswith("/site/") and cam.endswith(".html")):
+                caminho = "site/index.html" if cam in ("/site", "/site/") else cam.lstrip("/")
+                SITE.visita(cam, self._ip(), self.headers.get("Referer"), self.headers.get("User-Agent") or "",
+                            "&".join(x for x in (url.query or "").split("&") if x.startswith("utm_")))
             else:
                 caminho = urllib.parse.unquote(cam.lstrip("/"))
             raiz = WEB
@@ -1542,15 +1934,33 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if cam == "/api/acesso/estado":
                 est = ACESSOS.estado()
-                out = dict(primeiroAcesso=est["primeiroAcesso"], logado=bool(u), usuario=u or None, versao=VERSAO)
+                out = dict(primeiroAcesso=est["primeiroAcesso"], logado=bool(u), usuario=u or None, versao=VERSAO, site=SITE.publico_cfg(), publico=PUBLICO)
                 if est["primeiroAcesso"]:
                     out["adminEmail"] = est["adminEmail"]      # so aparece enquanto ninguem definiu a senha
                 return self._json(out)
+            if cam == "/api/site/termos":
+                return self._json(dict(termos=assinaturas.TERMOS, versao=assinaturas.TERMOS_VERSAO, site=SITE.publico_cfg()))
+            if cam == "/api/ea/sinal":
+                uid_ea = CONEX.uid_do_token(self.headers.get("X-Apex-Token") or q.get("token", [""])[0])
+                if not uid_ea:
+                    return self._texto("OK=0\nMOTIVO=código de conexão inválido\n", 403)
+                return self._texto(CONEX.sinal(uid_ea, TESTES.para_ea))
             uid = u["id"]
+            if cam == "/api/site/minha":
+                return self._json(dict(usuario=u, ativa=SITE.ativa(u), site=SITE.publico_cfg(), checkout=SITE.checkout_para(u["email"], u.get("nome"))))
+            if cam == "/api/admin/site":
+                us = ACESSOS.listar()
+                ativos = [x for x in us if x["papel"] != "admin" and SITE.ativa(dict(x, papel="usuario")) and (x.get("assinatura") or {}).get("status") == "ativa"]
+                return self._json(dict(cfg=SITE.admin_cfg(), compras=SITE.compras(150)[::-1], visitas=SITE.resumo_visitas(30),
+                                       resumo=dict(usuarios=len(us), assinantes=len(ativos), online=sum(1 for x in us if x.get("online")),
+                                                   cadastros30=sum(1 for x in us if (x.get("criado") or 0) > time.time() - 30 * 86400)),
+                                       publico=PUBLICO, dominio=DOMINIO))
+            if cam == "/api/conexao":
+                return self._json(CONEX.publico(uid, PORTA))
             if cam == "/api/config":
                 return self._json(config(u))
             if cam == "/api/sim":
-                return self._json(api_sim(q))
+                return self._json(api_sim(q, uid))
             if cam == "/api/testes":
                 seq = _int(q, "seq", 0)
                 espera = max(0, min(25, _int(q, "espera", 0)))
@@ -1565,6 +1975,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(api_ia(q))
             if cam == "/api/ajuste":
                 return self._json(api_ajuste(q))
+            if cam == "/api/boleta":
+                return self._json(BOLETA.estado(uid, q.get("ativo", [None])[0]))
+            if cam == "/api/testar":
+                return self._json(api_testar(q))
+            if cam == "/api/minhas":
+                return self._json(api_minhas(q))
+            if cam == "/api/cripto/mercado":
+                return self._json(api_cripto_mercado())
             if cam == "/api/gestoes":
                 return self._json(api_gestoes(q))
             if cam == "/api/metas":
@@ -1595,7 +2013,7 @@ class Handler(BaseHTTPRequestHandler):
             if cam == "/api/radar":
                 return self._json(api_radar(q))
             if cam == "/api/noticias":
-                return self._json(noticias.buscar(q.get("forcar", ["0"])[0] == "1"))
+                return self._json(noticias.buscar(q.get("forcar", ["0"])[0] == "1", "cripto" if q.get("mercado", [""])[0] == "cripto" else "b3"))
             if cam == "/api/base":
                 with historico._TRAVA:
                     est = dict(historico.ESTADO)
@@ -1677,6 +2095,11 @@ class Servidor(ThreadingHTTPServer):
             super().handle_error(request, client_address)
 
 
+SITE = assinaturas.Site(df.pasta_dados(BASE))
+PUBLICO = "--publico" in ARGS                      # na internet, atras de um proxy com HTTPS (Caddy/Nginx)
+DOMINIO = (_arg("--dominio") or "").strip().lower()
+CONEX = corretora.Conexao(df.pasta_dados(BASE), lambda uid: pasta_de(uid), lambda a, p: _ler_json(a, p), lambda a, o: _gravar_json(a, o))
+BOLETA = boleta.Boleta(lambda c, tf: carregar(c, tf), df.sessao_cfg, lambda B, cfg, c: formando(B, cfg, c), lambda uid: pasta_de(uid))
 _aquecido = threading.Event()
 
 
@@ -1700,9 +2123,10 @@ def aquecer():
     for t in ts:
         t.join()
     for tf in (15, 60):
-        for chave in chaves:
-            um(chave, tf)
-            time.sleep(1.0)
+        for chave in ("WIN", "WDO", "PETR4", "VALE3", "BOVA11", "EURUSD", "XAUUSD", "USTEC"):
+            if chave in df.ATIVOS:
+                um(chave, tf)
+                time.sleep(1.5)
 
 
 def main():
@@ -1719,10 +2143,10 @@ def main():
         print("Senha do administrador removida. Abra o robo: ele vai pedir para criar uma senha nova.")
         return
     PORTA = porta_livre(int(_arg("--porta", 8765)))
-    srv = Servidor(("127.0.0.1", PORTA), Handler)
+    srv = Servidor((_arg("--ouvir") or "127.0.0.1", PORTA), Handler)
     url = "http://127.0.0.1:%d/" % PORTA
     print("=" * 66)
-    print(" ROBO APEX %s - informativo e simulador (nao envia ordens a corretora)" % VERSAO)
+    print(" ROBO APEX %s - estrategias de day trade: B3, opcoes e cripto (estudo e simulacao)" % VERSAO)
     print(" Tela: %s" % url)
     print(" Dados e desenhos: %s" % df.pasta_dados(BASE))
     print(" Feche esta janela para encerrar o robo.")

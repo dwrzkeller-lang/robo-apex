@@ -1,4 +1,4 @@
-/* ROBÔ APEX — aba PLANO: as regras de risco que valem para o robô inteiro (tamanho pelo risco, limite de perda e
+/* ROBÔ APEX: aba PLANO: as regras de risco que valem para o robô inteiro (tamanho pelo risco, limite de perda e
    meta do dia, modo seletivo), a situação de hoje, o que cada regra fez no período do topo (com × sem) e a conta
    "meta × realidade": o que é provável num mês com as operações que a estratégia realmente fez. */
 (() => {

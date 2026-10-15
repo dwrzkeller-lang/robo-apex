@@ -1,4 +1,4 @@
-/* ROBÔ APEX — aba SIMULAÇÃO: roda a estratégia escolhida (ou TODAS) num período passado com dados reais,
+/* ROBÔ APEX: aba SIMULAÇÃO: roda a estratégia escolhida (ou TODAS) num período passado com dados reais,
    mostra quanto teria ganhado/perdido e permite assistir candle a candle como se fosse ao vivo. */
 (() => {
   "use strict";

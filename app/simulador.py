@@ -129,6 +129,7 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
     loss_dia, meta_dia = float(pl.get("loss_dia") or 0.0), float(pl.get("meta_dia") or 0.0)
     seletivo = bool(pl.get("seletivo"))
     prot = set(pl.get("prot") or ())                 # protecoes do plano: folga, tol, corte, forca (ver PROTECOES)
+    regras = dict(pl.get("regras") or {})             # cod -> (fator do stop, alvo em vezes o risco): a "Minha regra" do usuario
     h_ini, h_fim, h_zer = cfg["hora_inicio"], cfg["hora_fim"], cfg["hora_zeragem"]
     d, hm = G.d, G.hm
     codigos = [c for c in codigos if not (ESTRATEGIAS[c]["intraday"] and not G.intraday)]
@@ -273,7 +274,7 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
 
     def motivo_stop(p):
         if p["stop_manual"] is not None and abs(p["stop"] - p["stop_manual"]) < tick / 2:
-            return "stop ajustado na mão"
+            return "stop da sua edição" if p.get("manual") == "edicao" else "stop ajustado na mão"
         if p["stop"] > p["stop_ini"] + 1e-9:
             if abs(p["stop"] - p["ent"]) < tick / 2:
                 return "stop no 0x0"
@@ -291,8 +292,9 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
         # os alvos saem do risco TECNICO (sem a folga/tolerancia do plano): alargar o stop nao empurra o alvo para longe
         alvo1, alvo, rot, alvo2 = alvos_da_gestao(g, preco, max(tick, risco - od.get("extra", 0.0)), alvos_g)
         if od.get("alvo_manual") is not None:               # alvo movido na mao antes da entrada: vira o alvo unico
-            alvo, rot, alvo2 = od["dir"] * od["alvo_manual"], "alvo ajustado na mão", None
-            if alvo1 is not None and alvo1 >= alvo:
+            alvo, rot, alvo2 = od["dir"] * od["alvo_manual"], ("alvo da sua regra" if od.get("regra") and not od.get("editado")
+                                                                else "alvo da sua edição" if od.get("editado") else "alvo ajustado na mão"), None
+            if od.get("regra") or (alvo1 is not None and alvo1 >= alvo):
                 alvo1 = None
         if (g in ("fixo", "fibo", "fibo3") or od.get("alvo_manual") is not None) and (alvo is None or alvo <= preco + tick):
             od.update(status="cancelada", motivo="o preço já passou do alvo", i_fim=i)
@@ -324,8 +326,8 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                  alvo=alvo, alvo1=alvo1, rot=rot, gest=g, frac=1.0, pts=0.0,
                  parcial=False, i_sinal=od["i_sinal"], i_ent=i, sair=None, maxfav=preco, motivo="", info=od["info"],
                  q=q, custo_pts=custo_p, esc=slip if esc_ent is None else esc_ent, frac_parc=fp1, ctx=od.get("ctx", 0),
-                 alvo2=alvo2, parcial2=False, frac_parc2=fp2, f=od.get("f"), manual=manual,
-                 stop_manual=stop_g if od.get("stop_manual") else None)
+                 alvo2=alvo2, parcial2=False, frac_parc2=fp2, f=od.get("f"), manual=manual or ("edicao" if od.get("editado") else None),
+                 stop_manual=stop_g if od.get("stop_manual") else None, limite=od["tipo"] == "limite")
         s["pos"] = p
         od.update(status="executada", i_fim=i, preco=od["dir"] * preco, q=q)
         for outra in s["pend"]:
@@ -375,6 +377,10 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
         o, h, l, c = ohlc or (Gp.o[i], Gp.h[i], Gp.l[i], Gp.c[i])
         ent, R = p["ent"], p["risco"]
         na_entrada = p["i_ent"] == i
+        if na_entrada and p.get("limite") and ohlc is None:
+            # compra limitada: no candle em que executou nao se sabe se a maxima veio antes ou depois da execucao;
+            # do lado conservador, so o fechamento conta como preco alcancado depois da entrada
+            h = max(ent, c)
         if not na_entrada and o <= p["stop"]:
             return fechar(s, p, p["frac"], o - slip, i, motivo_stop(p) + " (abriu além)", slip)
         if l <= p["stop"]:
@@ -478,6 +484,8 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                         od.update(stop=a["valor"], stop_manual=True)
                     else:
                         od.update(alvo=a["valor"], alvo_manual=a["valor"])
+                    if a.get("ed"):
+                        od["editado"] = True                 # edicao feita no "E se...": a operacao fica marcada com ✎
 
     def na_hora(s, lista, i):
         """Cancelar e entrar na mao: valem no instante do clique (dentro do candle i). Devolve o ajuste de entrada usado."""
@@ -557,16 +565,6 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                     od["er"] = round(G.er[i], 2)
                     if seletivo and not passa_seletivo(G, cod, i, od["dir"]):
                         continue
-                    if "curto" in prot and G.atr[i]:
-                        # limite de risco: nenhum stop fica a mais de 1 ATR da entrada. Os alvos em preco (Fibonacci, gap)
-                        # nao mudam; os alvos em multiplos do risco (2:1, 3:1...) passam a valer sobre o risco menor.
-                        ref0 = od["gatilho"] if od["gatilho"] is not None else G.c[i]
-                        teto = max(2 * tick, round(STOP_MAX_ATR * G.atr[i] / tick) * tick)
-                        if abs(ref0 - od["stop"]) > teto + tick / 2:
-                            if STOP_MAX_MODO == "pula":
-                                continue
-                            od["stop"] = ref0 - od["dir"] * teto
-                            od["info"] = (od.get("info") or "") + " · stop encurtado para 1 ATR"
                     if "folga" in prot or "tol" in prot:
                         ref0 = od["gatilho"] if od["gatilho"] is not None else G.c[i]
                         tec = abs(ref0 - od["stop"])
@@ -578,6 +576,30 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                         if extra > 0:
                             od["stop"] = od["stop"] - od["dir"] * extra
                             od["extra"] = extra
+                    if "curto" in prot and G.atr[i]:
+                        # limite de risco: nenhum stop fica a mais de 1 ATR da entrada. Os alvos em preco (Fibonacci, gap)
+                        # nao mudam; os alvos em multiplos do risco (2:1, 3:1...) passam a valer sobre o risco menor.
+                        ref0 = od["gatilho"] if od["gatilho"] is not None else G.c[i]
+                        teto = max(2 * tick, round(STOP_MAX_ATR * G.atr[i] / tick) * tick)
+                        if abs(ref0 - od["stop"]) > teto + tick / 2:
+                            if STOP_MAX_MODO == "pula":
+                                continue
+                            od["stop"] = ref0 - od["dir"] * teto
+                            od["extra"] = 0.0                  # com o teto, os alvos sao medidos sobre o risco final
+                            od["info"] = (od.get("info") or "") + " · stop encurtado para 1 ATR"
+                    rg = regras.get(cod)
+                    if rg:
+                        # "Minha regra" (feita no E se...): stop a fs vezes a distancia tecnica e, se ra > 0, alvo unico a
+                        # ra vezes o risco novo. Vale para todas as operacoes da estrategia: passadas, a aberta e as proximas.
+                        fs, ra = rg
+                        ref0 = od["gatilho"] if od["gatilho"] is not None else G.c[i]
+                        novo_r = max(2 * tick, round(fs * abs(ref0 - od["stop"]) / tick) * tick)
+                        od["stop"] = ref0 - od["dir"] * novo_r
+                        if ra > 0:
+                            od["alvo_manual"] = ref0 + od["dir"] * round(ra * novo_r / tick) * tick
+                            od["alvos"] = None
+                        od["regra"] = True
+                        od["info"] = (od.get("info") or "") + " · com a sua regra"
                     repetida = False
                     for velha in list(s["pend"]):
                         if (velha["est"] == cod and od["tipo"] == "limite" and velha["tipo"] == "limite" and velha["dir"] == od["dir"]
@@ -604,6 +626,9 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                               q=tamanho(s, abs(ref), risco_prev, custo_pts + 2.0 * custo_pct * abs(ref)) if risco_prev > 0 else contratos)
                     if am is not None:
                         od["alvo2"] = sg * am
+                    if od.get("regra") and od.get("alvo_manual") is not None:         # regra do usuario: um alvo so
+                        od.update(alvo=od["alvo_manual"], alvo1=None)
+                        od.pop("alvo2", None)
                     od["f"] = caracteristicas(Gs[sg], G, i, od, ref, cfg)    # retrato do momento do sinal (para a IA)
                     od["k"] = len(ordens)                                    # posicao na lista (usada na retomada)
                     ordens.append(od)

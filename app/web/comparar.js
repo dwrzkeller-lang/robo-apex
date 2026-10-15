@@ -1,4 +1,4 @@
-/* ROBÔ APEX — aba COMPARAR: todas as estratégias em todos os ativos (tempo gráfico e gestão do topo).
+/* ROBÔ APEX: aba COMPARAR: todas as estratégias em todos os ativos (tempo gráfico e gestão do topo).
    Roda em segundo plano no servidor; a tela só consulta o andamento. Nada começa sozinho. */
 (() => {
   "use strict";

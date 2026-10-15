@@ -1,19 +1,62 @@
 # ROBÔ APEX
 
-Robô **informativo** de day trade: mostra quando uma estratégia arma uma entrada (entrada, stop e alvos), simula com
-dados reais quanto ela teria ganhado ou perdido **depois dos custos**, vigia testes ao vivo mesmo com a tela fechada
-(**Sentinela**), aprende com as operações já feitas e diz, com a nota dela à vista, qual a chance de cada sinal
-(**IA**), ajuda a montar um **plano de risco**, tem uma aba para estudar **opções da B3** e traz as notícias e a agenda
-econômica que mexem no mercado. **Não envia ordens para a corretora.**
+Robô de **estratégias de day trade** para **ações da B3, mini índice e mini dólar, opções da B3 e criptomoedas**. Mostra
+no gráfico onde cada estratégia entra, onde fica o stop e onde estão os alvos; testa no passado **com custos reais**;
+deixa assistir o **replay** de cada operação e editar o stop e o alvo para ver o que teria acontecido; roda **testes ao
+vivo** com aviso no celular; tem uma **boleta simulada** para comprar e vender na hora sem dinheiro; e, se o usuário
+quiser, se liga à **conta dele no MetaTrader 5** para enviar as ordens, sempre por decisão dele. É uma ferramenta de
+**estudo e análise**: não é recomendação de investimento e não garante resultado.
 
 Núcleo: setups do **Mario Pisani** com os ideais do **Oliver Velez**, o modelo **OGRO** (pivô + Fibonacci, no estilo
-de André Machado), duas estratégias de **retração e projeção de Fibonacci** com médias alinhadas, o **Keltner em dia
-lateral do Adriano Mendes (XTraders)** e quatro estratégias tiradas de estudos e fóruns (RSI-2 de Connors, ORB de
-Zarattini & Aziz, fechamento de gap e o momentum intraday da "faixa de ruído"). A Teoria de Dow aparece só como leitura.
+de André Machado), a leitura de **fundos ascendentes com projeção de Fibonacci**, os clássicos **Supertrend, Squeeze,
+Tartarugas, NR7 e Turtle Soup**, o **Keltner em dia lateral do Adriano Mendes (XTraders)** e estratégias tiradas de
+estudos (RSI-2 de Connors, ORB de Zarattini & Aziz, fechamento de gap e o momentum da "faixa de ruído").
 
 ![Robô Apex em ação](prints/00_ROBO_APEX_em_acao.gif)
 
 ---
+
+## Novidades da versão 3.0
+
+- **Cara nova e mais simples.** Topo com o mercado (**Bolsa · Opções · Cripto**), ativo, tempo, estratégia, período e
+  dois botões claros: **▶ Testar estratégia** e **★ Minhas estratégias**. O "Rodar robô" que testava tudo de uma vez saiu.
+  Painel lateral com 6 abas: **Agora, Resultado** (resumo, dia a dia e comparar), **Plano, Aprender, Notícias e Conectar**.
+- **Tutorial de 1 minuto** na primeira vez (e no botão **?** do topo).
+- **Testar estratégia:** a estratégia escolhida em 5, 15 e 60 minutos, com o resultado em reais, mês a mês, semana a
+  semana, ganho e perda médios, maior ganho, maior perda, a curva e as últimas operações. Dali dá para ver no gráfico
+  ou ligar o teste ao vivo.
+- **Minhas estratégias:** marque as suas favoritas (elas ficam no topo da lista) e veja de uma vez como cada uma foi e
+  o que cada uma está fazendo agora. "Minhas estratégias juntas" substitui o antigo "Todas".
+- **Boleta simulada ao vivo:** compre e venda na hora, com contratos, stop e alvo, a mercado, limitada ou stop; preço
+  médio, zerar e inverter; as linhas da posição no gráfico, com stop e alvo arrastáveis; resultado em reais, já com custos.
+- **Cripto de volta, numa tela própria:** Bitcoin, Ethereum, Solana e mais 13 moedas da Binance em tempo real, com as
+  mesmas estratégias, gestão e testes, o painel "Mercado cripto · 24 horas" e notícias de cripto (7 fontes).
+- **Mais ativos:** 12 ações da B3 (PETR4, VALE3, ITUB4, BBDC4, BBAS3, ABEV3, B3SA3, WEGE3, PRIO3, MGLU3, SUZB3, ELET3),
+  BOVA11, S&P 500 e Dow Jones.
+- **5 estratégias novas, de risco curto e ganho longo (E19 a E23):** Supertrend, Squeeze (TTM / LazyBear), Tartarugas
+  (rompimento de 20), NR7 de Toby Crabel e Turtle Soup de Linda Raschke. Teste com custos em 11 ativos: a melhor foi a
+  das Tartarugas (−0,04R por operação, 15 min no zero); Supertrend e Squeeze ficaram positivas só no WIN/WDO
+  (+0,14R e +0,12R, amostra pequena); NR7 e Turtle Soup perderam. Nenhuma tem vantagem comprovada.
+- **Editor "E se…" refeito:** agora **salva de verdade**. A edição vai para o simulador do robô e vale na lista, no
+  gráfico, no total do período, no dia a dia e nos testes ao vivo. **Usar como regra** aplica o mesmo ajuste
+  (proporcional) a todas as operações da estratégia: as passadas, a aberta e as próximas.
+- **Conectar à corretora (MetaTrader 5):** o usuário entra na corretora pelo MetaTrader dele, instala o EA
+  **RoboApex.mq5**, aceita o termo e liga o envio de ordens. O EA manda ao robô os candles da corretora em tempo real
+  (o ativo aparece como **MT5:símbolo**) e segue o teste ao vivo escolhido. Vem travado em conta **demo**, com lote
+  máximo, perda máxima no dia e botão liga/desliga. O robô nunca vê a senha da corretora.
+- **Online e por assinatura:** o mesmo programa roda num servidor (`--publico --dominio`): página de vendas na raiz,
+  cadastro com aceite dos termos (lidos até o fim, com aviso de risco e confirmação de maioridade), assinatura pela
+  Hotmart (aprovada libera, reembolso e cancelamento tiram) e o painel **Vendas e site** do administrador com
+  assinantes, compras, visitas e de onde vieram. Veja **PUBLICAR-ONLINE.md**.
+- **Página de vendas** (`app/web/site`): prints reais do robô com o nome das estratégias borrado, recursos, preço de
+  R$ 49,99/mês, perguntas frequentes, aviso de risco, termos e privacidade.
+- **Correções da revisão de código:** teste ao vivo de ativo em dólar dimensionava 5 vezes maior; entrada por ordem
+  limitada contava a máxima de antes da execução; parar um teste logo depois de abrir podia apagar o histórico; o stop
+  curto vinha antes da folga e o risco final passava de 1 ATR; respostas compartilhadas entre pedidos ao mesmo tempo;
+  avisos de ativos em dólar trocando de moeda; links de notícia que não eram da web; resultado de ajuste da IA caindo na
+  estratégia errada; a Simulação mostrando os candles ao vivo depois de um replay.
+
+![Testar estratégia](prints/27_TESTAR_ESTRATEGIA.png)
 
 ## Novidades da versão 2.6
 
@@ -158,7 +201,7 @@ mudar o saldo. Nada disso é "ganhador" nesses dados: são opções para testar 
 - **Candles do seu jeito:** cores de alta e de baixa, cheio ou vazado e a opção de **colorir pela tendência** das médias.
 - **"?" em tudo:** pequenos pontos de interrogação e dicas ao passar o mouse explicam cada botão e cada número, e o
   botão **Como funciona** abre uma minijanela com o desenho e o **passo a passo** de cada estratégia.
-- **Painel reorganizado:** abas com ícones, cartão do momento com a régua stop — entrada — alvo, quadrinhos de número.
+- **Painel reorganizado:** abas com ícones, cartão do momento com a régua stop, entrada, alvo, quadrinhos de número.
 - **Sem travar:** a tela pede ao robô só o trecho novo dos candles a cada 5 s, cada ativo é renovado em segundo plano
   (um site lento não segura os outros) e um pedido que não volta é abandonado em vez de congelar a tela.
 
@@ -184,43 +227,31 @@ minutos. O robô só atende pedidos feitos neste computador.
 
 ## A tela
 
-![Painel Ao vivo](prints/02_AO_VIVO_painel.png)
+![Robô Apex 3.0](prints/28_TELA_3_0.png)
 
-**Topo (uma linha só):** ativo · tempo gráfico · **estratégia** (menu com as 15, ou **▶ Todas**) · **período** ·
-contratos · **⚙** (gestão, capital, stops por dia, sons, aviso do Windows) · **⚡ RODAR ROBÔ** · luz verde = ao vivo ·
-**conta**.
+**Topo:** mercado (**Bolsa · Opções · Cripto**) · ativo · tempo gráfico · **estratégia** (as suas ★ primeiro, depois
+todas, e "★ Minhas estratégias juntas") · **período** · contratos · **▶ Testar estratégia** · **★ Minhas estratégias** ·
+**⚙** (gestão, capital, stops por dia, sons, aviso do Windows) · **?** (tutorial) · luz verde = ao vivo · **conta**.
 
-**Período (Hoje · 5 dias · 1 mês · 3 meses · Tudo · 📅 datas):** vale para tudo. O gráfico mostra aquele período e
-todos os números (resultado, acerto, pior queda, calendário, simulação, comparação, plano) passam a ser daquele período.
-Escolhendo datas no passado, o cartão mostra a situação no fim do período (luz laranja = histórico).
+**Período (Hoje · 5 dias · 1 mês · 3 meses · Tudo · 📅 datas):** vale para tudo: gráfico, resultado, dia a dia,
+testes e comparação.
 
-**▶ Todas:** as 18 estratégias procuram entrada ao mesmo tempo, com **uma operação por vez** (a primeira ordem que
-executar vale; as outras são canceladas). Clique de novo para voltar à estratégia anterior.
-
-**⚡ RODAR ROBÔ:** testa todas as estratégias em 5, 15 e 60 min no ativo e abre uma janela com a **estratégia do
-momento** (a que mais rendeu por dia nos últimos 20 pregões, puxada para o histórico todo para não escolher por sorte
-de uma semana) e a **projeção** para o próximo mês e até 31/12 (Monte Carlo com as operações reais dela: resultado mais
-provável, faixa de 8 em 10 cenários, chance de terminar no prejuízo e a queda que pode aparecer no caminho). Se nenhuma
-tiver histórico positivo com pelo menos 20 operações, ele diz **FICAR DE FORA**.
+**Minhas estratégias juntas:** as suas favoritas procuram entrada ao mesmo tempo, com **uma operação por vez** (a
+primeira ordem que executar vale; as outras são canceladas).
 
 | Aba | O que faz |
 |---|---|
-| **Ao vivo** | Cartão "o que fazer agora" (aguardando, atenção, ordem armada, em operação ou **PARE POR HOJE**) com a régua stop — entrada — alvo, tamanho e risco em dinheiro e em % do capital e a chance estimada pela IA; o **teste ao vivo**; a **central de sinais**; o resultado da estratégia no período (curva, custos, veredito e os botões de **gestão**); e a lista de **operações**: clique numa para ver no gráfico e ler o passo a passo. Atualiza a cada 5 s. |
-| **IA** | O que o robô aprendeu neste ativo: selo (aprovada ou não fora da amostra), o sinal de agora, o que teria acontecido seguindo as notas, lições, erros e acertos, o que mais pesa na nota e o diário de aprendizado. |
-| **Plano** | As regras de risco do robô inteiro, o estado do dia, a calculadora de tamanho, o efeito de cada regra e a conta meta × realidade. |
-| **Simulação** | Resultado do período com curva do capital, resultado por mês e cada operação (CSV). **Assistir candle a candle** faz o gráfico andar como se fosse ao vivo. |
-| **Calendário** | Resultado de cada dia; clique no dia para ver cada operação. Com Todas dá para ver cada estratégia sozinha. |
-| **Comparar** | As 18 estratégias + Todas em todos os ativos, no período escolhido, colorido pelo veredito. |
-| **Notícias** | **Agenda econômica** da semana e as notícias (Banco Central, Valor, InfoMoney, Money Times, g1, E-Investidor, Investing e Google Notícias), com o impacto estimado. |
-| **Opções** | Grade de opções da B3, gregas, volatilidade e cinco estruturas com gráfico de ganho e perda. |
+| **Agora** | O que fazer agora (aguardando, atenção, ordem armada, em operação ou **PARE POR HOJE**), a **boleta simulada**, o resultado do período numa linha, o **teste ao vivo** com os avisos dos seus testes e a lista de **operações** (clique numa para ver no gráfico, o replay e o editor E se). No modo Cripto, o painel do mercado cripto. |
+| **Resultado** | **Resumo e simulação** (resultado do período, gestões, **gestão × stop**, simulação candle a candle), **Dia a dia** (calendário) e **Comparar estratégias** (todas em todos os ativos). |
+| **Plano** | As regras de risco do robô inteiro, as proteções do stop, o estado do dia e a conta meta × realidade. |
+| **Aprender** | O que a IA aprendeu neste ativo, o ajuste de gestão aprovado na prova e as **suas lições** do E se. |
+| **Notícias** | Agenda econômica e notícias do mercado (no modo Cripto, as de cripto), com o impacto estimado. |
+| **Conectar** | Ligação com a sua conta da corretora pelo MetaTrader 5 (EA), com termo, limites e registro. Profit: scripts NTSL. |
+| **Opções** | (no modo Opções) grade de opções da B3, gregas, volatilidade e estruturas com gráfico de ganho e perda. |
 
-**"?" e dicas:** passe o mouse num botão para ler o que ele faz; os pontinhos **?** ao lado dos rótulos e dos números
-explicam o que aquilo quer dizer (clique também abre, para quem usa toque).
+**Botão direito no gráfico:** fundo, linhas de grade, mira, linha do preço, resultados em dinheiro ou em R.
 
-**Como funciona:** o botão no painel Ao vivo abre a minijanela da estratégia escolhida, com o desenho do setup
-(compra e venda), o passo a passo numerado, a gestão e onde ela costuma se encaixar.
-
-![Minijanela da estratégia](prints/07_COMO_FUNCIONA_E12.png)
+**"?" e dicas:** passe o mouse num botão para ler o que ele faz; os **?** explicam cada número.
 
 ### Teste ao vivo, Sentinela e central de sinais
 
@@ -355,6 +386,10 @@ depois de um evento de impacto alto, o cartão "o que fazer agora" avisa.
 | EUR/USD, GBP/USD, USD/JPY, AUD/USD, **XAU/USD** | Dukascopy (feed ECN, candles de 1 min) + hoje pelo Yahoo, com nível ajustado | 5 meses |
 | **USTEC** (Nasdaq 100, horário de Nova York) | Dukascopy + hoje pelo Yahoo | 5 meses |
 | **JP225** (Nikkei 225, horário de Tóquio) | Dukascopy + hoje pelo Yahoo | 5 meses |
+| Ações da B3 (PETR4, VALE3, ITUB4, BBDC4, BBAS3, ABEV3, B3SA3, WEGE3, PRIO3, MGLU3, SUZB3, ELET3) e BOVA11 | Yahoo, **com cerca de 15 min de atraso**; lote de 100 ações | 60 dias, e cresce |
+| **Criptomoedas** (BTC, ETH, SOL, BNB, XRP, DOGE, ADA, AVAX, LINK, TRX, LTC, DOT, SUI, TON, PEPE, SHIB) | Binance, **tempo real**, 24 horas | até 1 ano |
+| **MT5:símbolo** (qualquer ativo da sua corretora) | Candles de 1 minuto enviados pelo EA do MetaTrader 5, **tempo real** | o histórico que o MetaTrader tiver |
+| S&P 500, Dow Jones (horário de Nova York) | Yahoo | 60 dias |
 | WIN, WDO (substitutos: Ibovespa à vista e USD/BRL), prata, petróleo | Yahoo, **com cerca de 15 min de atraso** | 60 dias, e cresce: cada download fica guardado |
 | Qualquer ativo | CSV exportado do Profit/MetaTrader na pasta `dados` | o que você exportar |
 
@@ -364,7 +399,7 @@ candles de hoje são renovados em segundo plano: o Yahoo a cada ~20 s (o robô l
 minuto para não ser bloqueado). Para o WIN e o WDO **reais e em tempo real**, use os scripts no Profit (abaixo) ou
 exporte o gráfico do Profit em CSV: nenhuma fonte gratuita entrega o mini-índice e o mini-dólar ao vivo.
 
-## As 18 estratégias
+## As 23 estratégias
 
 | | Estratégia | Autor / fonte | Regras (compra; a venda é o espelho exato) | Onde se encaixa |
 |---|---|---|---|---|
@@ -386,8 +421,13 @@ exporte o gráfico do Profit em CSV: nenhuma fonte gratuita entrega o mini-índi
 | E16 | **Pivô de fundos ascendentes** | Estrutura (fundos e topos ascendentes) + projeção de Fibonacci em cima do topo | Preço e MM20 acima da MM200; fundo A mais alto que o anterior e perna A→B que superou o topo anterior; correção de 23,6% a 61,8%; compra 1 tick acima de B; stop abaixo do fundo da correção; alvos B + 61,8%, B + 100% e B + 161,8% da perna | 60 min; no teste empatou com a E9 (−0,15R; 60 min no zero) |
 | E17 | **Gatilho no fundo ascendente** | Mesma estrutura, entrada antecipada | Correção de 38,2% a 61,8% da perna; candle de alta que fecha acima da máxima anterior, colado no fundo; stop curto abaixo do fundo; mesmos alvos em cima de B; só arma se o alvo 1 pagar 1,5 vez o risco | 60 min; no teste −0,18R (acerta 34%, ganha +1,4R quando acerta) |
 | E18 | **Rompimento e reteste do pivô** | Rompimento e reteste, com os alvos da projeção | Topo B rompido por fechamento; em até 15 candles o preço volta a encostar em B sem fechar abaixo; candle de alta acima de B; stop abaixo do reteste; mesmos alvos | 15 e 60 min; no teste foi a mais fraca (−0,27R) |
+| E19 | **Supertrend: virada a favor** | Supertrend (Olivier Seban), um dos mais usados no TradingView | ATR 10, multiplicador 2; virada para alta acima da MM200; compra acima do candle da virada; stop na linha (no máximo 1,5 ATR); sai quando o Supertrend vira contra | WIN/WDO; no teste −0,13R no geral, +0,14R no WIN/WDO |
+| E20 | **Squeeze: compressão que dispara** | TTM Squeeze (John Carter) e Squeeze Momentum (LazyBear) | Bollinger dentro do Keltner por 6+ candles; dispara com o momento positivo e subindo, acima da MM20; stop na mínima dos 5 últimos (até 1,5 ATR); sai quando o momento perde força | 60 min e WIN/WDO; −0,10R no geral |
+| E21 | **Tartarugas: rompimento de 20** | Canal de Donchian e as Tartarugas (Richard Dennis) | A favor da MM200 e da MM20; compra stop acima da máxima de 20 candles; stop no mais perto entre a mínima de 10 e 1,5 ATR; sai abaixo da mínima de 10 | 15 e 60 min; a melhor das novas (−0,04R) |
+| E22 | **NR7: menor candle dos últimos 7** | Toby Crabel (1990) | Tendência de alta; candle mais estreito dos últimos 7; compra acima dele; stop abaixo (mín. 0,5 ATR); alvo 3R | para estudo (−0,27R) |
+| E23 | **Turtle Soup: falso rompimento** | Linda Raschke e Larry Connors (1995) | Mínima nova de 20 candles que fecha de volta acima; compra acima do candle; stop abaixo da mínima nova; alvo 2R | 15 e 60 min (−0,1R) |
 
-"Onde se encaixa" é o ponto de partida; o **⚡ RODAR ROBÔ** mede isso de novo com os dados de hoje. Da E11 à E18, as
+"Onde se encaixa" é o ponto de partida; o **▶ Testar estratégia** mede isso de novo com os dados de hoje. Da E11 à E23, as
 estratégias existem só no aplicativo (sem script do Profit).
 
 Filtros comuns: risco entre 0,3 e 2,5 ATR nas estratégias de Pisani/Velez, no OGRO e no Keltner (a E6, a E7, a E8, a
@@ -519,7 +559,7 @@ Opções da linha de comando: `--porta N`, `--sem-janela`, `--sem-base`, `--base
 ## Fontes
 
 - Mario Pisani, apostila 2022; Oliver Velez, apostila de análise técnica.
-- André Machado (Ogro de Wall Street): pivôs, Fibonacci e médias — [Projeto Os 10%](https://projetoos10porcento.com.br/aprenda-com-o-ogro-de-wall-street-a-dominar-ranges-e-breakouts-para-entradas-mais-seguras/),
+- André Machado (Ogro de Wall Street): pivôs, Fibonacci e médias, [Projeto Os 10%](https://projetoos10porcento.com.br/aprenda-com-o-ogro-de-wall-street-a-dominar-ranges-e-breakouts-para-entradas-mais-seguras/),
   [Eu Quero Investir](https://euqueroinvestir.com/educacao-financeira/day-touro-andre-machado-ogro-de-wall-street).
   A E9 é uma leitura objetiva da regra descrita, não o método oficial dele.
 - **Fibonacci (E12, E13 e as ferramentas de desenho):** ajuda do TradingView para a
@@ -539,17 +579,17 @@ Opções da linha de comando: `--porta N`, `--sem-janela`, `--sem-base`, `--base
   [o teste dele](https://www.adamhgrimes.com/testing-fibonaccis-12/);
   [testes econométricos de retrações](https://paperswithbacktest.com/strategies/can-returns-breed-like-rabbits-econometric-tests-for-fibonacci-retracements).
   O nosso teste chegou à mesma conclusão.
-- Adriano Mendes (XTraders): [canal no YouTube](https://www.youtube.com/@xtraders) — aula "Keltner: o segredo pra
+- Adriano Mendes (XTraders): [canal no YouTube](https://www.youtube.com/@xtraders), aula "Keltner: o segredo pra
   operar em dias laterais". A E10 é uma leitura objetiva dessa aula, não o método oficial dele.
-- Larry Connors e Cesar Alvarez, *Short Term Trading Strategies That Work* (2008) — [QuantifiedStrategies](https://www.quantifiedstrategies.com/rsi-2-strategy/).
-- Zarattini & Aziz (2023), *Can Day Trading Really Be Profitable?* — [Concretum](https://concretumgroup.com/can-day-trading-really-be-profitable/).
+- Larry Connors e Cesar Alvarez, *Short Term Trading Strategies That Work* (2008), [QuantifiedStrategies](https://www.quantifiedstrategies.com/rsi-2-strategy/).
+- Zarattini & Aziz (2023), *Can Day Trading Really Be Profitable?*, [Concretum](https://concretumgroup.com/can-day-trading-really-be-profitable/).
 - Zarattini, Aziz & Barbon (2024), *Beat the Market: An Effective Intraday Momentum Strategy for S&P500 ETF (SPY)* —
   [Concretum (PDF)](https://concretumgroup.com/wp-content/uploads/2026/02/Beat-the-Market.pdf).
-- Estatística de gaps — [TradingStats (NQ 2015–2025)](https://tradingstats.net/gap-fill-strategy/), [Trade That Swing](https://tradethatswing.com/sp-500-spy-es-gap-fill-strategy-and-statistics/).
-- Chague, De-Losso & Giovannetti (2019), *Day Trading for a Living?* — [texto (USP)](https://www.repec.eae.fea.usp.br/documentos/Chague_Losso_Giovannetti_47WP.pdf),
+- Estatística de gaps, [TradingStats (NQ 2015–2025)](https://tradingstats.net/gap-fill-strategy/), [Trade That Swing](https://tradethatswing.com/sp-500-spy-es-gap-fill-strategy-and-statistics/).
+- Chague, De-Losso & Giovannetti (2019), *Day Trading for a Living?*, [texto (USP)](https://www.repec.eae.fea.usp.br/documentos/Chague_Losso_Giovannetti_47WP.pdf),
   [resumo da FGV](https://eesp.fgv.br/noticia/quer-viver-especulando-na-bolsa-chance-de-enriquecer-e-minima-diz-estudo).
-- Solidus Labs (2025), tokens do pump.fun — [relatório](https://www.soliduslabs.com/reports/solana-rug-pulls-pump-dumps-crypto-compliance);
-  carteiras no prejuízo — [CoinJournal](https://coinjournal.net/news/over-60-of-pump-fun-wallets-lost-money-report/).
+- Solidus Labs (2025), tokens do pump.fun, [relatório](https://www.soliduslabs.com/reports/solana-rug-pulls-pump-dumps-crypto-compliance);
+  carteiras no prejuízo, [CoinJournal](https://coinjournal.net/news/over-60-of-pump-fun-wallets-lost-money-report/).
 - Agenda: [ForexFactory](https://www.forexfactory.com/calendar), [calendário do IBGE](https://servicodados.ibge.gov.br/api/docs/calendario?versao=3)
   e as reuniões do Copom de 2026 ([InfoMoney](https://www.infomoney.com.br/mercados/banco-central-divulga-calendario-das-reunioes-do-copom-para-2026/),
   [B3 Bora Investir](https://borainvestir.b3.com.br/noticias/copom-tera-8-reunioes-em-2026-veja-calendario-e-projecao-para-a-selic/)).
