@@ -20,10 +20,13 @@
     if (!D) return AX.toast("Espere o gráfico carregar.", "aviso");
     const max = AX.dataISO(D.meta.dataMax), min = AX.dataISO(D.meta.dataMin);
     const est = AX.pref.est === "TODAS" ? "minhas estratégias juntas" : AX.pref.est === "AUTO" ? "rodízio automático" : AX.pref.est + " · " + AX.nomeEst(AX.pref.est);
-    pop.innerHTML = `<div class="rot">REPLAY DO PREGÃO ${AX.q("Escolha o dia. O robô volta o gráfico para a abertura daquele dia e toca candle a candle até o fechamento, com a estratégia entrando e saindo na hora em que aconteceu. Ativo, tempo gráfico e estratégia são os do topo.")}</div>
-      <label class="campo"><span>Dia</span><input type="date" id="rpdDia" min="${min}" max="${max}" value="${AX.esc(P.diaIso && P.diaIso >= min && P.diaIso <= max ? P.diaIso : max)}"></label>
-      <div class="rpd-quem"><div><small>Ativo</small><b>${AX.esc(AX.rotAtivo(AX.pref.ativo))}</b></div><div><small>Tempo</small><b>${AX.esc(D.meta.nomeTf)}</b></div><div><small>Estratégia</small><b>${AX.esc(est)}</b></div></div>
-      <div class="nota">Para trocar o ativo, o tempo ou a estratégia, use o topo e abra o replay de novo.</div>
+    const tfAtual = P.tfEsc || +AX.pref.tf;
+    pop.innerHTML = `<div class="rot">REPLAY DO PREGÃO ${AX.q("Escolha o dia, o tempo gráfico e, se quiser, a hora de começar. O robô volta o gráfico para esse momento e toca candle a candle até o fechamento do dia, com a estratégia entrando e saindo na hora em que aconteceu. Ativo e estratégia são os do topo.")}</div>
+      <div class="rpd-linha"><label class="campo"><span>Dia</span><input type="date" id="rpdDia" min="${min}" max="${max}" value="${AX.esc(P.diaIso && P.diaIso >= min && P.diaIso <= max ? P.diaIso : max)}"></label>
+        <label class="campo"><span>Tempo gráfico</span><select id="rpdTf">${AX.cfg.tempos.filter((t) => +t.tf < 1440).map((t) => `<option value="${t.tf}"${+t.tf === tfAtual ? " selected" : ""}>${AX.esc(t.nome)}</option>`).join("")}</select></label>
+        <label class="campo"><span>Começar às</span><input type="time" id="rpdHora" value="${AX.esc(P.horaEsc || "")}" title="Vazio = desde a abertura do dia"></label></div>
+      <div class="rpd-quem"><div><small>Ativo</small><b>${AX.esc(AX.rotAtivo(AX.pref.ativo))}</b></div><div><small>Estratégia</small><b>${AX.esc(est)}</b></div></div>
+      <div class="nota">Hora vazia = o dia todo, desde a abertura. Ativo e estratégia vêm do topo.</div>
       <div class="campo"><span>Velocidade</span><div class="seg mini" id="rpdVel">${VEL.map((v) => `<button data-v="${v}" class="${v === P.vel ? "on" : ""}">${velTxt(v)}</button>`).join("")}</div></div>
       <div class="botoes"><button id="rpdCancelar">Cancelar</button><button id="rpdIr" class="primario">▶ Assistir o dia</button></div>`;
     const r = bt.getBoundingClientRect();
@@ -32,28 +35,38 @@
     pop.classList.remove("oculto");
     pop.querySelectorAll("#rpdVel button").forEach((b) => (b.onclick = () => { P.vel = +b.dataset.v; pop.querySelectorAll("#rpdVel button").forEach((x) => x.classList.toggle("on", x === b)); }));
     $("rpdCancelar").onclick = AX.fecharPopovers;
-    $("rpdIr").onclick = () => { const v = $("rpdDia").value; if (!v) return AX.toast("Escolha o dia.", "aviso"); P.diaIso = v; AX.fecharPopovers(); comecar(AX.isoInt(v)); };
+    $("rpdIr").onclick = () => {
+      const v = $("rpdDia").value; if (!v) return AX.toast("Escolha o dia.", "aviso");
+      P.diaIso = v; P.tfEsc = +$("rpdTf").value; P.horaEsc = $("rpdHora").value;
+      AX.fecharPopovers(); comecar(AX.isoInt(v), P.tfEsc, P.horaEsc);
+    };
   }
   bt.onclick = (e) => { e.stopPropagation(); abrirEscolha(); };
 
   // ---------------------------------------------------------------- tocar
-  async function comecar(dia) {
+  async function comecar(dia, tf = +AX.pref.tf, hora = "") {
     const seq = ++P.seq;
     parar(true);
     if (AX.replay && AX.replay.ativo()) AX.replay.fechar();
     if (AX.aba !== "vivo" && AX.trocarAba) AX.trocarAba("vivo");
     let D;
-    try { D = await AX.json("/api/sim?" + AX.parametros({ per: "tudo", de: dia, ate: dia }), { tempo: 90000, carga: true }); }
+    try { D = await AX.json("/api/sim?" + AX.parametros({ per: "tudo", de: dia, ate: dia, tf }), { tempo: 90000, carga: true }); }
     catch (err) { return AX.toast(err.message, "erro"); }
     if (seq !== P.seq) return;
     if (D.meta.dataIni !== dia) return AX.toast(`Sem pregão em ${AX.dataTxt(dia)} neste ativo e tempo gráfico. Escolha outro dia.`, "aviso");
     Object.assign(P, { on: true, D, dia, ini: D.meta.iIni, fim: D.meta.iFim, pausa: false, fala: "Abertura do pregão: o robô começa a observar." });
     P.k = P.ini - 1;
+    if (hora) {                                        // começar a partir de uma hora do dia (os candles antes dela já aparecem)
+      const hm = +hora.replace(":", "");
+      let i = P.ini; while (i <= P.fim && D.hm[i] < hm) i++;
+      P.k = Math.min(P.fim, i) - 1;
+      P.fala = `Começando às ${hora}: o robô observa a partir daqui.`;
+    }
     AX.emReplay = true;
     AX.mostrar(D, P.k, { manterZoom: true });
     AX.autoPreco();
     AX.chart.applyOptions({ timeScale: { shiftVisibleRangeOnNewBar: false } });
-    AX.chart.timeScale().setVisibleLogicalRange({ from: P.ini - 30, to: P.fim + 6 });
+    AX.chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, Math.min(P.ini - 30, P.k - 60)), to: P.fim + 6 });
     montarBarra();
     pintarBarra();
     P.relogio = setTimeout(passo, 700);

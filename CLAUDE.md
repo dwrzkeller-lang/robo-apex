@@ -21,6 +21,9 @@ simples, sem jargão.
 - Sem dependências novas no servidor (só biblioteca padrão do Python 3.12).
 - Tempo real: o último ponto da série do Yahoo é o preço de AGORA e atualiza o candle em formação (`_yahoo_para_barras`);
   retrato com mais de 60 s é buscado de novo antes de responder. Não volte a descartar esse ponto.
+- Ouro e prata: candle de agora pela cotação à vista da Swissquote (`app/tempo_real.py`, a cada 1 s enquanto o ativo é
+  usado); o histórico do Yahoo (futuro) é deslocado para o nível do à vista. Tela pergunta a cada 2 s; `t69_tempo_real.py`
+  (na pasta _testes) mede o atraso contra as fontes.
 - Moedas, metais e petróleo têm sessão de 24 h; índices dos EUA usam o futuro (NQ, ES, YM). Mudou a fonte ou o horário
   de um ativo? Ponha-o em `FONTE_NOVA_*` (dados_fonte.py) para os arquivos guardados ganharem nome novo.
 - `dados/` (contas, sessões, cache, desenhos) nunca vai para o Git. Nenhuma senha, token ou e-mail pessoal no repositório.
@@ -40,7 +43,8 @@ sem candles.
 ## Mapa
 
 - `app/robo_apex.py` — servidor HTTP, rotas `/api/*`, Sentinela (testes ao vivo), `VERSAO`.
-- `app/estrategias.py` (E1–E23, gestões), `app/simulador.py` (execução, custos, proteções), `app/ia.py`,
+- `app/estrategias.py` (E1–E25, gestões), `app/pisani_setups.py` (E26–E46: os setups da apostila do Pisani, um por
+  um, com as regras gerais da planilha dele; `abertura_real` = gap de abertura de verdade, inclusive ações), `app/simulador.py` (execução, custos, proteções), `app/ia.py`,
   `app/auth.py`, `app/dados_fonte.py`, `app/opcoes.py`, `app/profit.py`, `app/avisos.py`.
 - `app/qualidade.py` — nota de qualidade A+/A/B/C de cada sinal (price action, só com o passado) e o filtro `qual`.
 - Rodízio automático: estratégia `AUTO` (`rodizio_mapa` + `simular_c` em robo_apex.py; filtro `rodizio` no simulador).

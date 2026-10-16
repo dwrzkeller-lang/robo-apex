@@ -266,7 +266,47 @@
     AX.toast(igual ? `Edição salva. O resultado ficou igual ao do robô (${AX.dinheiro(r.dinheiro, AX.vivo.D, true)}): o preço não chegou no stop nem no alvo novos antes da saída.`
       : `Edição salva: esta operação passa a ${AX.dinheiro(r.dinheiro, AX.vivo.D, true)} (o robô fez ${AX.dinheiro(o.dinheiro, AX.vivo.D, true)}). A lista, o gráfico e o total do período já contam com ela.`, "ok");
     fecharEse();
+    aplicarAprendizado(tr.est, meta);
     recarregar();
+  }
+  // APRENDER COM AS EDIÇÕES: junta todas as edições salvas desta estratégia (mesmo ativo e tempo), calcula o ajuste
+  // típico (mediana do stop e do alvo em vezes o risco) e testa em TODAS as operações do período e nas duas metades.
+  // Só vira regra da estratégia se melhorar o conjunto nas duas metades: uma correção que só acerta a operação editada
+  // (olhando depois que ela aconteceu) não muda a estratégia.
+  const mediana = (v) => { const a = v.slice().sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : null; };
+  function aprenderComEdicoes(est, meta) {
+    const D = AX.vivo.D;
+    if (!D || AX.pref.aprenderEd === false) return null;
+    const pre = `${meta.ativo}|${+meta.tf}|${est}|`, fss = [], ras = [];
+    for (const [k, e] of Object.entries(ED.mapa || {})) {
+      if (!k.startsWith(pre) || !e || !e.orig) continue;
+      const t_ent = +k.split("|")[3], t = (D.trades || []).find((x) => x.est === est && x.t_ent === t_ent);
+      if (!t) continue;
+      const r0 = Math.abs(t.ent - e.orig.stop_ini), r1 = Math.abs(t.ent - e.stop);
+      if (!(r0 > 0) || !(r1 > 0)) continue;
+      fss.push(r1 / r0);
+      ras.push(e.alvo != null ? Math.abs(e.alvo - t.ent) / r1 : 0);
+    }
+    if (!fss.length) return null;
+    const fs = +mediana(fss).toFixed(3), ra = +mediana(ras).toFixed(2);
+    if (fs < 0.2 || fs > 5) return { n: fss.length, fs, ra, ok: false, motivo: "o stop editado ficou longe demais do original" };
+    const todas = (D.trades || []).filter((t) => t.est === est).sort((a, b) => a.t_ent - b.t_ent), meio = Math.floor(todas.length / 2);
+    const g = generalizar(D, est, fs, ra), g1 = generalizar(D, est, fs, ra, todas.slice(0, meio)), g2 = generalizar(D, est, fs, ra, todas.slice(meio));
+    const ok = g.n >= 6 && g.depois > g.antes && g1.depois >= g1.antes && g2.depois >= g2.antes;
+    return { n: fss.length, fs, ra, g, g1, g2, ok, motivo: g.n < 6 ? "poucas operações no período para concluir" : !ok ? "no conjunto das operações não melhorou" : "" };
+  }
+  function aplicarAprendizado(est, meta) {
+    const a = aprenderComEdicoes(est, meta), D = AX.vivo.D;
+    if (!a) return;
+    const desc = `stop a ${AX.num(a.fs, 2)}× ${a.ra ? "e saída a " + AX.num(a.ra, 1) + " : 1" : "(alvo da própria estratégia)"}`;
+    if (a.ok) {
+      AX.pref.regras = Object.assign({}, AX.pref.regras, { [est]: [a.fs, a.ra] });
+      AX.salvarRegras();
+      setTimeout(() => AX.toast(`🧠 O robô aprendeu com as suas ${a.n} edição(ões) na ${est}: ${desc}. Testado nas ${a.g.n} operações do período: de ${AX.dinheiro(a.g.antes, D, true)} para ${AX.dinheiro(a.g.depois, D, true)}, melhor nas duas metades. A ${est} passa a operar assim (dá para tirar na aba Plano).`, "ok"), 4800);
+    } else {
+      setTimeout(() => AX.toast(`🧠 Testei as suas edições na ${est} (${desc}) em ${a.g ? a.g.n : 0} operações: ${a.motivo}${a.g ? ` (${AX.dinheiro(a.g.antes, D, true)} → ${AX.dinheiro(a.g.depois, D, true)})` : ""}. A estratégia não mudou; a edição vale só nas operações editadas.`, "aviso"), 4800);
+    }
+    AX.ultimoAprendizado = a;
   }
   async function voltarOriginal(tr, meta) {
     const k = chaveEd(tr, meta);
@@ -303,7 +343,8 @@
       <div class="ese-campos"><label class="campo"><span>Stop</span><input type="text" inputmode="decimal" id="eseStop" autocomplete="off"></label>
         <label class="campo"><span>Alvo</span><input type="text" inputmode="decimal" id="eseAlvo" autocomplete="off" placeholder="vazio = sem alvo"></label></div>
       <div id="eseRes"></div>
-      <div class="ese-acoes"><button id="eseGravar" class="primario">💾 Salvar nesta operação</button><button id="eseRegra" class="secundario">📐 Usar como regra</button></div>
+      <div class="ese-acoes"><button id="eseGravar" class="primario">💾 Salvar (o robô aprende)</button><button id="eseRegra" class="secundario">📐 Usar como regra</button></div>
+      <label class="chk ese-aprende"><input type="checkbox" id="eseAprende"${AX.pref.aprenderEd === false ? "" : " checked"}> o robô aprende com as minhas edições ${AX.q("Ao salvar, o robô junta todas as suas edições desta estratégia (neste ativo e tempo), calcula o ajuste típico (por exemplo, sair em 3:1 em vez de 4:1) e testa em todas as operações do período, nas duas metades. Se melhorar o conjunto, a estratégia passa a operar assim, inclusive ao vivo e no piloto. Se não melhorar, ela não muda: uma correção feita depois de ver o resultado pode ser só sorte.")}</label>
       <div class="botoes finos"><button id="eseReplay">▶ Replay com este ajuste</button><button id="eseOrig">↺ Voltar ao original</button></div>
       <div class="nota" id="eseSituacao"></div>
       <details class="ese-licao"><summary>Anotar uma lição sobre esta entrada</summary>
@@ -314,6 +355,7 @@
     for (const id of ["eseStop", "eseAlvo"]) { $(id).onchange = digitou; $(id).onkeydown = (e) => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); $(id).blur(); } }; }
     $("eseFechar").onclick = (e) => { e.stopPropagation(); if (E.sujo && !confirm("A mudança ainda não foi salva. Fechar mesmo assim?")) return; fecharEse(); };
     $("eseGravar").onclick = salvarEd;
+    $("eseAprende").onchange = (e) => { AX.pref.aprenderEd = e.target.checked; AX.salvarPref(); };
     $("eseRegra").onclick = usarRegra;
     $("eseOrig").onclick = () => voltarOriginal(tr, meta);
     $("eseReplay").onclick = () => { if (!E.hip) return AX.toast("Ajuste o stop e o alvo primeiro.", "aviso"); tocar(E.hip, meta); };
@@ -390,7 +432,7 @@
     const el = $("iaLicoes"); if (!el) return;
     const lista = await licoes(), D = AX.vivo.D;
     if (!lista.length) {
-      el.innerHTML = `<div class="card"><div class="rot">SUAS LIÇÕES</div><div class="nota">Nenhuma ainda. Na aba Agora, clique numa operação da lista e use <b>E se…</b> para corrigir o stop e o alvo; salve como lição e ela aparece aqui, com o teste do ajuste em todas as operações da estratégia.</div></div>`;
+      el.innerHTML = `<div class="card"><div class="rot">SUAS LIÇÕES</div><div class="nota">Nenhuma ainda. Na aba Agora, clique numa operação da lista e use <b>✎ Editar</b> para corrigir o stop e o alvo; salve como lição e ela aparece aqui, com o teste do ajuste em todas as operações da estratégia.</div></div>`;
       return;
     }
     const porEst = {};
@@ -404,7 +446,7 @@
         ${g && g.n ? ` Aplicado às ${g.n} operações deste ativo e período: de <b class="${AX.cls(g.antes)}">${AX.dinheiro(g.antes, D, true)}</b> para <b class="${AX.cls(g.depois)}">${AX.dinheiro(g.depois, D, true)}</b> (${g.viraram} perdas viraram ganho, ${g.pioraram} ganhos viraram perda).` : " Sem operações desta estratégia no ativo e período de agora."}
         ${ls.filter((x) => x.nota).slice(-3).map((x) => `<br>“${AX.esc(x.nota)}”`).join("")}</span></div></div>`;
     }
-    h += `<div class="nota">Para o robô passar a operar com um ajuste, abra uma operação da estratégia, faça o ajuste no E se… e use <b>📐 Usar como regra</b>: ele vale nas operações passadas, na aberta e nas próximas, inclusive nos testes ao vivo.</div>
+    h += `<div class="nota">Para o robô passar a operar com um ajuste, abra uma operação da estratégia, faça o ajuste no ✎ Editar e use <b>📐 Usar como regra</b>: ele vale nas operações passadas, na aberta e nas próximas, inclusive nos testes ao vivo.</div>
       <div class="botoes finos"><button id="licLimpar">Apagar as lições</button></div></div>`;
     el.innerHTML = h;
     $("licLimpar").onclick = async () => { if (!confirm("Apagar todas as suas lições?")) return; L.lista = []; try { await AX.api.set("licoes", []); } catch (e) { /* ok */ } renderLicoes(); };

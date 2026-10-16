@@ -127,7 +127,8 @@ def sessao_cfg(cfg):
                 custo_pct=cfg.get("custo_pct", 0.0), passo_lote=cfg.get("passo_lote", 0.01),
                 valor_ponto=cfg.get("valor_ponto") or 1.0, fracionado=cfg.get("fracionado", False),
                 hora_inicio=p.get("HoraInicio", 905), hora_fim=p.get("HoraFimEntradas", 1700),
-                hora_zeragem=p.get("HoraZeragem", 1745))
+                hora_zeragem=p.get("HoraZeragem", 1745),
+                abertura_real=cfg.get("grupo") == "Ações da B3")   # ação: a abertura é leilão de verdade (gap real)
 
 
 def caminho_longo(p):
@@ -212,7 +213,7 @@ def agrupar(cfg, minutos, tf):
 
 
 # ------------------------------------------------------------------------------------------ Yahoo
-YAHOO_POR_MINUTO = 45                                # pedidos ao Yahoo por minuto, somados todos os ativos
+YAHOO_POR_MINUTO = 60                                # pedidos ao Yahoo por minuto, somados todos os ativos
 _yh_trava = threading.Lock()
 _yh_pedidos = []                                     # horarios dos pedidos do ultimo minuto
 
@@ -336,7 +337,8 @@ class _Celula:
         """max_idade (segundos): se o retrato e mais velho que isso, renova AGORA e espera (so para quem ja esta num
         trabalho de fundo, como a base de 5 meses pedindo os candles de hoje)."""
         # (com a fonte fora do ar, quem pede nao fica esperando a cada pedido: uma tentativa a cada 30 s)
-        if self.valor is None or (max_idade is not None and time.time() - self.t_ok >= max_idade and time.time() - self.t_tentativa >= 30.0):
+        if self.valor is None or (max_idade is not None and time.time() - self.t_ok >= max_idade
+                                  and time.time() - self.t_tentativa >= (30.0 if self.erro else max_idade)):
             with self.trava:                                   # so quem pediu ESTA fonte espera
                 if self.valor is None:
                     self.valor = self.fn(None)                 # primeira carga: o erro sobe para quem pediu
@@ -487,7 +489,7 @@ def carregar_yahoo(base, chave, tf=5, guardar=True, max_idade=None):
                 fonte += " · %d dias guardados" % len(set(b["d"]))
             return b, fonte
         return fn
-    ttl = 900.0 if tf >= 1440 else 20.0 if cfg.get("mercado") == "b3" else 8.0      # moedas e futuros: preco quase ao vivo
+    ttl = 900.0 if tf >= 1440 else 15.0 if cfg.get("mercado") == "b3" else 3.0      # moedas e futuros: preco quase ao vivo
     return vivo(("y", os.path.abspath(base), chave, tf, guardar), fabrica, ttl, max_idade)
 
 

@@ -516,6 +516,24 @@
     if (!D || !p || p.logical == null || !p.point || (AX.desenho && AX.desenho.ferramenta && AX.desenho.ferramenta() !== "cursor")) return fecharVela();
     const k = Math.round(p.logical);
     if (k < 0 || k > G.k) return fecharVela();
+    const W0 = $("chart").clientWidth, por = (x, y) => {
+      caixaVela.style.left = (x + 220 > W0 ? x - 210 : x + 16) + "px";
+      caixaVela.style.top = Math.max(30, Math.min($("chart").clientHeight - 220, y - 60)) + "px";
+    };
+    // clicou numa média móvel (ou na VWAP): qual é, o tipo e o valor naquele candle
+    const ml = AX.ind && AX.ind.perto ? AX.ind.perto(D, k, p.point.y) : null;
+    if (ml) {
+      caixaVela.innerHTML = `<div class="vi-cab"><span><i class="vi-cor" style="background:${ml.cor}"></i>${AX.esc(ml.rot)}</span><button aria-label="Fechar">✕</button></div>
+        <div class="vi-nome">${AX.esc(ml.nome)}</div>
+        <div><span>Valor em ${AX.quando(D, k, true).slice(-5)}</span><b>${AX.fmt(ml.valor)}</b></div>
+        ${ml.periodo ? `<div><span>Períodos</span><b>${ml.periodo} candles de ${AX.esc(D.meta.nomeTf)}</b></div>` : ""}
+        <div><span>Preço x linha</span><b class="${D.c[k] >= ml.valor ? "lg-alta" : "lg-baixa"}">${D.c[k] >= ml.valor ? "acima" : "abaixo"} (${AX.fmt(Math.abs(D.c[k] - ml.valor))})</b></div>
+        <div class="vi-tipo">${AX.esc(ml.tipoTxt)}</div>`;
+      caixaVela.querySelector("button").onclick = fecharVela;
+      por(p.point.x, p.point.y);
+      caixaVela.classList.remove("oculto");
+      return;
+    }
     const yH = S.candle.priceToCoordinate(D.h[k]), yL = S.candle.priceToCoordinate(D.l[k]);
     if (yH == null || yL == null || p.point.y < yH - 6 || p.point.y > yL + 6) return fecharVela();     // clicou fora do candle
     const ref = k > 0 ? D.c[k - 1] : D.o[k], dv = D.c[k] - ref, sobe = D.c[k] >= D.o[k];
@@ -533,6 +551,10 @@
   });
   AX.on("tecla", (e) => { if (e.key === "Escape") fecharVela(); });
   AX.on("mudou", fecharVela);
+  // some ao clicar fora dele (em qualquer lugar da tela) e ao mexer no zoom ou arrastar o gráfico: não fica "vagando"
+  document.addEventListener("pointerdown", (e) => { if (!caixaVela.classList.contains("oculto") && !caixaVela.contains(e.target)) fecharVela(); }, true);
+  $("chart").addEventListener("pointermove", (e) => { if (e.buttons && !caixaVela.classList.contains("oculto")) fecharVela(); });     // arrastou o gráfico
+  $("chart").addEventListener("wheel", fecharVela, { passive: true });
   chart.subscribeCrosshairMove((p) => {
     const D = G.D; if (!D) return;
     let k = G.k;
@@ -726,7 +748,7 @@
       capital: p.capital, maxstops: p.maxstops, per: p.per === "custom" ? "tudo" : p.per });
     if (p.per === "custom") { q.set("de", AX.isoInt(p.de)); q.set("ate", AX.isoInt(p.ate)); }
     if (p.est === "TODAS") q.set("cods", (p.minhas || []).join(","));
-    if (AX.edv) q.set("edv", AX.edv);                                            // edições do E se…: versão (pedido novo quando mudam)
+    if (AX.edv) q.set("edv", AX.edv);                                            // edições (botão Editar): versão (pedido novo quando mudam)
     for (const [k, v] of Object.entries(AX.planoParams())) q.set(k, v);
     for (const [k, v] of Object.entries(extra)) q.set(k, v);
     return q.toString();
@@ -1119,7 +1141,7 @@
       est = `<b class="${o.dir > 0 ? "cmp" : "vnd"}">${o.dir > 0 ? "COMPRA" : "VENDA"} ARMADA</b> ${AX.esc(o.est)} · entra ${o.gatilho == null ? "a mercado no próximo candle" : (o.tipo === "limite" ? "no limite " : o.dir > 0 ? "acima de " : "abaixo de ") + "<b>" + f(o.gatilho) + "</b>"} · stop <b>${f(o.stop)}</b>${o.alvo != null ? " · alvo <b>" + f(o.alvo) + "</b>" : ""}`;
     } else est = `<span class="neutro">sem operação aberta: aguardando setup</span>`;
     el.innerHTML = `<i class="luz ${m.aoVivo ? "vivo" : "hist"}"></i><span class="hud-preco">${f(D.c[k])}</span><span class="hud-est">${est}</span>
-      <span class="hud-tempo" data-dica="Há quanto tempo o robô respondeu pela última vez. A tela pergunta a cada 5 segundos; o candle de agora muda quando a fonte manda preço novo.">${m.aoVivo ? (seg == null ? "" : "atualizado há " + seg + " s") + atraso : "histórico"}</span>`;
+      <span class="hud-tempo" data-dica="Há quanto tempo o robô respondeu pela última vez. A tela pergunta a cada 2 segundos; o candle de agora muda quando a fonte manda preço novo.">${m.aoVivo ? (seg == null ? "" : "atualizado há " + seg + " s") + atraso : "histórico"}</span>`;
     el.classList.remove("oculto");
   }
   setInterval(hudVivo, 1000);
@@ -1133,7 +1155,7 @@
       : parado ? `<i class="luz hist"></i><span>${semResposta ? "sem resposta do robô" : "sem dados novos há " + Math.round(m.idade / 60) + " min"} · ${dt}</span>`
         : `<i class="luz vivo"></i><span>ao vivo · ${dt}</span>`;
     $("statusDados").dataset.dica = `Último candle: ${AX.quando(D, m.ultimo, true)} (horário de Brasília). Fonte dos dados: ${m.fonte}.` +
-      (m.aoVivo ? " A tela pergunta ao robô a cada 5 segundos e recebe só o que mudou. Se a luz ficar laranja, os dados pararam de chegar." : " Luz laranja: período no passado (histórico).");
+      (m.aoVivo ? " A tela pergunta ao robô a cada 2 segundos e recebe só o que mudou. Se a luz ficar laranja, os dados pararam de chegar." : " Luz laranja: período no passado (histórico).");
   }
 
   // ---------------------------------------------------------------- resumo do período (aba Ao vivo)
@@ -1237,7 +1259,7 @@
       const cr = st.custoR || 0;
       html += `<div class="resumo-topo"><div><div class="grande ${AX.cls(st.total)}">${AX.dinheiro(st.total, D, true)}</div>
           <div class="sub">${st.n} operações · acerto ${AX.pct(st.acerto, 0)} (empata com ${AX.pct(st.empate, 0)}) · ${tamanho}</div>
-          ${D.edN ? `<div class="sub ed-linha" data-dica="Este total já conta as suas edições do E se… (as operações marcadas com ✎). Ao lado, o que o robô fez sozinho, sem nenhuma edição. Atenção: as edições foram feitas depois de ver o que o preço fez; servem para aprender e testar, não provam que funcionam daqui para a frente.">✎ ${D.edN === 1 ? "Inclui 1 operação editada por você" : "Inclui " + D.edN + " operações editadas por você"}${D.statsRobo ? ` · <span class="neutro">o robô sozinho: ${AX.dinheiro(D.statsRobo.total, D, true)}</span>` : ""}</div>` : ""}</div>${AX.seloCurto(st)}</div>
+          ${D.edN ? `<div class="sub ed-linha" data-dica="Este total já conta as suas edições (botão Editar) (as operações marcadas com ✎). Ao lado, o que o robô fez sozinho, sem nenhuma edição. Atenção: as edições foram feitas depois de ver o que o preço fez; servem para aprender e testar, não provam que funcionam daqui para a frente.">✎ ${D.edN === 1 ? "Inclui 1 operação editada por você" : "Inclui " + D.edN + " operações editadas por você"}${D.statsRobo ? ` · <span class="neutro">o robô sozinho: ${AX.dinheiro(D.statsRobo.total, D, true)}</span>` : ""}</div>` : ""}</div>${AX.seloCurto(st)}</div>
         <canvas class="spark" id="sparkVivo"></canvas>
         <div class="kpis">
           <div><small>Média por operação${AX.q("Resultado médio de cada operação, já com custos. O “±” é a margem de erro (95%): enquanto ela for maior que a média, o resultado ainda pode ser sorte.")}</small><b class="${AX.cls(st.mediaDin)}">${AX.dinheiro(st.mediaDin, D, true)}</b><em>± ${AX.dinheiro(st.icDin, D)}</em></div>
@@ -1354,7 +1376,7 @@
   setInterval(() => {
     if (!(AX.cfg && AX.pref.auto && ABAS_VIVAS.includes(AX.aba) && AX.aba !== "cal" && !document.hidden && V.D && V.D.meta.aoVivo)) return;
     if (V.buscando && Date.now() - V.pedido < 40000) return;
-    if (Date.now() - V.pedido >= 4700) AX.carregarVivo(!V.velho);
+    if (Date.now() - V.pedido >= 1900) AX.carregarVivo(!V.velho);          // a cada 2 s (só o trecho novo: pedido pequeno)
   }, 1000);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {

@@ -16,6 +16,39 @@ estudos (RSI-2 de Connors, ORB de Zarattini & Aziz, fechamento de gap e o moment
 
 ---
 
+## Novidades da versão 3.4
+
+- **21 setups da apostila do Mario Pisani, um por um (E26 a E46), para backtest:** pivô clássico com as regras da
+  planilha dele, clássico metade, clássico afastado, trick entry, FAB4, range da abertura, volta em V (a favor, contra
+  e nas Bandas de Bollinger), 1-2-3 do Mark Crisp, 3x3 do DiNapoli, divergência no MACD, range com cor invertida, zona
+  de armadilha, power-breakout (e com pullback), breakout da tarde com 4 alternâncias, mergulhada dupla, MM200
+  pós-rompimento, afastamento da MM200 e armadilha na MM200. Regras gerais da planilha em todos (nunca depois de 3
+  barras da mesma cor, impulso de 3 a 5 barras, correção até 50%, MM20 virada, MM200 fora do caminho). Gestão padrão =
+  o manejo parcial da apostila. Conferido que nenhum olha o futuro (1.281 sinais, 0 diferenças). **Resultado com
+  custos: todos negativos** (de −0,12R a −0,65R por operação); o 1º alvo 1:1 sai em 23% a 46%, contra 69% a 84% no
+  diário manual dele (que usa alvo parcial menor e escolhe as entradas). Servem para estudar e testar, não para ligar
+  no automático.
+- **Pivô da abertura (E24) e pivô clássico perto (E25):** dos vídeos de pivô do Pisani, com alvos na projeção de
+  Fibonacci em cima do topo. Com custos: −0,21R e −0,18R.
+- **Editar (antigo "E se…") que ensina o robô:** ao salvar uma edição, o robô junta as suas edições da estratégia,
+  calcula o ajuste típico (ex.: sair em 3:1 em vez de 4:1) e testa em todas as operações do período e nas duas
+  metades. Só muda a estratégia se melhorar o conjunto; dá para desligar.
+- Testei combinar o rodízio com a nota A e com as gestões 2:1 e 3:1: nenhuma combinação ficou claramente melhor que
+  o rodízio sozinho (−0,06R contra −0,12R de todas juntas), então nada novo foi ligado por padrão.
+- **Tempo real medido em segundos:** a tela pergunta a cada 2 s; moedas, metais e futuros com preço mais velho que
+  3 s são buscados na hora. Auditoria de 90 s contra a fonte: EUR/USD 1,1 s de atraso típico (pior 2,2 s), ouro 1,6 s
+  (pior 2,4 s), Bitcoin 1,2 s (pior 6,3 s), mais até 2 s da tela. B3 (WIN, WDO, ações) continua com ~15 min e os
+  índices dos EUA (NQ, ES, YM) com ~10 min, que é o limite das fontes gratuitas; tempo real nesses só pelo MetaTrader.
+- **Ouro e prata ao vivo pela Swissquote (à vista):** o Yahoo só tinha o contrato futuro, 10 min atrasado e mais caro
+  que o XAU/USD do TradingView. Agora o candle de agora é feito com a cotação à vista de segundos atrás e o histórico
+  fica no mesmo nível; a lista de cotações mostra o mesmo preço do gráfico.
+- **Média móvel clicável:** clique numa média (ou na VWAP) e veja qual é (aritmética/simples ou exponencial), de
+  quantos períodos, o valor naquele candle e se o preço está acima ou abaixo dela.
+- **Replay com tempo gráfico e hora:** escolha o dia, o tempo gráfico (2, 5, 15, 30 ou 60 min) e, se quiser, a hora de
+  começar; vazio = o dia todo desde a abertura.
+- O quadro do candle some ao clicar fora, ao dar zoom ou ao arrastar o gráfico.
+- Topo com o contorno de cada campo; menu da direita com cada caixa emoldurada e separada.
+
 ## Novidades da versão 3.3
 
 - **Gráfico em tempo real de verdade:** o robô descartava o último ponto que o Yahoo manda, que é o preço de AGORA, e o
@@ -470,7 +503,7 @@ candles de hoje são renovados em segundo plano: o Yahoo a cada ~20 s (o robô l
 minuto para não ser bloqueado). Para o WIN e o WDO **reais e em tempo real**, use os scripts no Profit (abaixo) ou
 exporte o gráfico do Profit em CSV: nenhuma fonte gratuita entrega o mini-índice e o mini-dólar ao vivo.
 
-## As 23 estratégias
+## As 46 estratégias
 
 | | Estratégia | Autor / fonte | Regras (compra; a venda é o espelho exato) | Onde se encaixa |
 |---|---|---|---|---|
@@ -497,8 +530,31 @@ exporte o gráfico do Profit em CSV: nenhuma fonte gratuita entrega o mini-índi
 | E21 | **Tartarugas: rompimento de 20** | Canal de Donchian e as Tartarugas (Richard Dennis) | A favor da MM200 e da MM20; compra stop acima da máxima de 20 candles; stop no mais perto entre a mínima de 10 e 1,5 ATR; sai abaixo da mínima de 10 | 15 e 60 min; a melhor das novas (−0,04R) |
 | E22 | **NR7: menor candle dos últimos 7** | Toby Crabel (1990) | Tendência de alta; candle mais estreito dos últimos 7; compra acima dele; stop abaixo (mín. 0,5 ATR); alvo 3R | para estudo (−0,27R) |
 | E23 | **Turtle Soup: falso rompimento** | Linda Raschke e Larry Connors (1995) | Mínima nova de 20 candles que fecha de volta acima; compra acima do candle; stop abaixo da mínima nova; alvo 2R | 15 e 60 min (−0,1R) |
+| E24 | **Pivô da abertura (Onda 1)** | Pisani (vídeo) | Primeiras 2h30; onda 1 A→B ≥ 1 ATR; correção de 23,6% a 61,8%; compra acima de B; stop abaixo do pivô C; alvos B + 61,8/100/161,8% da perna | intraday (−0,21R) |
+| E25 | **Pivô clássico perto** | Pisani (vídeo) | A favor da MM200; perna ≥ 1,5 ATR com topo confirmado; pullback curto de 8% a 38,2%; compra acima de B; mesmos alvos | 5, 15 e 60 min (−0,18R) |
+| E26 | **Pivô clássico (regras da apostila)** | Pisani (apostila) | Impulso de 3 a 5 barras; correção de 2 a 3 barras até 50% (61,8% com impulso pequeno); MM20 virada sem cruzar o pivô; MM200 fora do caminho; compra acima do topo | para estudo (−0,32R) |
+| E27 | **Clássico metade** | Pisani (apostila) | Primeiro movimento do dia; pullback de 30% a 50%; pivô curto no meio; entrada abaixo de 80% do movimento; alvo 1 no topo | intraday, poucos dados (−0,42R) |
+| E28 | **Clássico afastado** | Pisani (apostila) | Pullback de 50% a 79% do primeiro movimento; volta à região do topo e pausa de 1 a 3 barras (pré, no ou pós rompimento); compra acima da pausa | intraday, poucos dados (−0,16R) |
+| E29 | **Trick entry** | Pisani (apostila) | Tendência definida; pivô menor dentro da correção do pivô maior; entrada antecipada acima dele; alvo 1 no topo do pivô maior | para estudo (−0,39R) |
+| E30 | **FAB4 (abertura)** | Pisani / Velez | Abertura acima do fechamento anterior, da MM20 e da MM200, gap até 3%; primeiro pivô dos 30 min iniciais sem fechar o gap; só com gap real (ações, futuros) | poucos dados |
+| E31 | **Range da abertura** | Pisani (apostila) | 30 min iniciais formam o range; 1º rompimento; pausa segurando o topo; compra acima da pausa | 5 e 15 min (−0,24R) |
+| E32 | **Volta em V a favor** | Pisani (apostila) | Queda violenta (≥ 2,5 ATR em 2 a 6 barras) acima da MM200; candle de virada forte e simétrico; fora da cara da MM20; stop abaixo do V | para estudo (−0,18R) |
+| E33 | **Volta em V contra** | Pisani (apostila) | A mesma, abaixo da MM200; alvo no topo de onde a queda começou | para estudo (−0,15R) |
+| E34 | **Volta em V nas Bollinger** | Pisani (apostila) | Fecha fora da banda de baixo a ≥ 2,5 ATR da MM20 e o seguinte fecha dentro, de alta; alvo na MM20 | WIN/WDO −0,11R; geral −0,20R |
+| E35 | **1-2-3 (Mark Crisp)** | Mark Crisp, na apostila | Depois de queda violenta: fundo 1, topo 2, fundo 3 mais alto; compra acima de 2; stop abaixo de 3 | para estudo (−0,28R) |
+| E36 | **3x3 (DiNapoli)** | Joe DiNapoli, na apostila | Depois de queda violenta, fecha acima da média de 3 deslocada em 3; pivô curto; compra acima dele | WIN/WDO −0,09R; geral −0,35R |
+| E37 | **Divergência no MACD** | Pisani (apostila) | Mínima nova com o histograma do MACD mais alto + candle de alta acima da máxima anterior | WIN/WDO −0,03R; geral −0,17R |
+| E38 | **Range com cor invertida** | Pisani (apostila) | Range de 9 candles na MM20 subindo; barra de baixa colada no topo; compra acima do topo; mais de 3 toques = não entra | para estudo (−0,37R) |
+| E39 | **Zona de armadilha larga** | Pisani (apostila) | Preço entre a MM20 e a MM200 com ≥ 2,5 ATR entre elas; pivô clássico; 1:1 antes da MM200 | para estudo (−0,31R) |
+| E40 | **Power-breakout (MM20)** | Pisani (apostila) | Lateral de 6 candles ≤ 1,2 ATR depois de tendência média; MM20 subindo por baixo sem entrar nos preços; compra acima da lateral | para estudo (−0,31R) |
+| E41 | **Power-breakout com pullback** | Pisani (apostila) | A lateral rompeu; pullback que segura o topo; compra acima da máxima do rompimento | poucos dados (−0,24R) |
+| E42 | **Breakout da tarde** | Pisani (apostila) | Depois de 2h30; 4+ alternâncias dos fechamentos com a MM20; pivô no topo da lateral (pré, no ou pós rompimento) | para estudo (−0,25R) |
+| E43 | **Mergulhada dupla** | Pisani (apostila) | A favor da tendência; dois fundos parecidos depois de impulso grande; candle de alta acima da máxima anterior; stop abaixo dos fundos | a menos ruim das novas (−0,12R; WIN/WDO −0,01R) |
+| E44 | **MM200 pós-rompimento** | Pisani (apostila) | Vinha abaixo da MM200, fechou acima há 3 a 15 candles; pullback segura perto dela; pivô clássico | poucos dados (−0,33R) |
+| E45 | **Afastamento da MM200** | Pisani (apostila) | Preço a ≥ 3 ATR da MM200; MM20 virada; pivô médio alinhado com ela; alvos até a MM200 | poucos dados (−0,35R) |
+| E46 | **Armadilha na MM200 (RBI/Gift)** | Pisani / Velez | Chega na MM200 por baixo com candle de alta; pausa de 1 barra; compra acima das duas máximas | o pior resultado (−0,65R) |
 
-"Onde se encaixa" é o ponto de partida; o **▶ Testar estratégia** mede isso de novo com os dados de hoje. Da E11 à E23, as
+"Onde se encaixa" é o ponto de partida; o **▶ Testar estratégia** mede isso de novo com os dados de hoje. Da E11 à E46, as
 estratégias existem só no aplicativo (sem script do Profit).
 
 Filtros comuns: risco entre 0,3 e 2,5 ATR nas estratégias de Pisani/Velez, no OGRO e no Keltner (a E6, a E7, a E8, a

@@ -90,8 +90,12 @@
     itens = []; paineis = []; calcD = null; estMontada = est;
     const add = (s, calc, rot, cor, extra) => itens.push(Object.assign({ s, calc, rot, cor, val: null }, extra));
     cfg.medias.filter((m) => m.on).forEach((m) =>
-      add(linha(m.cor, m.n >= 20 ? 2 : 1), (D) => (m.tipo === "MME" ? ema : sma)(D.c, m.n), (m.tipo === "MME" ? "MME" : "MM") + m.n, m.cor));
-    if (cfg.vwap) add(linha(COR_VWAP, 2), (D) => D.vw, "VWAP", COR_VWAP);
+      add(linha(m.cor, m.n >= 20 ? 2 : 1), (D) => (m.tipo === "MME" ? ema : sma)(D.c, m.n), (m.tipo === "MME" ? "MME" : "MM") + m.n, m.cor,
+        { clicavel: true, nome: `Média móvel ${m.tipo === "MME" ? "exponencial" : "aritmética (simples)"} de ${m.n} períodos`,
+          tipoTxt: m.tipo === "MME" ? "Exponencial (MME): dá mais peso aos candles mais recentes, reage mais rápido" : "Aritmética / simples (MMS): todos os candles com o mesmo peso",
+          periodo: m.n }));
+    if (cfg.vwap) add(linha(COR_VWAP, 2), (D) => D.vw, "VWAP", COR_VWAP,
+      { clicavel: true, nome: "VWAP (preço médio do dia ponderado pelo volume)", tipoTxt: "Recomeça a cada dia; muito usada como referência de preço justo do dia" });
     if (cfg.boll) {
       const memo = (D) => (D._boll = D._boll || (() => { const m = sma(D.c, 20), d = desvio(D.c, 20, m); return [m.map((v, i) => (v == null ? null : v + 2 * d[i])), m.map((v, i) => (v == null ? null : v - 2 * d[i]))]; })());
       add(linha("#8fa3bf", 1), (D) => memo(D)[0], "Bollinger ↑", "#8fa3bf");
@@ -266,6 +270,17 @@
         h += `<span><i style="background:${x.cor}"></i>${x.rot} ${x.casas === 0 ? AX.num(x.val[k], 0) : AX.fmt(x.val[k], x.casas ?? undefined)}</span>`;
       }
       return h;
+    },
+    // linha (média, VWAP) a até 7 px do ponto clicado no candle k: para o quadro "qual é esta média"
+    perto(D, k, y) {
+      if (calcD !== D) return null;
+      let melhor = null, dmin = 7;
+      for (const x of itens) {
+        if (!x.clicavel || !x.val || x.val[k] == null) continue;
+        const yy = x.s.priceToCoordinate(x.val[k]);
+        if (yy != null && Math.abs(yy - y) < dmin) { dmin = Math.abs(yy - y); melhor = { rot: x.rot, nome: x.nome, tipoTxt: x.tipoTxt, periodo: x.periodo, cor: x.cor, valor: x.val[k] }; }
+      }
+      return melhor;
     },
     ops: () => cfg.ops,
     ligar(nomes) {                 // link direto: ?ind=vol,ifr,estoc,boll,kelt (não muda o que está salvo); "semniveis" esconde os níveis

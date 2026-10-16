@@ -38,6 +38,7 @@ from datetime import date, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import agenda
+import tempo_real
 import auth
 import assinaturas
 import avisos
@@ -55,7 +56,7 @@ import radar
 from estrategias import AQUECIMENTO, ESTRATEGIAS, GESTOES, GESTOES_CURTO, atencao
 from simulador import PROTECOES, atualizar_ultimo, estatisticas, preparar, simular
 
-VERSAO = "3.3"
+VERSAO = "3.4"
 ARGS = sys.argv[1:]
 
 
@@ -92,7 +93,18 @@ def _cripto_viva(chave, tf):
             B, fonte, cfg = cripto.candles(BASE, chave, tf)
             return df.marcar(B, ant[0] if ant else None), fonte, cfg
         return fn
-    return df.vivo(("cr", chave, tf), fabrica, 4.0, 60.0)        # retrato com mais de 1 min (ex.: tela recem-aberta): espera o novo
+    return df.vivo(("cr", chave, tf), fabrica, 1.5, 2.5)         # cripto: retrato com mais de 2,5 s e buscado na hora
+
+
+def _ao_vivo(chave, tf):
+    """Ouro e prata: historico no nivel do a vista + candles feitos com a cotacao ao vivo (tempo_real.py)."""
+    def fabrica():
+        def fn(ant):
+            b0, _ = df.carregar(BASE, chave, tf)
+            b = tempo_real.misturar(chave, b0, df.ATIVOS[chave], df.offset_horas, df._add, df._barras_vazias)
+            return b0 if b is b0 else df.marcar(b, ant)
+        return fn
+    return df.vivo(("tr", chave, tf), fabrica, 1.0, 2.0)
 
 
 _MT5_MEM = {}
@@ -141,7 +153,13 @@ def carregar(chave, tf):
         if chave not in df.ATIVOS:
             raise ValueError("ativo desconhecido: %s" % chave)
         cfg = df.ATIVOS[chave]
-        B, fonte = df.carregar(BASE, chave, tf, max_idade=60.0)        # mais velho que 1 min: busca agora em vez de mostrar o antigo
+        # moedas, metais e futuros: retrato com mais de 3 s e buscado AGORA (a resposta sai com o preco de agora, nao com o
+        # da rodada anterior); B3 (fonte com ~15 min de atraso) e diario: so depois de 1 min parado
+        vivo_ja = df.ATIVOS[chave].get("mercado") != "b3" and tf < 1440
+        B, fonte = df.carregar(BASE, chave, tf, max_idade=3.0 if vivo_ja else 60.0)
+        if chave in tempo_real.SWISS and B.get("tf", tf) < 1440:
+            B = _ao_vivo(chave, tf)                     # ouro e prata: candle de agora com a cotacao a vista de segundos atras
+            fonte = fonte.replace(", futuro com atraso ~10 min", "") + " · preço ao vivo: Swissquote (à vista)"
     if len(B["c"]) < AQUECIMENTO + 20:
         raise RuntimeError("Poucos candles (%d) em %s. Preciso de pelo menos %d." % (len(B["c"]), chave, AQUECIMENTO + 20))
     return B, fonte, cfg
@@ -954,6 +972,12 @@ def api_lista(q):
                                       aberto=time.time() - t < (35 * 60 if cfg.get("mercado") == "b3" else 20 * 60),
                                       dec=cfg["decimais"], _t=time.time())
         itens = [{kk: vv for kk, vv in _LISTA["v"][k].items() if kk != "_t"} for k in chaves if k in _LISTA["v"]]
+    for x in itens:                                    # ouro e prata: o preco a vista ao vivo (igual ao grafico e ao TradingView)
+        if x["chave"] in tempo_real.SWISS:
+            u = tempo_real.ultimo(x["chave"])
+            if u:
+                pct = x["varPct"]
+                x.update(preco=u[1], var=u[1] * pct / (100.0 + pct), aberto=time.time() - u[0] < 180)
     return dict(itens=itens)
 
 

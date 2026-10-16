@@ -10,7 +10,7 @@
   const AX = window.AX;
   if (!AX) return;
 
-  const NOTA = "Estatística do passado, não é promessa: nos testes com custos reais nenhuma estratégia teve vantagem comprovada. O robô é informativo e não envia ordens.";
+  const NOTA = "Estatística do passado, não é promessa: nos testes com custos reais nenhuma estratégia teve vantagem comprovada. Ordens de verdade só pela sua conta no MetaTrader, e só quando você liga o piloto.";
   const GLOSSARIO = "ATR = tamanho médio dos últimos 14 candles. Tick = a menor variação de preço do ativo. Risco = distância da entrada ao stop. " +
     "No intraday o robô só abre operação dentro do horário do ativo, zera a posição no fim do pregão e para o dia ao atingir o limite de stops de ⚙ Ajustes.";
   const lado = (s, venda) => String(s).replace(/\{([^{}|]*)\|([^{}|]*)\}/g, (_, c, v) => (venda ? v : c));

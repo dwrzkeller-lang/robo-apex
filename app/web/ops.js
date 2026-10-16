@@ -196,7 +196,7 @@
     ];
     if (t.ia) linhas.push(["IA", `quando o sinal apareceu, dava <b>${AX.num(100 * t.ia[0], 0)}%</b> de chance de ganho (esperado <span class="${AX.cls(t.ia[1])}">${AX.R(t.ia[1])}</span>). Nota de um modelo que ainda não conhecia esta operação.`]);
     if (NA_MAO[t.manual]) linhas.push(["✋ Na mão", NA_MAO[t.manual] + ": esta operação não é a estratégia pura."]);
-    return `<div class="op-det"><div class="botoes finos op-acoes"><button id="opReplay" class="primario" data-dica="Toca esta operação candle a candle: antes do sinal, o sinal, a ordem armada, a entrada, o stop e os alvos, até a saída. Dá para pausar e acelerar até 10x.">▶ Replay da entrada</button><button id="opEse" data-dica="Refaz esta entrada com outro stop e outro alvo, mostra o que teria acontecido e testa o mesmo ajuste nas outras operações da estratégia. Dá para salvar como lição.">✎ E se…</button></div><div id="opEseBox"></div>${linhas.map(([a, b]) => `<div><span>${a}</span><p>${b}</p></div>`).join("")}
+    return `<div class="op-det"><div class="botoes finos op-acoes"><button id="opReplay" class="primario" data-dica="Toca esta operação candle a candle: antes do sinal, o sinal, a ordem armada, a entrada, o stop e os alvos, até a saída. Dá para pausar e acelerar até 16x.">▶ Replay da entrada</button><button id="opEse" data-dica="Refaz esta entrada com outro stop e outro alvo, mostra o que teria acontecido e testa o mesmo ajuste nas outras operações da estratégia. Ao salvar, o robô aprende: se o seu ajuste melhorar o conjunto das operações, a estratégia passa a operar assim.">✎ Editar</button></div><div id="opEseBox"></div>${linhas.map(([a, b]) => `<div><span>${a}</span><p>${b}</p></div>`).join("")}
       ${!aberta && t.maxR != null ? `<div class="nota">Chegou a andar ${AX.res(Math.max(0, t.maxR), AX.dinDeR(t, meta, Math.max(0, t.maxR)), { meta })} a favor. Resultado já com custos e escorregamento.</div>` : ""}</div>`;
   }
   function renderOps() {
@@ -221,7 +221,7 @@
       return `<div class="op${sel ? " sel" : ""}" data-j="${j}">
           <span class="op-h">${AX.quandoT(t.t_ent, meta.intraday)}</span><span class="op-e">${t.est}</span>
           <span class="${t.dir > 0 ? "bom" : "ruim"}">${t.dir > 0 ? "C" : "V"}</span>
-          <span class="op-m">${t.qual ? `<i class="nota-mini n-${t.qual.replace("+", "p")}" data-dica="Nota de qualidade da entrada (price action): ${AX.esc(t.qual)}">${AX.esc(t.qual)}</i> ` : ""}${editada(t) ? `<span class="op-ed" data-dica="Operação editada por você no E se…: o resultado já é o da sua edição.">✎</span> ` : ""}${aberta ? '<i class="luz vivo"></i> aberta' : AX.esc(t.motivo)}${t.manual && !editada(t) ? " ✋" : ""}</span>
+          <span class="op-m">${t.qual ? `<i class="nota-mini n-${t.qual.replace("+", "p")}" data-dica="Nota de qualidade da entrada (price action): ${AX.esc(t.qual)}">${AX.esc(t.qual)}</i> ` : ""}${editada(t) ? `<span class="op-ed" data-dica="Operação editada por você no Editar: o resultado já é o da sua edição.">✎</span> ` : ""}${aberta ? '<i class="luz vivo"></i> aberta' : AX.esc(t.motivo)}${t.manual && !editada(t) ? " ✋" : ""}</span>
           <b class="${AX.cls(t.R)}">${AX.emR() ? AX.R(t.R, 1) : ""}</b><b class="op-d ${AX.cls(din)}">${AX.dinheiro(din, { meta }, true)}</b>
         </div>${sel ? comoFoi(t, meta, aberta) : ""}`;
     };

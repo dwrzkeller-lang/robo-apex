@@ -43,6 +43,7 @@ def preparar(B, cfg):
     ruido = faixa_de_ruido(B) if B["tf"] < 1440 else None
     for g in Gs.values():
         g.tend_d, g.er, g.ruido = td, er, ruido
+        g.abertura_real = g.gap_real or bool(cfg.get("abertura_real"))   # gap de abertura de verdade (futuro, CFD ou ação)
     return Gs
 
 

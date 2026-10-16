@@ -234,7 +234,7 @@ def eficiencia(c, p=ER_PERIODO):
 
 
 # Modo seletivo (opcional): menos operacoes, so no contexto que se saiu melhor nos testes com 41 mil operacoes em 12 ativos
-SELETIVO_TENDENCIA = ("E1", "E2", "E3", "E4", "E5", "E9", "E12", "E13", "E14", "E15", "E16", "E17", "E18")   # correcao/rompimento: a favor do diario E tendencia limpa
+SELETIVO_TENDENCIA = ("E1", "E2", "E3", "E4", "E5", "E9", "E12", "E13", "E14", "E15", "E16", "E17", "E18", "E24", "E25")   # correcao/rompimento: a favor do diario E tendencia limpa
 SELETIVO_DIRECAO = ("E7", "E11", "E19", "E20", "E21", "E22")                              # momentum do dia: so a favor do diario
 
 
@@ -1274,6 +1274,103 @@ def e23_atencao(G, i):
 
 
 # ------------------------------------------------------------------------------------------ catalogo
+# ------------------------------------------------------------------------------------------ E24 e E25: pivos do Mario Pisani
+# Leitura dos slides "Abertura - Onda 1" e "Primeiro movimento - Classico Perto": o primeiro impulso forma a perna A->B,
+# a correcao forma o pivo C e a entrada e no rompimento da maxima B (gatilho na superacao da maxima). Os alvos sao a
+# projecao de Fibonacci da perna colocada em cima de B (B + 61,8%, 100% e 161,8% da perna), como no grafico do WDO.
+O1_MAX_MIN = 150                     # E24: a onda 1 precisa acontecer nas primeiras 2h30 do pregao
+O1_ZONA = (0.236, 0.618)             # E24: correcao da onda 1
+CP_ZONA = (0.08, 0.382)              # E25: pullback raso, perto da extremidade da perna (o "classico perto")
+CP_JANELA = 40                       # E25: onde procurar o comeco da perna A antes do topo B
+
+
+def _onda1(G, i):
+    """Abertura - onda 1, no candle i: (a, b, c, ab) ou None. A = minima do dia ate B, B = maxima do dia (ainda nao
+    rompida, com pelo menos 2 candles de correcao depois dela), C = minima da correcao (acima de A)."""
+    s = G.ini_dia[i]
+    if i - s < 4 or (i - s) * G.tf > O1_MAX_MIN:
+        return None
+    b = max(range(s, i - 1), key=lambda k: (G.h[k], k))         # maxima do dia, com 2+ candles de correcao depois
+    if b > i - 2 or max(G.h[b + 1:i + 1]) >= G.h[b]:
+        return None                                             # B ja foi superada: o gatilho passou
+    a = min(range(s, b + 1), key=lambda k: (G.l[k], -k))
+    ab = G.h[b] - G.l[a]
+    if b - a < 2 or ab < 1.0 * G.atr[i]:
+        return None
+    c = min(range(b + 1, i + 1), key=lambda k: (G.l[k], -k))
+    if G.l[c] <= G.l[a]:
+        return None
+    return a, b, c, ab
+
+
+def e24_onda1(G, i):
+    """Pivo da abertura (onda 1): compra 1 tick acima da maxima B do primeiro impulso do dia depois de uma correcao de
+    23,6% a 61,8% da perna; stop 1 tick abaixo do pivo C; alvos na projecao de Fibonacci da perna em cima de B."""
+    r = _onda1(G, i)
+    if not r:
+        return None
+    a, b, c, ab = r
+    ret = (G.h[b] - G.l[c]) / ab
+    if not O1_ZONA[0] <= ret <= O1_ZONA[1]:
+        return None
+    ent = G.acima(G.h[b] + G.tick)
+    stop = G.abaixo(G.l[c] - G.tick)
+    if not _risco_ok(G, i, ent, stop, 0.3, 2.5):
+        return None
+    return dict(tipo="stop", gatilho=ent, stop=stop, validade=1, alvos=_alvos_do_topo(G, b, ab), ret=round(ret, 4),
+                info="onda 1 da abertura: correção de %s%% da perna" % _br(100 * ret, 0))
+
+
+def e24_atencao(G, i):
+    r = _onda1(G, i)
+    return bool(r) and (G.h[r[1]] - G.l[r[2]]) / r[3] < O1_ZONA[0] and e24_onda1(G, i) is None
+
+
+def _classico_perto(G, i):
+    """Perna A->B a favor da tendencia com o topo B confirmado (pivo de 3 candles) e ainda nao superado; C = minima do
+    pullback depois de B. Devolve (a, b, c, ab) ou None."""
+    b = None
+    for k in range(i - PV_N, max(PV_N, i - PV_JANELA) - 1, -1):
+        if _eh_pivo(G, k)[1]:
+            b = k
+            break
+    if b is None or max(G.h[b + 1:i + 1]) >= G.h[b]:
+        return None
+    a = min(range(max(0, b - CP_JANELA), b), key=lambda k: (G.l[k], -k))
+    ab = G.h[b] - G.l[a]
+    if b - a < 3 or ab < PV_PERNA_ATR * G.atr[i]:
+        return None
+    c = min(range(b + 1, i + 1), key=lambda k: (G.l[k], -k))
+    return a, b, c, ab
+
+
+def e25_classico_perto(G, i):
+    """Pivo classico perto: a favor da tendencia, o pullback que forma o pivo fica perto da extremidade da perna (ate
+    38,2%), entao o gatilho e a superacao da maxima B; stop 1 tick abaixo do pivo C; alvos na projecao em cima de B."""
+    if not _tendencia_ok(G, i):
+        return None
+    r = _classico_perto(G, i)
+    if not r:
+        return None
+    a, b, c, ab = r
+    ret = (G.h[b] - G.l[c]) / ab
+    if not CP_ZONA[0] <= ret <= CP_ZONA[1]:
+        return None
+    ent = G.acima(G.h[b] + G.tick)
+    stop = G.abaixo(G.l[c] - G.tick)
+    if not _risco_ok(G, i, ent, stop, 0.25, 2.0):
+        return None
+    return dict(tipo="stop", gatilho=ent, stop=stop, validade=1, alvos=_alvos_do_topo(G, b, ab), ret=round(ret, 4),
+                info="pivô clássico perto: pullback de %s%% da perna" % _br(100 * ret, 0))
+
+
+def e25_atencao(G, i):
+    if not _tendencia_ok(G, i):
+        return False
+    r = _classico_perto(G, i)
+    return bool(r) and (G.h[r[1]] - G.l[r[2]]) / r[3] < CP_ZONA[0] and e25_classico_perto(G, i) is None
+
+
 ESTRATEGIAS = {
     "E1": dict(nome="Halt na MM20", autor="Mario Pisani + Oliver Velez", fn=e1_halt_mm20, aten=e1_atencao,
                gestao="alvo2", saida=None, intraday=False,
@@ -1498,7 +1595,33 @@ ESTRATEGIAS = {
                         "Sinal: o candle faz mínima nova abaixo dela, mas fecha de volta acima e em alta (quem vendeu o rompimento ficou preso)",
                         "Compra 1 tick acima desse candle (vale 2 candles); stop 1 tick abaixo da mínima nova (risco curto)",
                         "Alvo em 2 vezes o risco. Venda: o espelho, na máxima de 20 candles"]),
+    "E24": dict(nome="Pivô da abertura (Onda 1)", autor="Mario Pisani (Os 10%): pivô de rompimento da onda 1 + projeção de Fibonacci",
+                fn=e24_onda1, aten=e24_atencao, gestao="fibo3", saida=None, intraday=True, sem_ntsl=True,
+                aguardando="primeiro impulso do dia feito, esperando a correção formar o pivô",
+                ideal="Intraday, 5 e 15 min. No nosso teste com custos: 425 operações, média de −0,21R; no WIN e no WDO, +0,006R em 68 operações (poucas para concluir).",
+                regras=["Só nas primeiras 2h30 do pregão: o primeiro movimento do dia (onda 1) vai do fundo A até o topo B, a máxima do dia até ali, com pelo menos 1 ATR",
+                        "Correção depois de B forma o pivô C: de 23,6% a 61,8% da perna, sem perder o fundo A (pelo menos 2 candles de correção)",
+                        "Gatilho: compra 1 tick acima da máxima B (superação da máxima), valendo 1 candle; stop 1 tick abaixo do pivô C",
+                        "Alvos: projeção de Fibonacci da perna A→B em cima de B: B + 61,8%, B + 100% e B + 161,8% da perna",
+                        "Um terço em cada alvo; no alvo 1 o stop vai para a entrada, no alvo 2 vai para o alvo 1",
+                        "Venda: o espelho (onda 1 de baixa, pivô de alta, gatilho na perda da mínima)"]),
+    "E25": dict(nome="Pivô clássico perto", autor="Mario Pisani (Os 10%): primeiro movimento, clássico perto + projeção de Fibonacci",
+                fn=e25_classico_perto, aten=e25_atencao, gestao="fibo3", saida=None, intraday=False, sem_ntsl=True,
+                aguardando="perna a favor da tendência com topo confirmado, esperando o pullback curto",
+                ideal="5, 15 e 60 min. No nosso teste com custos: 2.817 operações, média de −0,18R. No diário do Pisani (operação manual, com alvo parcial menor) o acerto do 1º alvo foi de 77%, em 178 operações.",
+                regras=["Tendência a favor: preço e MM20 acima da MM200 (venda: o inverso)",
+                        "Perna A→B de pelo menos 1,5 ATR com o topo B confirmado (3 candles de cada lado) e ainda não superado",
+                        "Pullback curto, perto da extremidade da perna: de 8% a 38,2% (não precisa de um movimento grande para romper a máxima)",
+                        "Gatilho: compra 1 tick acima da máxima B, valendo 1 candle; stop 1 tick abaixo do pivô C (fundo do pullback)",
+                        "Alvos: projeção de Fibonacci da perna em cima de B (61,8%, 100% e 161,8%); um terço em cada alvo",
+                        "Venda: o espelho"]),
 }
+
+# E26 a E46: os setups da apostila do Mario Pisani, um por um (pisani_setups.py importa as ferramentas deste arquivo)
+import pisani_setups  # noqa: E402
+
+ESTRATEGIAS.update(pisani_setups.SETUPS)
+SELETIVO_TENDENCIA = SELETIVO_TENDENCIA + pisani_setups.SELETIVO_TENDENCIA
 
 GESTOES = {
     "padrao": "Padrão de cada estratégia (a gestão que cada uma usa - ver regras)",

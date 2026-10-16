@@ -295,7 +295,7 @@
   area.addEventListener("pointermove", (e) => {
     if (!B.drag) {
       if (e.buttons) return;
-      // só mexe no cursor por causa da boleta (o editor "E se…" e os desenhos também usam o cursor)
+      // só mexe no cursor por causa da boleta (o editor da operação e os desenhos também usam o cursor)
       const c = rotuloSob(e) ? "pointer" : linhaSob(e) ? "ns-resize" : null;
       if (c) { area.style.cursor = c; B.cursor = true; } else if (B.cursor) { area.style.cursor = ""; B.cursor = false; }
       return;
