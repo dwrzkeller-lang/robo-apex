@@ -3,398 +3,706 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Robô Apex · estratégias de day trade para B3, opções e cripto</title>
-<meta name="description" content="Mais de 20 estratégias de day trade com entrada, stop e alvo no gráfico, teste no passado com custos reais, replay de cada operação, boleta simulada ao vivo, cripto e opções. R$ 49,99 por mês.">
-<meta property="og:title" content="Robô Apex · estratégias de day trade">
-<meta property="og:description" content="Veja onde cada estratégia entra e sai, teste antes de arriscar e treine ao vivo na boleta simulada.">
-<meta property="og:image" content="img/replay_15out.jpg">
-<link rel="icon" type="image/png" href="../icone-64.png">
+<title>Robô Apex · 46 estratégias de day trade, testadas candle a candle</title>
+<meta name="description" content="46 estratégias de day trade com entrada, stop e alvo no gráfico. Mini índice, mini dólar, ações, opções, moedas, ouro e cripto. Backtest com custos, replay, boleta simulada e 3 volumes de treinamento. R$ 49,99 por mês com tudo incluso.">
+<meta name="apex-app" content="">
+<meta property="og:title" content="Robô Apex · 46 estratégias de day trade">
+<meta property="og:description" content="Teste cada estratégia no passado com custos, assista o replay e treine ao vivo. Menos de R$ 1,67 por dia.">
+<meta property="og:image" content="img/r_win5b.webp">
+<link rel="icon" type="image/png" href="icone-64.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #04060c; --bg2: #0a0f1a; --linha: rgba(148, 163, 184, .14); --txt: #e8eef8; --txt2: #9aa7bc;
-  --ciano: #22d3ee; --violeta: #8b5cf6; --verde: #2ef2a8; --verm: #ff4d6a; --ouro: #ffd23f;
-  --grad: linear-gradient(135deg, #22d3ee, #8b5cf6);
+  --bg: #0b0e14; --bg2: #11151f; --bg3: #161b26; --linha: #232a38; --linha2: #2e3747;
+  --txt: #e6e9ef; --txt2: #9aa3b5; --txt3: #6b7488;
+  --verde: #089981; --verde2: #22c39b; --verm: #f23645; --azul: #2962ff; --azul2: #4f7dff;
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body { margin: 0; background: var(--bg); color: var(--txt); font: 16px/1.6 Inter, "Segoe UI", system-ui, sans-serif; overflow-x: hidden; }
+body { margin: 0; background: var(--bg); color: var(--txt); font: 16px/1.55 Inter, "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
 a { color: inherit; }
-h1, h2, h3 { font-family: "Space Grotesk", Inter, sans-serif; line-height: 1.12; margin: 0; letter-spacing: -.5px; }
-.envolve { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
-.fundo-grade { position: fixed; inset: 0; z-index: -2; pointer-events: none;
-  background-image: linear-gradient(rgba(148, 163, 184, .05) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, .05) 1px, transparent 1px);
-  background-size: 48px 48px; mask-image: radial-gradient(ellipse 80% 60% at 50% 20%, #000 30%, transparent 75%); }
-.fundo-luz { position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  background: radial-gradient(800px 500px at 15% 0%, rgba(139, 92, 246, .22), transparent 60%), radial-gradient(800px 600px at 90% 30%, rgba(34, 211, 238, .14), transparent 60%); }
+img, video { max-width: 100%; height: auto; display: block; }
+h1, h2, h3 { margin: 0; letter-spacing: -.025em; line-height: 1.12; }
+p { margin: 0; }
+.mono, .num { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.verde { color: var(--verde2); }
+.verm { color: var(--verm); }
+.env { width: min(1200px, calc(100% - 32px)); margin: 0 auto; }
 
 /* topo */
-.nav { position: sticky; top: 0; z-index: 50; backdrop-filter: blur(14px); background: rgba(4, 6, 12, .72); border-bottom: 1px solid var(--linha); }
-.nav .envolve { display: flex; align-items: center; justify-content: space-between; height: 68px; }
-.marca { display: flex; align-items: center; gap: 10px; font-family: "Space Grotesk"; font-weight: 700; letter-spacing: 2.5px; text-decoration: none; }
-.marca img { width: 36px; height: 36px; border-radius: 10px; box-shadow: 0 0 18px rgba(34, 211, 238, .4); }
-.nav nav { display: flex; gap: 26px; font-size: 14px; color: var(--txt2); }
+.nav { position: sticky; top: 0; z-index: 50; background: var(--bg); border-bottom: 1px solid var(--linha); }
+.nav .env { display: flex; align-items: center; gap: 28px; height: 60px; }
+.marca { display: flex; align-items: center; gap: 9px; font-weight: 800; letter-spacing: .08em; text-decoration: none; font-size: 15px; white-space: nowrap; }
+.marca img { width: 28px; height: 28px; border-radius: 6px; }
+.nav nav { display: flex; gap: 22px; font-size: 14px; color: var(--txt2); flex: 1; }
 .nav nav a { text-decoration: none; }
 .nav nav a:hover { color: var(--txt); }
-.bt { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 26px; border-radius: 14px; font-weight: 800; text-decoration: none; border: 0; cursor: pointer; font-size: 16px; transition: transform .15s, filter .15s, box-shadow .15s; }
-.bt:hover { transform: translateY(-2px); filter: brightness(1.08); }
-.bt-pri { background: var(--grad); color: #04101a; box-shadow: 0 10px 40px rgba(34, 211, 238, .35), 0 0 0 1px rgba(255, 255, 255, .1) inset; }
-.bt-sec { background: rgba(255, 255, 255, .05); color: var(--txt); border: 1px solid var(--linha); }
-.bt-peq { padding: 10px 18px; font-size: 14px; border-radius: 11px; }
-@media (max-width: 860px) { .nav nav { display: none; } }
+.nav .acoes { display: flex; gap: 8px; }
+@media (max-width: 1000px) { .nav nav { display: none; } .nav .env { justify-content: space-between; } }
+.bt { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 20px; border-radius: 6px; font-weight: 700;
+  text-decoration: none; border: 1px solid transparent; cursor: pointer; font-size: 15px; white-space: nowrap; }
+.bt-pri { background: var(--azul); color: #fff; }
+.bt-pri:hover { background: var(--azul2); }
+.bt-verde { background: var(--verde); color: #fff; }
+.bt-verde:hover { background: #0aa98f; }
+.bt-sec { background: transparent; color: var(--txt); border-color: var(--linha2); }
+.bt-sec:hover { border-color: var(--txt3); }
+.bt-peq { padding: 8px 14px; font-size: 14px; }
+@media (max-width: 400px) { .nav .bt-peq { padding: 7px 10px; font-size: 13px; } }
 
-/* hero */
-.hero { padding: 72px 0 40px; }
-.hero .envolve { display: grid; grid-template-columns: 1.05fr 1fr; gap: 48px; align-items: center; }
-.selo-topo { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 999px;
-  background: rgba(34, 211, 238, .08); border: 1px solid rgba(34, 211, 238, .35); color: #a5f3fc; }
-.selo-topo i { width: 8px; height: 8px; border-radius: 50%; background: var(--verde); box-shadow: 0 0 10px var(--verde); animation: pisca 1.6s infinite; }
-@keyframes pisca { 50% { opacity: .3; } }
-.hero h1 { font-size: clamp(40px, 5.2vw, 68px); margin: 18px 0 18px; }
-.hero h1 em { font-style: normal; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.hero p.lead { font-size: 19px; color: #c3cee0; max-width: 560px; margin: 0 0 28px; }
-.hero .ctas { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-.hero .mini { margin-top: 16px; font-size: 13px; color: var(--txt2); }
-.hero .mini b { color: var(--txt); }
-.tela-hero { position: relative; border-radius: 22px; padding: 10px; background: linear-gradient(160deg, rgba(34, 211, 238, .35), rgba(139, 92, 246, .35));
-  box-shadow: 0 30px 90px rgba(0, 0, 0, .6), 0 0 80px rgba(34, 211, 238, .18); }
-.tela-hero canvas { display: block; width: 100%; height: 360px; border-radius: 16px; background: #070b14; }
-.tela-hero .legenda-anim { position: absolute; left: 22px; bottom: 18px; font-size: 11px; color: var(--txt2); background: rgba(4, 6, 12, .7); padding: 3px 8px; border-radius: 6px; }
-.flutua { position: absolute; padding: 10px 14px; border-radius: 14px; background: rgba(10, 15, 26, .92); border: 1px solid var(--linha); backdrop-filter: blur(10px);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, .5); font-size: 13px; animation: sobe 6s ease-in-out infinite; }
-.flutua b { display: block; font-size: 18px; font-family: "Space Grotesk"; }
-.flutua.f1 { top: -18px; right: -14px; }
-.flutua.f2 { bottom: -22px; left: -18px; animation-delay: -3s; }
-@keyframes sobe { 50% { transform: translateY(-10px); } }
-@media (max-width: 980px) { .hero .envolve { grid-template-columns: 1fr; } .flutua { display: none; } }
+/* janela de print */
+.tela { border: 1px solid var(--linha2); border-radius: 8px; overflow: hidden; background: #000; }
+.tela .barra-j { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 12px; background: var(--bg3); border-bottom: 1px solid var(--linha2); font-size: 12px; color: var(--txt2); }
+.tela .barra-j i { width: 9px; height: 9px; border-radius: 50%; background: var(--linha2); flex: none; }
+.tela .barra-j span { margin-left: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.legenda { font-size: 13px; color: var(--txt2); padding-top: 10px; }
+.legenda b { color: var(--txt); font-weight: 700; }
 
-/* faixa que passa */
-.faixa { border-block: 1px solid var(--linha); background: rgba(10, 15, 26, .7); overflow: hidden; padding: 14px 0; }
-.faixa-trilho { display: flex; gap: 48px; width: max-content; animation: corre 45s linear infinite; }
-.faixa:hover .faixa-trilho { animation-play-state: paused; }
-.faixa span { white-space: nowrap; font-weight: 600; color: #c8d3e3; display: inline-flex; align-items: center; gap: 10px; }
-.faixa span::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--grad); }
-.faixa .dep { color: #fff; }
-.faixa .dep b { color: var(--verde); }
-@keyframes corre { to { transform: translateX(-50%); } }
+/* capa */
+.hero { padding: 40px 0 36px; }
+.hero .grade-h { display: grid; grid-template-columns: 1fr 1.05fr; gap: 48px; align-items: center; }
+.etiqueta { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--txt2);
+  border: 1px solid var(--linha2); padding: 5px 10px; border-radius: 4px; }
+.etiqueta b { color: var(--verde2); }
+.hero h1 { font-size: clamp(32px, 3.7vw, 50px); font-weight: 800; margin: 16px 0 14px; }
+.hero h1 .q { color: var(--verde2); }
+.hero .lead { font-size: 17px; color: #c4cada; margin-bottom: 22px; max-width: 520px; }
+.hero .ctas { display: flex; flex-wrap: wrap; gap: 10px; }
+.cartao-trade { position: relative; border: 1px solid var(--linha2); border-radius: 8px; overflow: hidden; background: #000; }
+.cartao-trade video { width: 100%; height: auto; aspect-ratio: 1280 / 668; object-fit: cover; }
+.cartao-trade .valor-t { position: absolute; left: 12px; top: 12px; background: #0b0e14eb; border: 1px solid var(--linha2); border-radius: 6px; padding: 8px 12px 9px; }
+.cartao-trade .valor-t small { display: block; font: 700 10.5px Inter, sans-serif; letter-spacing: .1em; color: var(--txt2); text-transform: uppercase; }
+.cartao-trade .valor-t b { display: block; font: 800 34px/1.05 "JetBrains Mono", monospace; color: var(--verde2); letter-spacing: -.02em; }
+.cartao-trade .rot-t { padding: 9px 12px; background: var(--bg3); border-top: 1px solid var(--linha2); font: 700 11px/1.45 "JetBrains Mono", monospace; letter-spacing: .04em; color: var(--txt2); text-transform: uppercase; }
+.cartao-trade .rot-t b { color: var(--verde2); }
+@media (max-width: 900px) { .hero { padding-top: 28px; } .hero .grade-h { grid-template-columns: 1fr; gap: 26px; } .cartao-trade .valor-t b { font-size: 26px; } }
 
-/* secoes */
-section.bloco { padding: 90px 0; }
-.titulo-sec { text-align: center; max-width: 760px; margin: 0 auto 48px; }
-.titulo-sec small { color: var(--ciano); font-weight: 800; letter-spacing: 2px; font-size: 13px; }
-.titulo-sec h2 { font-size: clamp(30px, 3.6vw, 46px); margin: 10px 0 14px; }
-.titulo-sec p { color: var(--txt2); font-size: 18px; margin: 0; }
-.print { border-radius: 18px; overflow: hidden; border: 1px solid var(--linha); box-shadow: 0 30px 80px rgba(0, 0, 0, .55); background: #070b14; }
-.print img { display: block; width: 100%; height: auto; }
-.duplas { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
-.dupla-txt h3 { font-size: 26px; margin: 18px 0 10px; }
-.dupla-txt p { color: var(--txt2); margin: 0; }
-.vitrine-grande { margin-bottom: 36px; }
-@media (max-width: 860px) { .duplas { grid-template-columns: 1fr; } }
+/* fita de resultados */
+.fita { border-top: 1px solid var(--linha); border-bottom: 1px solid var(--linha); background-color: #0d1118;
+  background-image: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px); background-size: 100% 4px; overflow: hidden; position: relative; }
+.fita .trilha { display: flex; width: max-content; animation: rolar 70s linear infinite; }
+.fita:hover .trilha { animation-play-state: paused; }
+@keyframes rolar { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.tk { display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 14px 24px; border-right: 1px solid var(--linha); text-decoration: none; min-width: 220px; }
+a.tk:hover { background: var(--bg2); }
+.tk .a { font: 700 11px Inter, sans-serif; letter-spacing: .09em; text-transform: uppercase; color: var(--txt2); white-space: nowrap; }
+.tk .v { font: 800 21px "JetBrains Mono", monospace; color: var(--verde2); white-space: nowrap; letter-spacing: -.01em; }
+.tk .v::before { content: "\25B2  "; font-size: 12px; vertical-align: 2px; }
+.tk .d { font: 500 11.5px "JetBrains Mono", monospace; color: var(--txt3); white-space: nowrap; }
+.nota-fita { font-size: 12px; color: var(--txt3); padding: 8px 0 0; }
+@media (prefers-reduced-motion: reduce) { .fita { overflow-x: auto; } .fita .trilha { animation: none; } .fita .trilha [aria-hidden] { display: none; } }
 
-.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-.card { padding: 26px; border-radius: 18px; background: linear-gradient(180deg, rgba(20, 28, 46, .7), rgba(10, 15, 26, .8)); border: 1px solid var(--linha);
-  transition: transform .2s, border-color .2s; }
-.card:hover { transform: translateY(-4px); border-color: rgba(34, 211, 238, .45); }
-.card .ic { width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; font-size: 22px; background: rgba(34, 211, 238, .1); border: 1px solid rgba(34, 211, 238, .3); margin-bottom: 14px; }
-.card h3 { font-size: 20px; margin-bottom: 8px; }
-.card p { margin: 0; color: var(--txt2); font-size: 15px; }
-@media (max-width: 980px) { .cards { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 640px) { .cards { grid-template-columns: 1fr; } }
+/* confianca */
+.confia { display: grid; grid-template-columns: 1fr 1.4fr; border: 1px solid var(--linha); border-radius: 8px; overflow: hidden; margin-top: 28px; }
+.confia > div { padding: 20px 22px; }
+.confia > div + div { border-left: 1px solid var(--linha); }
+.confia h3 { font: 700 11.5px Inter, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: var(--txt3); margin-bottom: 10px; }
+.confia ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+.confia li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; font-size: 14.5px; color: #d3d8e3; }
+.confia li svg { width: 16px; height: 16px; margin-top: 3px; stroke: var(--verde2); fill: none; stroke-width: 2; }
+@media (max-width: 800px) { .confia { grid-template-columns: 1fr; } .confia > div + div { border-left: 0; border-top: 1px solid var(--linha); } }
 
-.numeros { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 10px; }
-.numeros div { text-align: center; padding: 22px 10px; border-radius: 16px; border: 1px solid var(--linha); background: rgba(10, 15, 26, .7); }
-.numeros b { display: block; font-family: "Space Grotesk"; font-size: 40px; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.numeros span { color: var(--txt2); font-size: 14px; }
-@media (max-width: 760px) { .numeros { grid-template-columns: 1fr 1fr; } }
+/* blocos */
+section.bloco { padding: 80px 0; border-bottom: 1px solid var(--linha); }
+@media (max-width: 640px) { section.bloco { padding: 56px 0; } }
+.cab { max-width: 760px; margin-bottom: 32px; }
+.cab .sobre { font-size: 12.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--azul2); }
+.cab h2 { font-size: clamp(26px, 3.2vw, 40px); font-weight: 800; margin: 10px 0 12px; }
+.cab p { color: var(--txt2); font-size: 17px; }
 
-.passos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; counter-reset: p; }
-.passos div { padding: 26px; border-radius: 18px; border: 1px solid var(--linha); background: rgba(10, 15, 26, .7); position: relative; }
-.passos div::before { counter-increment: p; content: counter(p); position: absolute; top: -18px; left: 22px; width: 38px; height: 38px; border-radius: 12px;
-  display: grid; place-items: center; font-weight: 800; background: var(--grad); color: #04101a; font-family: "Space Grotesk"; }
-.passos h3 { font-size: 20px; margin: 8px 0 8px; }
-.passos p { color: var(--txt2); margin: 0; }
-@media (max-width: 860px) { .passos { grid-template-columns: 1fr; gap: 30px; } }
+/* livros */
+.livros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+.livro { display: grid; grid-template-columns: 140px 1fr; gap: 20px; align-items: start; }
+.capa { position: relative; aspect-ratio: 210 / 297; border-radius: 2px 6px 6px 2px; overflow: hidden; background: #16213a;
+  box-shadow: 0 12px 26px rgba(0, 0, 0, .55); border: 1px solid #2b3a5e; }
+.capa::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 7px; background: rgba(0, 0, 0, .35); border-right: 1px solid rgba(255, 255, 255, .08); z-index: 2; }
+.capa img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+.capa .f { position: absolute; inset: 0; padding: 16px 12px 14px 18px; display: flex; flex-direction: column; justify-content: space-between; }
+.capa .f small { font: 700 10px "JetBrains Mono", monospace; letter-spacing: .1em; color: var(--verde2); }
+.capa .f b { font-size: 16px; line-height: 1.15; letter-spacing: -.01em; }
+.capa .f em { font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .12em; color: var(--txt2); }
+.livro small.vol { color: var(--azul2); font-weight: 800; letter-spacing: .1em; font-size: 12px; }
+.livro h3 { font-size: 19px; margin: 4px 0 8px; }
+.livro p { color: var(--txt2); font-size: 14px; margin-bottom: 12px; }
+.livro .lib { display: block; font-size: 12.5px; color: var(--txt3); margin-bottom: 8px; }
+.faixa-tudo { margin-top: 30px; padding: 16px 18px; border: 1px solid var(--linha2); border-radius: 8px; background: var(--bg2); display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between; }
+.faixa-tudo p { color: #c4cada; font-size: 15px; }
+.faixa-tudo b { color: var(--txt); }
+@media (max-width: 1000px) { .livros { grid-template-columns: 1fr; max-width: 560px; } }
+@media (max-width: 420px) { .livro { grid-template-columns: 110px 1fr; gap: 14px; } .capa .f b { font-size: 13px; } }
 
-.resultado-caixa { display: grid; grid-template-columns: 1.3fr 1fr; gap: 28px; align-items: center; }
-.resultado-caixa ul { padding-left: 18px; color: #c8d3e3; }
-.resultado-caixa li { margin: 8px 0; }
-.aviso-honesto { margin-top: 18px; padding: 14px 16px; border-radius: 14px; border: 1px solid rgba(255, 210, 63, .4); background: rgba(255, 210, 63, .06); color: #f6e7b0; font-size: 14px; }
-@media (max-width: 860px) { .resultado-caixa { grid-template-columns: 1fr; } }
+/* resultados */
+.abas { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+.abas button { background: var(--bg2); color: var(--txt2); border: 1px solid var(--linha); border-radius: 6px; padding: 9px 14px; font: 600 14px Inter, sans-serif; cursor: pointer; }
+.abas button[aria-selected=true] { background: var(--bg3); color: var(--txt); border-color: var(--azul); }
+.abas button .num { color: var(--verde2); margin-left: 6px; }
+.res-painel[hidden] { display: none; }
+.res-info { display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 32px; margin-top: 22px; align-items: start; }
+.res-info h3 { font-size: 22px; margin: 10px 0 10px; }
+.res-info .rot { display: block; margin-top: 14px; font: 800 12px Inter, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: var(--verde2); }
+.res-info .grande { font: 800 46px/1.05 "JetBrains Mono", monospace; color: var(--verde2); letter-spacing: -.03em; margin-top: 4px; }
+.tabela-mini { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tabela-mini td { padding: 8px 0; border-bottom: 1px solid var(--linha); }
+.tabela-mini td:last-child { text-align: right; font-weight: 700; }
+.res-info p { color: var(--txt2); font-size: 14.5px; margin-bottom: 14px; }
+.nota-res { font-size: 12.5px; color: var(--txt3); margin-top: 22px; }
+@media (max-width: 900px) { .res-info { grid-template-columns: 1fr; gap: 18px; } .res-info .grande { font-size: 32px; } }
+
+/* inteligencia artificial */
+.ia { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
+.ia ol { list-style: none; margin: 0; padding: 0; counter-reset: ia; }
+.ia li { counter-increment: ia; display: grid; grid-template-columns: 34px 1fr; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--linha); }
+.ia li:first-child { padding-top: 0; }
+.ia li::before { content: counter(ia, decimal-leading-zero); font: 700 13px "JetBrains Mono", monospace; color: var(--azul2); padding-top: 2px; }
+.ia li b { display: block; font-size: 16px; margin-bottom: 3px; }
+.ia li span { color: var(--txt2); font-size: 14.5px; }
+.ia .prints { display: grid; gap: 22px; }
+.ia .prints .quadro { aspect-ratio: 16 / 10; overflow: hidden; }
+.ia video { width: 100%; height: auto; aspect-ratio: 1280 / 730; object-fit: contain; background: #000; }
+.ia .prints .quadro img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
+.ia .aviso-ia { margin-top: 18px; font-size: 13px; color: var(--txt3); }
+.selo-ia { display: inline-block; font: 700 10.5px "JetBrains Mono", monospace; letter-spacing: .08em; color: var(--azul2); border: 1px solid #2b3a5e; border-radius: 3px; padding: 1px 6px; margin-left: 6px; vertical-align: 2px; }
+@media (max-width: 900px) { .ia { grid-template-columns: 1fr; gap: 32px; } }
+
+/* navegador e computador */
+.dois { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--linha); border: 1px solid var(--linha); border-radius: 8px; overflow: hidden; }
+.dois > div { background: var(--bg2); padding: 26px; }
+.dois svg { width: 30px; height: 30px; stroke: var(--txt2); fill: none; stroke-width: 1.6; margin-bottom: 14px; }
+.dois h3 { font-size: 19px; margin-bottom: 8px; }
+.dois p { color: var(--txt2); font-size: 15px; }
+.salvo { margin-top: 22px; display: grid; grid-template-columns: 220px 1fr; gap: 24px; align-items: start; }
+.salvo h3 { font-size: 17px; }
+.salvo ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.salvo li { border: 1px solid var(--linha2); border-radius: 4px; padding: 6px 10px; font-size: 14px; color: #c4cada; }
+@media (max-width: 800px) { .dois { grid-template-columns: 1fr; } .salvo { grid-template-columns: 1fr; gap: 12px; } }
+
+/* mercados */
+.merc-abas { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--linha); border-radius: 8px; overflow: hidden; margin-bottom: 22px; }
+.merc-abas button { background: var(--bg2); border: 0; border-right: 1px solid var(--linha); color: var(--txt2); padding: 14px 14px; cursor: pointer; text-align: left; font: 13.5px Inter, sans-serif; }
+.merc-abas button:last-child { border-right: 0; }
+.merc-abas button b { display: block; color: var(--txt); font-size: 16px; }
+.merc-abas button[aria-selected=true] { background: var(--bg3); box-shadow: inset 0 -2px 0 var(--azul); }
+.merc { display: grid; grid-template-columns: 1fr 1.7fr; gap: 32px; align-items: start; }
+.merc[hidden] { display: none; }
+.merc h3 { font-size: 22px; margin-bottom: 10px; }
+.merc p { color: #c4cada; font-size: 15px; }
+.merc h4 { margin: 18px 0 0; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--txt3); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chips span { font: 600 12.5px "JetBrains Mono", monospace; border: 1px solid var(--linha2); border-radius: 4px; padding: 4px 8px; color: var(--txt2); }
+.chips span em { font-style: normal; color: var(--txt3); font-family: Inter, sans-serif; font-weight: 500; margin-left: 4px; }
+@media (max-width: 900px) { .merc { grid-template-columns: 1fr; } .merc .tela { order: -1; } .merc-abas { grid-template-columns: 1fr 1fr; } .merc-abas button:nth-child(2) { border-right: 0; } .merc-abas button:nth-child(-n+2) { border-bottom: 1px solid var(--linha); } }
+
+/* gestao */
+.gestao { display: grid; grid-template-columns: 340px 1fr; gap: 48px; align-items: center; }
+.gestao ul { padding: 0; margin: 0; list-style: none; }
+.gestao li { padding: 12px 0; border-bottom: 1px solid var(--linha); color: #c4cada; }
+.gestao li b { color: var(--txt); }
+@media (max-width: 900px) { .gestao { grid-template-columns: 1fr; gap: 28px; } .gestao .tela { max-width: 340px; width: 100%; } }
+
+/* estrategias */
+.contador { display: grid; grid-template-columns: auto 1fr; gap: 48px; align-items: center; }
+.contador .n { font-size: clamp(100px, 14vw, 180px); font-weight: 800; line-height: .85; letter-spacing: -.06em; }
+.familias { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--linha); border: 1px solid var(--linha); border-radius: 8px; overflow: hidden; }
+.familias div { background: var(--bg2); padding: 18px; }
+.familias b { display: block; font-size: 15px; }
+.familias span { color: var(--txt2); font-size: 13.5px; }
+.familias i { font: 700 12px "JetBrains Mono", monospace; color: var(--verde2); float: right; }
+@media (max-width: 900px) { .contador { grid-template-columns: 1fr; gap: 16px; } .familias { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 520px) { .familias { grid-template-columns: 1fr; } }
+
+/* funcionalidades */
+.funcs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.func { border: 1px solid var(--linha); border-radius: 8px; overflow: hidden; background: var(--bg2); display: flex; flex-direction: column; }
+.func .img { aspect-ratio: 16 / 10; overflow: hidden; background: #000; border-bottom: 1px solid var(--linha); position: relative; }
+.func .img img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
+.func .txt { padding: 16px 18px 18px; }
+.func h3 { font-size: 17px; margin-bottom: 6px; }
+.func p { color: var(--txt2); font-size: 14px; }
+.func.trancada .img img { filter: blur(7px) brightness(.55); transform: scale(1.06); }
+.func.trancada .img::after { content: "só para assinantes"; position: absolute; inset: 0; display: grid; place-items: center; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; font-size: 13px; }
+@media (max-width: 900px) { .funcs { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .funcs { grid-template-columns: 1fr; } }
 
 /* preco */
-.preco-box { max-width: 520px; margin: 0 auto; padding: 36px; border-radius: 26px; text-align: center; position: relative;
-  background: linear-gradient(180deg, rgba(20, 28, 46, .92), rgba(8, 12, 22, .96)); border: 1px solid rgba(34, 211, 238, .45);
-  box-shadow: 0 30px 100px rgba(34, 211, 238, .18), 0 0 0 1px rgba(139, 92, 246, .25) inset; }
-.preco-box .rotulo { display: inline-block; padding: 6px 14px; border-radius: 999px; background: var(--grad); color: #04101a; font-weight: 800; font-size: 13px; }
-.preco-box .valor { font-family: "Space Grotesk"; font-size: 64px; font-weight: 700; margin: 16px 0 0; }
-.preco-box .valor small { font-size: 20px; color: var(--txt2); font-weight: 500; }
-.preco-box ul { list-style: none; padding: 0; margin: 22px 0 28px; text-align: left; }
-.preco-box li { padding: 7px 0 7px 30px; position: relative; border-bottom: 1px solid var(--linha); }
-.preco-box li::before { content: "✓"; position: absolute; left: 4px; color: var(--verde); font-weight: 800; }
-.preco-box .bt { width: 100%; font-size: 18px; padding: 18px; }
-.preco-box .garantia { margin-top: 14px; font-size: 13px; color: var(--txt2); }
+.preco { display: grid; grid-template-columns: 1fr 460px; gap: 56px; align-items: center; }
+.caixa-preco { border: 1px solid var(--linha2); border-radius: 10px; background: var(--bg2); overflow: hidden; }
+.caixa-preco .cp-topo { display: flex; justify-content: space-between; align-items: center; padding: 16px 26px; border-bottom: 1px solid var(--linha); font: 700 12px Inter, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: var(--txt2); }
+.selo-tudo { background: var(--verde); color: #fff; border-radius: 4px; padding: 4px 9px; font-size: 11.5px; letter-spacing: .1em; }
+.caixa-preco .cp-corpo { padding: 24px 26px 22px; }
+.caixa-preco .valor { display: flex; align-items: baseline; gap: 8px; }
+.caixa-preco .valor b { font: 800 56px/1 Inter, sans-serif; letter-spacing: -.04em; }
+.caixa-preco .inclui { margin-top: 10px; font-size: 14px; color: var(--txt2); }
+.caixa-preco .valor span { font-size: 17px; color: var(--txt2); font-weight: 600; }
+.contas { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 20px 0 18px; }
+.contas div { border: 1px solid var(--linha2); border-radius: 6px; padding: 12px 14px; background: var(--bg); }
+.contas b { display: block; font: 800 22px "JetBrains Mono", monospace; color: var(--verde2); letter-spacing: -.02em; }
+.contas span { font-size: 11.5px; color: var(--txt2); text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+.caixa-preco ul { margin: 0 0 22px; padding: 0; list-style: none; display: grid; gap: 9px; }
+.caixa-preco li { padding-left: 24px; position: relative; font-size: 14.5px; color: #d3d8e3; }
+.caixa-preco li::before { content: ""; position: absolute; left: 3px; top: 6px; width: 9px; height: 5px; border-left: 2px solid var(--verde2); border-bottom: 2px solid var(--verde2); transform: rotate(-45deg); }
+.caixa-preco .bt { width: 100%; padding: 16px; font-size: 17px; }
+.garantias { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--linha); font-size: 12px; line-height: 1.35; color: var(--txt2); background: var(--bg); text-align: center; }
+.garantias span { padding: 12px 8px; }
+.garantias span + span { border-left: 1px solid var(--linha); }
+.argumentos h2 { font-size: clamp(28px, 3.4vw, 42px); font-weight: 800; margin-bottom: 8px; }
+.argumentos .linha-arg { display: grid; grid-template-columns: 150px 1fr; gap: 16px; padding: 18px 0; border-bottom: 1px solid var(--linha); }
+.argumentos .linha-arg b { font-size: 28px; font-weight: 700; }
+.argumentos .linha-arg p { color: #c4cada; }
+@media (max-width: 980px) { .preco { grid-template-columns: 1fr; gap: 36px; } .argumentos .linha-arg { grid-template-columns: 1fr; gap: 4px; } }
+@media (max-width: 420px) { .caixa-preco .cp-corpo { padding: 20px 18px; } .caixa-preco .cp-topo { padding: 14px 18px; } .caixa-preco .valor b { font-size: 46px; } }
 
-/* perguntas */
-.perguntas { max-width: 820px; margin: 0 auto; }
-details.pq { border: 1px solid var(--linha); border-radius: 14px; padding: 16px 20px; margin-bottom: 10px; background: rgba(10, 15, 26, .7); }
-details.pq summary { cursor: pointer; font-weight: 700; font-size: 17px; list-style: none; }
-details.pq summary::after { content: "+"; float: right; color: var(--ciano); font-size: 22px; line-height: 1; }
+/* aviso de cadastro */
+.modal { position: fixed; inset: 0; z-index: 100; background: rgba(0, 0, 0, .7); display: grid; place-items: center; padding: 16px; }
+.modal[hidden] { display: none; }
+.modal .cx { width: min(420px, 100%); background: var(--bg2); border: 1px solid var(--linha2); border-radius: 10px; padding: 24px; }
+.modal h3 { font-size: 20px; margin-bottom: 10px; }
+.modal p { color: var(--txt2); font-size: 15px; margin-bottom: 18px; }
+
+/* duvidas e rodape */
+.duvidas { max-width: 820px; }
+details.pq { border-bottom: 1px solid var(--linha); padding: 16px 0; }
+details.pq summary { cursor: pointer; font-weight: 700; font-size: 16.5px; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+details.pq summary::-webkit-details-marker { display: none; }
+details.pq summary::after { content: "+"; color: var(--txt2); font-size: 22px; line-height: 1; }
 details.pq[open] summary::after { content: "−"; }
-details.pq p { color: var(--txt2); margin: 12px 0 0; }
-
-/* rodape */
-footer { border-top: 1px solid var(--linha); padding: 40px 0 60px; color: var(--txt2); font-size: 14px; }
-.risco { padding: 22px; border-radius: 16px; border: 1px solid rgba(255, 77, 106, .35); background: rgba(255, 77, 106, .05); color: #f3c9d1; margin-bottom: 26px; }
-.risco b { color: #fff; }
-footer .linhas { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+details.pq p { color: var(--txt2); margin-top: 10px; }
+footer { padding: 40px 0 90px; color: var(--txt2); font-size: 13.5px; }
+.risco { border: 1px solid var(--linha2); border-radius: 8px; padding: 18px; margin-bottom: 22px; color: #b9c0cf; }
+.risco b { color: var(--txt); }
+footer .linhas { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
 footer a { color: var(--txt2); }
-.fixo-celular { display: none; }
-@media (max-width: 640px) { .fixo-celular { display: block; position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 60; } .fixo-celular .bt { width: 100%; } }
-.aparece { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s ease; }
-.aparece.on { opacity: 1; transform: none; }
-/* 3.1: video no topo e os casos reais */
-.tela-hero video { width: 100%; height: auto; aspect-ratio: 1362 / 912; display: block; object-fit: cover; border-radius: 16px; background: #05080f; }
-.flutua b.verde, b.verde { color: var(--verde); }
-.caso { margin: 0 0 54px; display: grid; grid-template-columns: 1.35fr 1fr; gap: 34px; align-items: center; }
-.caso.inverte { grid-template-columns: 1fr 1.35fr; }
-.caso.inverte .print { order: 2; }
-.caso.grande { grid-template-columns: 1fr; gap: 18px; }
-.caso.grande figcaption { max-width: 860px; }
-.caso h3 { font-size: 26px; margin: 6px 0 10px; }
-.caso p { color: #c3cee0; margin: 0 0 16px; }
-.data { display: inline-block; font-size: 12.5px; font-weight: 700; letter-spacing: .4px; color: #a5f3fc; padding: 4px 10px; border-radius: 999px;
-  background: rgba(34, 211, 238, .08); border: 1px solid rgba(34, 211, 238, .3); }
-.dupla-txt .data { margin-bottom: 8px; }
-.print.estreito { max-width: 360px; margin: 0 auto; }
-@media (max-width: 860px) { .caso, .caso.inverte { grid-template-columns: 1fr; gap: 16px; } .caso.inverte .print { order: 0; } .caso h3 { font-size: 22px; } }
+.fixo-cel { display: none; }
+@media (max-width: 640px) { .fixo-cel { display: block; position: fixed; left: 10px; right: 10px; bottom: 10px; z-index: 60; } .fixo-cel .bt { width: 100%; white-space: normal; } }
+
+/* ===== movimento ===== */
+.cartao-trade .vid { position: relative; overflow: hidden; }
+.cartao-trade .replay { position: absolute; right: 12px; top: 12px; display: inline-flex; align-items: center; gap: 7px; background: #0b0e14eb; border: 1px solid var(--linha2); border-radius: 4px; padding: 4px 9px; font: 700 10.5px "JetBrains Mono", monospace; letter-spacing: .1em; text-transform: uppercase; color: var(--txt); }
+.cartao-trade .replay i { width: 7px; height: 7px; border-radius: 50%; background: var(--verm); }
+.cartao-trade .varre { position: absolute; inset: 0; pointer-events: none; border-top: 1px solid rgba(34, 195, 155, .35); transform: translateY(-2px); }
+.bt { position: relative; overflow: hidden; transition: background-color .2s, border-color .2s, transform .12s; }
+.bt::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 40%; background: rgba(255, 255, 255, .16); transform: translateX(-160%) skewX(-20deg); pointer-events: none; }
+.bt:active { transform: scale(.975); }
+.bt-verde::before { content: "\2192"; order: 2; display: inline-block; transition: transform .2s; }
+.tk { transition: background-color .2s, box-shadow .2s; }
+.tk .v { transition: color .2s; }
+.func, .livro .capa, .dois > div, .familias div, .confia, .res-painel .tela, .merc .tela { transition: transform .25s ease, border-color .25s ease; }
+.func { position: relative; }
+.func::before, .func::after { content: ""; position: absolute; width: 14px; height: 14px; z-index: 3; pointer-events: none; transform: scale(0); transition: transform .25s ease; }
+.func::before { left: -1px; top: -1px; border-left: 2px solid var(--azul2); border-top: 2px solid var(--azul2); transform-origin: 0 0; }
+.func::after { right: -1px; bottom: -1px; border-right: 2px solid var(--azul2); border-bottom: 2px solid var(--azul2); transform-origin: 100% 100%; }
+.func .img img, .ia .prints .quadro img { transition: transform .4s ease; }
+.caixa-preco { position: relative; }
+.caixa-preco::before { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none; z-index: 2; opacity: 0; transition: opacity .3s;
+  background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 0%), rgba(79, 125, 255, .8), transparent 70%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
+.conta, .contas b, .caixa-preco .valor b, .res-info .grande { font-variant-numeric: tabular-nums; }
+
+@media (hover: hover) and (pointer: fine) {
+  .bt:hover::after { transform: translateX(360%) skewX(-20deg); transition: transform .6s ease; }
+  .bt-verde:hover::before { transform: translateX(3px); }
+  .tk:hover { background: var(--bg2); box-shadow: inset 0 2px 0 var(--verde2); }
+  .tk:hover .v { color: #3ee0b5; }
+  .func:hover { transform: translateY(-3px); border-color: var(--azul); }
+  .func:hover::before, .func:hover::after { transform: scale(1); }
+  .func:not(.trancada):hover .img img { transform: scale(1.03); }
+  .dois > div:hover, .familias div:hover { border-color: var(--azul); }
+  .livro:hover .capa { transform: translateY(-4px) rotate(-1deg); }
+  .res-painel .tela:hover, .merc .tela:hover { border-color: var(--azul); }
+  .ia .prints .tela:hover .quadro img, .ia .prints .quadro:hover img { transform: scale(1.03); }
+  .caixa-preco:hover::before { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .js-mov .rv { opacity: 0; transform: translateY(16px); transition: opacity .55s ease, transform .55s ease; }
+  .js-mov .rv.on { opacity: 1; transform: none; }
+  .cartao-trade .varre { animation: varrer 5s linear infinite; }
+  .cartao-trade .replay i { animation: piscar 1.2s steps(2, start) infinite; }
+}
+@keyframes varrer { from { transform: translateY(-2px); } to { transform: translateY(100%); } }
+@keyframes piscar { to { visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) {
+  .bt, .bt::after, .bt-verde::before, .func, .func::before, .func::after, .func .img img, .livro .capa, .caixa-preco::before, .tk { transition: none !important; }
+  .cartao-trade .varre { display: none; }
+}
 </style>
 </head>
 <body>
-<div class="fundo-grade"></div><div class="fundo-luz"></div>
 
 <header class="nav">
-  <div class="envolve">
-    <a class="marca" href="#"><img src="../icone-64.png" alt="">ROBÔ APEX</a>
-    <nav><a href="#como">Como funciona</a><a href="#recursos">Recursos</a><a href="#resultados">Resultados</a><a href="#preco">Preço</a><a href="#perguntas">Dúvidas</a></nav>
-    <div><a class="bt bt-sec bt-peq" data-app="/entrar">Entrar</a> <a class="bt bt-pri bt-peq" data-app="/entrar?cadastro=1">Começar agora</a></div>
+  <div class="env">
+    <a class="marca" href="#"><img src="icone-64.png" alt="" width="28" height="28">ROBÔ APEX</a>
+    <nav><a href="#ia">IA</a><a href="#curso">Treinamento</a><a href="#resultados">Resultados</a><a href="#mercados">Mercados</a><a href="#estrategias">Estratégias</a><a href="#funcionalidades">Funcionalidades</a><a href="#preco">Preço</a></nav>
+    <div class="acoes"><a class="bt bt-sec bt-peq" data-app="/entrar">Entrar</a><a class="bt bt-pri bt-peq" data-app="/entrar?cadastro=1">Assinar</a></div>
   </div>
 </header>
 
 <section class="hero">
-  <div class="envolve">
+  <div class="env grade-h">
     <div>
-      <span class="selo-topo"><i></i>B3 · opções · cripto · 46 estratégias prontas</span>
-      <h1>Pare de operar no escuro. <em>Veja a estratégia antes de arriscar.</em></h1>
-      <p class="lead">O Robô Apex mostra no gráfico onde cada estratégia entra, onde fica o stop e onde estão os alvos. Você testa no passado com os custos de verdade, assiste o replay de cada operação e treina ao vivo numa boleta simulada, sem colocar dinheiro.</p>
+      <span class="etiqueta"><b>46</b> estratégias · <b>Inteligência Artificial</b> · B3 · opções · mundo · cripto</span>
+      <h1>46 estratégias de day trade. <span class="q">Teste todas antes de arriscar um centavo.</span></h1>
+      <p class="lead">Entrada, stop e alvo no gráfico, testados no passado com custos e mostrados em reais. Com IA que ajusta cada estratégia.</p>
       <div class="ctas">
-        <a class="bt bt-pri" data-app="/entrar?cadastro=1">Quero o Robô Apex · R$ 49,99/mês</a>
-        <a class="bt bt-sec" href="#como">Ver como funciona</a>
+        <a class="bt bt-verde" data-app="/entrar?cadastro=1">Assinar por R$ 49,99/mês</a>
+        <a class="bt bt-sec" href="#resultados">Ver os resultados</a>
       </div>
-      <div class="mini"><b>Cancele quando quiser.</b> 7 dias de garantia pela plataforma de pagamento.</div>
     </div>
-    <div class="tela-hero tem-video">
-      <video id="videoHero" src="img/replay_15out.mp4" poster="img/replay_15out.jpg" autoplay muted loop playsinline preload="auto" aria-label="Replay de duas entradas no mini índice em 15/10/2026"></video>
-      <span class="legenda-anim">replay · WIN 5 min · 15/10/2026</span>
-      <div class="flutua f1"><small>2 entradas seguidas</small><b class="verde">+R$ 3.443,97</b></div>
-      <div class="flutua f2"><small>Replay candle a candle</small><b>do sinal à saída</b></div>
-    </div>
+    <figure style="margin:0" class="cartao-trade">
+      <div class="vid"><video src="img/trade_win.mp4" poster="img/trade_win.jpg" width="1280" height="668" autoplay muted loop playsinline preload="metadata" aria-label="Replay de uma compra no mini índice saindo no alvo"></video>
+        <span class="varre" aria-hidden="true"></span><span class="replay"><i></i>Replay</span>
+        <div class="valor-t"><small>Resultado do trade</small><b class="conta">+R$ 2.594</b></div></div>
+      <figcaption class="rot-t">Trade no WIN · 10 contratos · compra 185.935 → alvo 187.235 (<b>+1.300 pontos</b>) · replay acelerado</figcaption>
+    </figure>
   </div>
 </section>
 
-<div class="faixa" aria-label="Destaques"><div class="faixa-trilho" id="faixa"></div></div>
-
-<section class="bloco" id="como">
-  <div class="envolve">
-    <div class="titulo-sec aparece"><small>O ROBÔ EM AÇÃO</small><h2>Operações reais de mercado, marcadas pelo robô</h2>
-      <p>Prints tirados do Robô Apex em outubro de 2026, com os dados reais do mercado, em simulação (sem dinheiro). O nome das estratégias fica borrado de propósito: elas são para quem assina.</p></div>
-
-    <figure class="caso grande aparece">
-      <div class="print"><img src="img/dia_win_15out.png" alt="Gráfico do mini índice em 15/10/2026 com duas vendas e as saídas no alvo" loading="lazy"></div>
-      <figcaption><span class="data">15/10/2026 · WIN · 5 min · 10 contratos</span>
-        <h3>O dia inteiro no gráfico: sinal, entrada, stop e saída</h3>
-        <p>Às 14:45 o robô marcou a venda em 205.475 e saiu no alvo às 16:10 com <b class="verde">+R$ 1.794,00</b>. Às 16:25 veio a segunda venda, que saiu às 16:30 com <b class="verde">+R$ 1.649,97</b>. Na direita, o painel mostra o resultado do dia, o teste ao vivo e cada operação, que você pode abrir em replay.</p></figcaption>
-    </figure>
-
-    <figure class="caso aparece">
-      <div class="print"><img src="img/estrategia_win_15out.png" alt="Duas compras no mini índice com saída no alvo de 4 vezes o risco" loading="lazy"></div>
-      <figcaption><span class="data">14 e 15/10/2026 · WIN · 5 min · 10 contratos</span>
-        <h3>Ganhar muito quando acerta, perder pouco quando erra</h3>
-        <p>A estratégia é composta por três peças: espera o preço romper uma mínima importante, confirma que o rompimento foi falso quando ele volta para dentro e entra a favor da volta, com o stop logo abaixo do fundo e o alvo de 4 vezes o risco. Aqui foram duas saídas no alvo: <b class="verde">+R$ 4.778,13</b> e <b class="verde">+R$ 5.345,25</b>. Na lista ao lado aparecem também os dois stops da semana, de cerca de R$ 400 cada.</p>
-        <a class="bt bt-pri bt-peq" data-app="/entrar?cadastro=1">Assine e veja como ela funciona na prática</a></figcaption>
-    </figure>
-
-    <figure class="caso inverte aparece">
-      <div class="print"><img src="img/parcial_win_15out.png" alt="Resultado de 15/10/2026 com a gestão parcial" loading="lazy"></div>
-      <figcaption><span class="data">15/10/2026 · WIN · 5 min · gestão Parcial</span>
-        <h3>A mesma estratégia, no dia 15/10, com outra gestão</h3>
-        <p>Compra às 10:40 em 203.774, stop em 203.105 e saída às 12:25 no alvo, com <b class="verde">+R$ 2.000,72</b> em 10 contratos. Na direita você troca a gestão (2:1, 3:1, 4:1, parcial, trailing) e o robô refaz a conta na hora.</p></figcaption>
-    </figure>
-
-    <figure class="caso aparece">
-      <div class="print"><img src="img/outra_win_2309.png" alt="Duas compras seguidas no mini índice em 22 e 23/09/2026" loading="lazy"></div>
-      <figcaption><span class="data">22 e 23/09/2026 · WIN · 5 min · 10 contratos · alvo 3:1</span>
-        <h3>Outra estratégia, outras entradas</h3>
-        <p>Duas compras seguidas a favor da tendência, cada uma com o stop curto embaixo e o alvo de 3 vezes o risco: <b class="verde">+R$ 1.284,00</b> no dia 22 e <b class="verde">+R$ 2.961,28</b> no dia 23. O robô mostra onde estava o stop e por que saiu.</p></figcaption>
-    </figure>
-
-    <figure class="caso inverte aparece">
-      <div class="print"><img src="img/acoes_petr4.png" alt="Compra em PETR4 com dois alvos" loading="lazy"></div>
-      <figcaption><span class="data">PETR4 · 5 min · 02/10/2026</span>
-        <h3>Também em ações da B3</h3>
-        <p>Compra em 50,41 às 13:30, stop em 50,19 e dois alvos marcados no gráfico. Saída a 50,74 às 14:40, com <b class="verde">+R$ 304,79</b>. As mesmas estratégias rodam em PETR4, VALE3, ITUB4 e outras ações, no mini índice, no mini dólar e em cripto.</p></figcaption>
-    </figure>
-
-    <figure class="caso grande aparece">
-      <div class="print"><img src="img/mes_win.png" alt="Um mês de operações no mini índice com o resultado do período" loading="lazy"></div>
-      <figcaption><span class="data">15/09 a 15/10/2026 · WIN · 5 min · 10 contratos · gestão 3:1</span>
-        <h3>O mês inteiro de uma estratégia, operação por operação</h3>
-        <p>48 operações no mês e <b class="verde">+R$ 6.642,00</b> no período, com acerto de 35%: perde várias vezes pouco e ganha menos vezes, mas bem mais. Ao lado ficam a média por operação, os custos e a pior queda do mês (R$ 11.028), para você saber o tamanho do caminho antes de decidir.</p></figcaption>
-    </figure>
-
-    <div class="duplas">
-      <div class="aparece"><div class="print"><img src="img/testar_15out.png" alt="Janela Testar estratégia" loading="lazy"></div>
-        <div class="dupla-txt"><span class="data">15/10/2026 · WIN · último mês</span><h3>▶ Testar estratégia</h3><p>Um clique e a estratégia roda em 5, 15 e 60 minutos: resultado em reais, a curva dia a dia (verde acima do zero, vermelha abaixo), mês a mês, semana a semana, maior ganho e maior perda. Os custos já vêm descontados.</p></div></div>
-      <div class="aparece"><div class="print"><img src="img/boleta_15out.png" alt="Boleta simulada ao lado do gráfico" loading="lazy"></div>
-        <div class="dupla-txt"><span class="data">15/10/2026 · WIN · boleta simulada</span><h3>Boleta simulada ao vivo</h3><p>Compre e venda na hora com contratos, stop e alvo, a mercado, limitada ou stop, sem dinheiro. No gráfico, a operação de 14/10 que bateu no stop: o robô mostra as perdas também, para você treinar de verdade.</p></div></div>
-      <div class="aparece"><div class="print estreito"><img src="img/resultado_15out.png" alt="Resultado do período e gestões" loading="lazy"></div>
-        <div class="dupla-txt"><span class="data">15/10/2026 · aba Resultado</span><h3>Resultado e gestão</h3><p>O resultado do período em reais, a média por operação, a pior queda e os custos. Teste a gestão de saída e o editor “E se…”: arraste o stop e o alvo e veja na hora o que teria acontecido.</p></div></div>
-      <div class="aparece"><div class="print estreito"><img src="img/calendario_out.png" alt="Calendário com o resultado de cada dia" loading="lazy"></div>
-        <div class="dupla-txt"><span class="data">outubro de 2026 · aba Dia a dia</span><h3>O dia a dia num calendário</h3><p>Cada dia com o resultado, quantas operações e quantas deram certo. Clique no dia e o gráfico vai direto para ele, ou abra o <b>Replay</b> do pregão inteiro.</p></div></div>
-    </div>
+<div class="fita" aria-label="Resultados de simulações com custos"><div class="trilha" id="trilha"><a class="tk" href="#resultados" data-res="win15"><span class="a">WIN · 15 min</span><span class="v">+R$ 5.564,50</span><span class="d">10 contratos · 9 ops · 15/09 a 15/10</span></a><div class="tk"><span class="a">Ouro XAUUSD · 15 min</span><span class="v">+R$ 5.228,17</span><span class="d">0,1 lote · 15 ops · 22/09 a 16/10</span></div><a class="tk" href="#resultados" data-res="eur60"><span class="a">EURUSD · 60 min</span><span class="v">+R$ 4.230,28</span><span class="d">6 ops · 16/09 a 16/10</span></a><div class="tk"><span class="a">Nasdaq USTEC · 60 min</span><span class="v">+R$ 3.516,63</span><span class="d">1 lote · 12 ops · 22/09 a 16/10</span></div><a class="tk" href="#resultados" data-res="win5b"><span class="a">WIN · 5 min</span><span class="v">+R$ 3.277,06</span><span class="d">10 contratos · 19 ops · 15/09 a 15/10</span></a><div class="tk"><span class="a">Ouro XAUUSD · 5 min</span><span class="v">+R$ 3.073,38</span><span class="d">0,1 lote · 21 ops · 22/09 a 16/10</span></div><div class="tk"><span class="a">Ouro XAUUSD · 60 min</span><span class="v">+R$ 2.104,16</span><span class="d">0,1 lote · 22 ops · 22/09 a 16/10</span></div><a class="tk" href="#resultados" data-res="eur5"><span class="a">EURUSD · 5 min</span><span class="v">+R$ 1.795,20</span><span class="d">13 ops · 16/09 a 16/10</span></a><div class="tk"><span class="a">Bitcoin · 60 min</span><span class="v">+R$ 1.031,36</span><span class="d">0,1 BTC · 18 ops · 22/09 a 16/10</span></div><div class="tk"><span class="a">Bitcoin · 5 min</span><span class="v">+R$ 1.007,96</span><span class="d">0,1 BTC · 26 ops · 22/09 a 16/10</span></div><a class="tk" href="#resultados" data-res="win5"><span class="a">WIN · 5 min</span><span class="v">+R$ 965,38</span><span class="d">2 contratos · 28 ops · 15/09 a 15/10</span></a><a class="tk" href="#resultados" data-res="win2"><span class="a">WIN · 2 min</span><span class="v">+R$ 898,08</span><span class="d">2 contratos · 13 ops · 15/09 a 15/10</span></a><div class="tk"><span class="a">Mini dólar WDO · 5 min</span><span class="v">+R$ 619,41</span><span class="d">1 contrato · 14 ops · 17/09 a 16/10</span></div><div class="tk"><span class="a">GBPUSD · 15 min</span><span class="v">+R$ 366,56</span><span class="d">0,1 lote · 12 ops · 22/09 a 16/10</span></div></div></div>
+<div class="env"><p class="nota-fita">Simulações com dados reais e custos, no período de cada item. Resultado passado não garante resultado futuro. Valores em dólar convertidos a R$ 5,08.</p>
+  <div class="confia">
+    <div><h3>Na compra</h3><ul>
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Pagamento pela Hotmart</span></li>
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>7 dias de garantia</span></li>
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Cancele quando quiser</span></li></ul></div>
+    <div><h3>No uso</h3><ul>
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>O robô nunca pede a senha da sua corretora</span></li>
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Ordens só pelo SEU MetaTrader, começando em conta demo</span></li>
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Seus dados ficam na sua conta</span></li>
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Dados: Binance, Yahoo Finance, Swissquote e a sua corretora</span></li></ul></div>
   </div>
-</section>
+</div>
 
-<section class="bloco" id="recursos" style="padding-top:20px">
-  <div class="envolve">
-    <div class="titulo-sec aparece"><small>RECURSOS</small><h2>Tudo o que um trader precisa para estudar de verdade</h2></div>
-    <div class="cards">
-      <div class="card aparece"><div class="ic">📈</div><h3>46 estratégias prontas</h3><p>Clássicas do mercado, das mais usadas no TradingView e pivôs de rompimento com alvos de Fibonacci: tendência, rompimento, retração, reversão e volatilidade. Escolha as suas favoritas.</p></div>
-      <div class="card aparece"><div class="ic">▶</div><h3>Replay do pregão</h3><p>Escolha o dia e assista o pregão inteiro candle a candle, com cada candle se formando e a estratégia entrando e saindo na hora. Velocidade de 0,5x a 16x.</p></div>
-      <div class="card aparece"><div class="ic">✎</div><h3>E se eu tivesse feito diferente?</h3><p>Arraste o stop e o alvo no gráfico e veja o que teria acontecido. Gostou? Salve como regra e a estratégia passa a operar assim.</p></div>
-      <div class="card aparece"><div class="ic">🛡</div><h3>Gestão e stop lado a lado</h3><p>Compare alvo fixo, parcial, trailing e stop curto numa tabela só, e escolha a combinação que perde menos para ganhar o mesmo.</p></div>
-      <div class="card aparece"><div class="ic">📡</div><h3>Teste ao vivo com aviso</h3><p>Deixe a estratégia rodando: o robô registra cada sinal, entrada e saída e avisa no computador e no celular.</p></div>
-      <div class="card aparece"><div class="ic">₿</div><h3>Cripto 24 horas</h3><p>Bitcoin, Ethereum, Solana e outras em tempo real, com as mesmas estratégias, gestão, testes e notícias de cripto.</p></div>
-      <div class="card aparece"><div class="ic">🧩</div><h3>Opções da B3</h3><p>Grade de calls e puts, gregas, volatilidade e estruturas prontas com o gráfico de ganho e perda.</p></div>
-      <div class="card aparece"><div class="ic">🔌</div><h3>Piloto automático na sua corretora</h3><p>Escolha a estratégia, o filtro de qualidade e os limites e ligue com um botão: o robô opera pelo seu MetaTrader 5, na sua conta. Horário, máximo de operações, perda do dia e botão de emergência.</p></div>
-      <div class="card aparece"><div class="ic">⟳</div><h3>Rodízio automático</h3><p>A cada dia o robô opera só as 3 estratégias que mais ganharam nos 20 pregões anteriores. Nos testes com custos, a perda média caiu pela metade em relação a operar todas. Funciona também no piloto automático.</p></div>
+<section class="bloco" id="curso" style="margin-top:44px;border-top:1px solid var(--linha)">
+  <div class="env">
+    <div class="cab"><span class="sobre">Treinamento incluso</span><h2>3 volumes de treinamento, do zero ao backtest</h2><p>Um curso em 3 volumes, com prints e setas em todas as páginas. Liberado na sua conta assim que você assina.</p></div>
+    <div class="livros">
+      <div class="livro"><div class="capa"><div class="f"><small>VOLUME 1</small><b>Conhecendo o robô</b><em>ROBÔ APEX</em></div><img src="curso/capa1.webp" alt="Capa do volume 1: Conhecendo o robô" width="420" height="594" loading="lazy" onerror="this.remove()"></div>
+        <div><small class="vol">VOLUME 1</small><h3>Conhecendo o robô</h3><p>Cada tela, cada botão e cada número, explicado para quem nunca usou.</p><span class="lib">Liberado na assinatura</span><a class="bt bt-pri bt-peq" data-app="/entrar?cadastro=1">Assinar e ler</a></div></div>
+      <div class="livro"><div class="capa"><div class="f"><small>VOLUME 2</small><b>Backtest, replay e gestão</b><em>ROBÔ APEX</em></div><img src="curso/capa2.webp" alt="Capa do volume 2: Backtest, replay e gestão" width="420" height="594" loading="lazy" onerror="this.remove()"></div>
+        <div><small class="vol">VOLUME 2</small><h3>Backtest, replay e gestão</h3><p>Ativar estratégias, regular o replay, editar trades para ensinar a IA e escolher a gestão.</p><span class="lib">Liberado na assinatura</span><a class="bt bt-pri bt-peq" data-app="/entrar?cadastro=1">Assinar e ler</a></div></div>
+      <div class="livro"><div class="capa"><div class="f"><small>VOLUME 3</small><b>As estratégias por dentro</b><em>ROBÔ APEX</em></div><img src="curso/capa3.webp" alt="Capa do volume 3: As estratégias por dentro" width="420" height="594" loading="lazy" onerror="this.remove()"></div>
+        <div><small class="vol">VOLUME 3</small><h3>As estratégias por dentro</h3><p>Como cada família de estratégia entra e sai, e as funções avançadas do robô.</p><span class="lib">Liberado na assinatura</span><a class="bt bt-pri bt-peq" data-app="/entrar?cadastro=1">Assinar e ler</a></div></div>
     </div>
-    <div class="numeros aparece" style="margin-top:34px">
-      <div><b>25</b><span>estratégias prontas</span></div>
-      <div><b>40+</b><span>ativos: B3, mundo e cripto</span></div>
-      <div><b>10</b><span>gestões de saída para comparar</span></div>
-      <div><b>0</b><span>reais para treinar na boleta</span></div>
-    </div>
+    <div class="faixa-tudo"><p><b>R$ 49,99 por mês com TUDO incluso:</b> as 46 estratégias, o robô no navegador e no computador e os 3 volumes de treinamento.</p><a class="bt bt-verde bt-peq" data-app="/entrar?cadastro=1">Assinar por R$ 49,99/mês</a></div>
   </div>
 </section>
 
 <section class="bloco" id="resultados">
-  <div class="envolve">
-    <div class="titulo-sec aparece"><small>RESULTADOS DE VERDADE</small><h2>Números reais da simulação, com o lado bom e o lado ruim</h2>
-      <p>O robô não esconde nada: mostra onde a estratégia ganhou e onde perdeu, com custos. É assim que você descobre o que funciona para você.</p></div>
-    <div class="resultado-caixa">
-      <div class="print aparece"><img src="img/mes_win.png" alt="Resultado de um mês, com a pior queda e os custos" loading="lazy"></div>
-      <div class="aparece">
-        <h3 style="font-size:26px">O que você vê em cada estratégia</h3>
-        <ul>
-          <li>Resultado em reais no período que você escolher, com custos.</li>
-          <li>Acerto, ganho médio, perda média e a pior queda.</li>
-          <li>O resultado de cada gestão com cada tipo de stop, lado a lado.</li>
-          <li>O dia a dia num calendário e as operações uma por uma.</li>
-        </ul>
-        <div class="aviso-honesto"><b>Transparência:</b> os prints e o vídeo são do robô em simulação, com dados reais do mercado e sem dinheiro. Em outros ativos, tempos gráficos e períodos a mesma estratégia pode dar prejuízo, e o robô mostra isso também. Resultado passado não garante resultado futuro.</div>
+  <div class="env">
+    <div class="cab"><span class="sobre">Resultados</span><h2>As mesmas estratégias, em ativos e tempos gráficos diferentes</h2>
+      <p>Prints do Robô Apex de outubro de 2026: um mês de operações de cada estratégia, com entrada, stop, alvo e o resultado em reais já descontados os custos. Os stops aparecem também, na lista ao lado de cada gráfico.</p></div>
+    <div class="abas" role="tablist" id="abasRes"></div>
+    <div id="paineisRes"></div>
+    <p class="nota-res">Simulações com dados reais do mercado, sem dinheiro, no período indicado em cada print. O resultado muda com o ativo, o tempo gráfico, a gestão e o período: por isso o robô deixa você testar tudo antes. Resultado passado não garante resultado futuro.</p>
+  </div>
+</section>
+
+<section class="bloco" id="ia">
+  <div class="env">
+    <div class="cab"><span class="sobre">Inteligência Artificial</span><h2>Inteligência Artificial que trabalha no seu backtest</h2><p>A IA do Robô Apex testa, compara e ajusta as estratégias o tempo todo, procurando entradas e saídas melhores. Ela só sugere e aplica o que melhorou nos testes; a decisão de operar é sempre sua.</p></div>
+    <div class="ia">
+      <ol>
+        <li><div><b>Aprende com as suas edições</b><span>Você corrige o stop ou o alvo de um trade antigo. A IA testa esse ajuste em todos os trades da estratégia e só adota se ele melhorar o conjunto nas duas metades do período.</span></div></li>
+        <li><div><b>Rodízio automático</b><span>Todo dia a IA escolhe as 3 estratégias que se saíram melhor nos 20 pregões anteriores.</span></div></li>
+        <li><div><b>Nota de qualidade A+, A, B, C</b><span>Cada entrada recebe uma nota pela leitura do price action, olhando só o passado, sem espiar o futuro.</span></div></li>
+        <li><div><b>Procurar o melhor ajuste</b><span>Busca o stop e o alvo de cada estratégia que melhoram os resultados no curto e no longo prazo.</span></div></li>
+        <li><div><b>Aba Aprender</b><span>As lições guardadas e o que mais funcionou em cada estratégia, num lugar só.</span></div></li>
+      </ol>
+      <div class="prints">
+        <figure style="margin:0"><div class="tela"><video src="img/trade_eur.mp4" poster="img/trade_eur.jpg" width="1280" height="730" autoplay muted loop playsinline preload="metadata" aria-label="Operação no EUR/USD ajustada no Editar"></video></div><figcaption class="legenda">EUR/USD: operação ajustada no Editar (stop e alvo mudados à mão) e saída no alvo · vídeo acelerado 2x</figcaption></figure>
+        <figure style="margin:0"><div class="tela quadro"><img src="img/f_aprender.webp" alt="Aba Aprender com as lições de cada estratégia" width="800" height="500" loading="lazy"></div><figcaption class="legenda">Aprender: as lições e o ajuste que mais funcionou em cada estratégia.</figcaption></figure>
+      </div>
+    </div>
+    <p class="aviso-ia">A IA trabalha sobre dados passados, com custos. Um ajuste que melhorou o passado não garante resultado futuro.</p>
+  </div>
+</section>
+
+<section class="bloco" id="navegador">
+  <div class="env">
+    <div class="cab"><span class="sobre">Onde usar</span><h2>No navegador e no computador</h2><p>A mesma conta e os mesmos dados nos dois lugares, como num site de gráficos que também tem aplicativo para o computador.</p></div>
+    <div class="dois">
+      <div><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4" width="19" height="16" rx="2"/><path d="M2.5 8.5h19"/><path d="M5.5 6.3h.01M8 6.3h.01"/></svg>
+        <h3>No navegador</h3><p>Depois do cadastro o robô abre no navegador, com todas as funções. Sem instalar nada.</p></div>
+      <div><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4" width="19" height="12.5" rx="1.5"/><path d="M9 20h6M12 16.5V20"/></svg>
+        <h3>No computador (Windows)</h3><p>Se preferir, baixe a versão para Windows na sua conta e entre com o mesmo e-mail.</p></div>
+    </div>
+    <div class="salvo"><h3>Fica salvo na SUA conta</h3>
+      <ul><li>Seus desenhos no gráfico</li><li>Suas edições de trades</li><li>O que a IA aprendeu com você</li><li>Seus testes ao vivo</li><li>Suas configurações</li></ul></div>
+  </div>
+</section>
+
+<section class="bloco" id="mercados">
+  <div class="env">
+    <div class="cab"><span class="sobre">Mercados</span><h2>Bolsa, opções, cripto e mundo num lugar só</h2><p>As mesmas 46 estratégias, a mesma gestão e os mesmos testes em todos os mercados.</p></div>
+    <div class="merc-abas" role="tablist">
+      <button role="tab" aria-selected="true" data-m="bolsa"><b>Bolsa</b>mini índice, mini dólar e ações</button>
+      <button role="tab" aria-selected="false" data-m="opcoes"><b>Opções da B3</b>grade, gregas e estruturas</button>
+      <button role="tab" aria-selected="false" data-m="cripto"><b>Cripto</b>Binance, 24 horas</button>
+      <button role="tab" aria-selected="false" data-m="mundo"><b>Mundo</b>moedas, metais e índices</button>
+    </div>
+    <div class="merc" data-p="bolsa">
+      <div><h3>Mini índice, mini dólar e ações da B3</h3><p>WIN e WDO de 2 a 60 minutos e as ações mais negociadas. Cada ativo com o custo, o tamanho do ponto e o horário dele.</p>
+        <h4>Futuros</h4><div class="chips"><span>WIN<em>mini índice</em></span><span>WDO<em>mini dólar</em></span></div>
+        <h4>Ações</h4><div class="chips"><span>PETR4</span><span>VALE3</span><span>ITUB4</span><span>BBDC4</span><span>BBAS3</span><span>ABEV3</span><span>B3SA3</span><span>WEGE3</span><span>PRIO3</span><span>MGLU3</span><span>SUZB3</span><span>ELET3</span><span>BOVA11</span></div></div>
+      <div class="tela"><img src="img/m_wdo.webp" alt="Mini dólar no Robô Apex" width="1600" height="914" loading="lazy"></div>
+    </div>
+    <div class="merc" data-p="opcoes" hidden>
+      <div><h3>Opções da B3</h3><p>Grade de calls e puts com as gregas e a volatilidade, e estruturas prontas com o gráfico de ganho e perda no vencimento. Para estudar antes de montar a operação.</p>
+        <h4>Ações com opções</h4><div class="chips"><span>PETR4</span><span>VALE3</span><span>BOVA11</span><span>ITUB4</span><span>BBAS3</span><span>BBDC4</span><span>ABEV3</span><span>B3SA3</span><span>MGLU3</span><span>WEGE3</span><span>+ qualquer outra digitada</span></div></div>
+      <div class="tela"><img src="img/m_opcoes.webp" alt="Aba de opções com a grade de calls e puts" width="1600" height="914" loading="lazy"></div>
+    </div>
+    <div class="merc" data-p="cripto" hidden>
+      <div><h3>Cripto em tempo real</h3><p>Todas as moedas da Binance, à vista e futuros perpétuos, em tempo real. Como o mercado não fecha, é ótimo para testar as estratégias a qualquer hora, 24 horas por dia.</p>
+        <h4>Algumas moedas</h4><div class="chips"><span>BTC</span><span>ETH</span><span>SOL</span><span>BNB</span><span>XRP</span><span>DOGE</span><span>memes</span><span>+ todas da Binance</span></div></div>
+      <div class="tela"><img src="img/m_cripto.webp" alt="Bitcoin no Robô Apex" width="1600" height="914" loading="lazy"></div>
+    </div>
+    <div class="merc" data-p="mundo" hidden>
+      <div><h3>Moedas, metais, petróleo e índices</h3><p>Moedas, ouro e prata com preço a cada segundo, petróleo e os principais índices dos EUA e do Japão. Resultado convertido para reais.</p>
+        <h4>Moedas</h4><div class="chips"><span>EURUSD</span><span>GBPUSD</span><span>USDJPY</span><span>AUDUSD</span><span>BTCUSD<em>bitcoin</em></span></div>
+        <h4>Metais e petróleo</h4><div class="chips"><span>XAUUSD<em>ouro</em></span><span>XAGUSD<em>prata</em></span><span>Petróleo</span></div>
+        <h4>Índices</h4><div class="chips"><span>USTEC<em>Nasdaq</em></span><span>SPX500<em>S&amp;P 500</em></span><span>US30<em>Dow Jones</em></span><span>JP225<em>Nikkei</em></span></div></div>
+      <div class="tela"><img src="img/m_ouro.webp" alt="Ouro no Robô Apex" width="1600" height="914" loading="lazy"></div>
+    </div>
+  </div>
+</section>
+
+<section class="bloco" id="gestao">
+  <div class="env gestao">
+    <div class="tela"><img src="img/r_gestao.webp" alt="Quadro com as 10 gestões e os 4 tipos de stop lado a lado" width="493" height="752" loading="lazy"></div>
+    <div>
+      <div class="cab"><span class="sobre">Quadro de gestão</span><h2>A mesma entrada pode dar <span class="verm">−R$ 656</span> ou <span class="verde">+R$ 10.317</span></h2>
+        <p>O que muda é a saída. O quadro refaz o período inteiro com 10 gestões e 4 tipos de stop, lado a lado, e mostra a pior queda de cada combinação. Um clique e a estratégia passa a usar a melhor.</p></div>
+      <ul>
+        <li><b>Alvo fixo</b> 2:1, 3:1 e 4:1: o alvo em vezes o risco.</li>
+        <li><b>Parcial e condução</b>: metade no 1:1, o resto vai mais longe com o stop na entrada.</li>
+        <li><b>Trailing ATR e em degraus</b>: o stop sobe junto com o preço, sem alvo.</li>
+        <li><b>Escalonadas</b>: vários contratos saindo em alvos diferentes.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="bloco" id="estrategias">
+  <div class="env contador">
+    <div class="n verde">46</div>
+    <div>
+      <div class="cab" style="margin-bottom:22px"><span class="sobre">Estratégias</span><h2>46 estratégias prontas, de 2 a 60 minutos</h2>
+        <p>Cada uma com as regras escritas, o desenho de como funciona e o teste com custos em um clique. Ligue uma, várias ou deixe o rodízio automático escolher as 3 do dia.</p></div>
+      <div class="familias">
+        <div><i>14</i><b>Pivôs de rompimento</b><span>impulso, correção e gatilho na máxima</span></div>
+        <div><i>12</i><b>Rompimentos e abertura</b><span>base, range, lateral e gap</span></div>
+        <div><i>7</i><b>Viradas em V</b><span>quedas violentas e a volta</span></div>
+        <div><i>5</i><b>Médias e VWAP</b><span>9, 20, 200, VWAP e Keltner</span></div>
+        <div><i>4</i><b>Fibonacci</b><span>retração, projeção e 3 alvos</span></div>
+        <div><i>4</i><b>Indicadores clássicos</b><span>Supertrend, Squeeze, IFR, MACD</span></div>
       </div>
     </div>
   </div>
 </section>
 
-<section class="bloco" style="padding-top:30px">
-  <div class="envolve">
-    <div class="titulo-sec aparece"><small>COMO COMEÇAR</small><h2>Três passos e você está estudando</h2></div>
-    <div class="passos">
-      <div class="aparece"><h3>Crie a sua conta</h3><p>Cadastro rápido e assinatura mensal de R$ 49,99. Sem fidelidade.</p></div>
-      <div class="aparece"><h3>Escolha mercado e estratégia</h3><p>Bolsa, opções ou cripto. Um tutorial de 1 minuto mostra o caminho na primeira vez.</p></div>
-      <div class="aparece"><h3>Teste, assista e treine</h3><p>Rode o teste, veja o replay das operações e pratique na boleta simulada até ter confiança.</p></div>
+<section class="bloco" id="funcionalidades">
+  <div class="env">
+    <div class="cab"><span class="sobre">Funcionalidades</span><h2>Feito para quem quer saber antes de entrar</h2><p>Algumas das ferramentas do robô. As melhores ficam lá dentro.</p></div>
+    <div class="funcs">
+      <div class="func"><div class="img"><img src="img/f_testar.webp" alt="" width="900" height="563" loading="lazy"></div><div class="txt"><h3>Testar estratégia</h3><p>Um clique e a estratégia roda no período que você quiser: resultado em reais, curva do dinheiro, mês a mês e a pior queda.</p></div></div>
+      <div class="func"><div class="img"><img src="img/f_replay.webp" alt="" width="900" height="562" loading="lazy"></div><div class="txt"><h3>Replay do pregão</h3><p>Escolha o dia, o tempo gráfico e a hora: o pregão volta candle a candle, com a estratégia entrando e saindo na hora.</p></div></div>
+      <div class="func"><div class="img"><img src="img/f_editar.webp" alt="" width="900" height="562" loading="lazy"></div><div class="txt"><h3>Editar e ensinar a IA<span class="selo-ia">IA</span></h3><p>Arraste o stop e o alvo de uma operação antiga. O robô testa o seu ajuste em todas as outras e aprende se ele melhora o conjunto.</p></div></div>
+      <div class="func"><div class="img"><img src="img/f_boleta.webp" alt="" width="800" height="500" loading="lazy"></div><div class="txt"><h3>Boleta simulada ao vivo</h3><p>Compre e venda na hora, com stop e alvo arrastáveis no gráfico, sem dinheiro. Treino de verdade.</p></div></div>
+      <div class="func"><div class="img"><img src="img/f_calendario.webp" alt="" width="800" height="500" loading="lazy"></div><div class="txt"><h3>Dia a dia no calendário</h3><p>O resultado de cada dia, quantas operações e quantas deram certo. Clique e o gráfico vai direto para o dia.</p></div></div>
+      <div class="func"><div class="img"><img src="img/f_conectar.webp" alt="" width="800" height="500" loading="lazy"></div><div class="txt"><h3>Piloto no MetaTrader 5</h3><p>Ligue a estratégia na sua conta com limite de lote, perda máxima do dia, horário e botão de emergência. Começa em conta demo.</p></div></div>
+      <div class="func"><div class="img"><img src="img/f_aprender.webp" alt="" width="800" height="500" loading="lazy"></div><div class="txt"><h3>Aprender com os seus trades<span class="selo-ia">IA</span></h3><p>A IA junta as suas edições e lições e mostra o ajuste que mais funcionou em cada estratégia.</p></div></div>
+      <div class="func trancada"><div class="img"><img src="img/f_aovivo.webp" alt="" width="800" height="500" loading="lazy"></div><div class="txt"><h3>Robôs ligados e alertas</h3><p>Deixe várias estratégias rodando: o robô avisa cada sinal no computador e no celular.</p></div></div>
+      <div class="func trancada"><div class="img"><img src="img/f_plano.webp" alt="" width="800" height="500" loading="lazy"></div><div class="txt"><h3>Plano de trade e nota A, B, C<span class="selo-ia">IA</span></h3><p>Tamanho da mão pelo risco, meta e perda do dia, e uma nota de qualidade em cada entrada.</p></div></div>
     </div>
   </div>
 </section>
 
 <section class="bloco" id="preco">
-  <div class="envolve">
-    <div class="preco-box aparece">
-      <span class="rotulo">ACESSO COMPLETO</span>
-      <div class="valor">R$ 49,99<small>/mês</small></div>
-      <ul>
-        <li>As 46 estratégias, e as novas que chegarem</li>
-        <li>Testar estratégia, replay e editor E se</li>
-        <li>Boleta simulada ao vivo, sem limite</li>
-        <li>Ações da B3, mini índice, mini dólar, opções e cripto</li>
-        <li>Testes ao vivo com aviso no celular</li>
-        <li>Conexão com MetaTrader 5 (conta demo ou real, por sua conta)</li>
-        <li>Atualizações incluídas</li>
-      </ul>
-      <a class="bt bt-pri" data-app="/entrar?cadastro=1">Assinar agora</a>
-      <div class="garantia">Pagamento seguro pela plataforma de pagamento. 7 dias de garantia. Cancele quando quiser.</div>
+  <div class="env preco">
+    <div class="argumentos">
+      <h2>Tudo isso por menos de R$ 1,67 por dia</h2>
+      <div class="linha-arg"><b class="num">R$ 1,09</b><p>por estratégia no mês: 46 estratégias por R$ 49,99, com regras, desenho e teste com custos de cada uma.</p></div>
+      <div class="linha-arg"><b class="num">250 pts</b><p>é o que a assinatura do mês vale em 1 contrato de mini índice (cada ponto vale R$ 0,20). No mini dólar, 10 pontos em 1 contrato.</p></div>
+      <div class="linha-arg"><b class="num">3</b><p>volumes de treinamento inclusos: do primeiro clique ao backtest e à gestão.</p></div>
+      <div class="linha-arg"><b class="num">0</b><p>reais para treinar: boleta simulada e piloto em conta demo antes de qualquer dinheiro.</p></div>
+    </div>
+    <div class="caixa-preco">
+      <div class="cp-topo"><span>Assinatura Robô Apex</span><span class="selo-tudo">Tudo incluso</span></div>
+      <div class="cp-corpo">
+        <div class="valor"><b>R$ 49,99</b><span>/mês</span></div>
+        <p class="inclui">Com tudo incluso: as 46 estratégias, o robô no navegador e no computador e os 3 volumes de treinamento.</p>
+        <div class="contas"><div><b>R$ 1,67</b><span>por dia</span></div><div><b>R$ 1,09</b><span>por estratégia</span></div></div>
+        <ul>
+          <li>As 46 estratégias e as novas que chegarem</li>
+          <li>Inteligência Artificial: ajustes, rodízio e nota de cada entrada</li>
+          <li>O robô no navegador e no Windows</li>
+          <li>3 volumes de treinamento</li>
+          <li>Boleta simulada ao vivo, sem limite</li>
+          <li>Piloto no MetaTrader 5, com travas</li>
+          <li>Bolsa, opções, cripto e mundo</li>
+        </ul>
+        <a class="bt bt-verde" data-app="/entrar?cadastro=1">Assinar por R$ 49,99/mês</a>
+      </div>
+      <div class="garantias"><span>Pagamento pela Hotmart</span><span>7 dias de garantia</span><span>Cancele quando quiser</span></div>
     </div>
   </div>
 </section>
 
-<section class="bloco" id="perguntas" style="padding-top:20px">
-  <div class="envolve">
-    <div class="titulo-sec aparece"><small>DÚVIDAS</small><h2>Perguntas frequentes</h2></div>
-    <div class="perguntas">
-      <details class="pq"><summary>O robô garante lucro?</summary><p>Não. Nenhuma estratégia garante lucro, e quem promete isso está mentindo. O Robô Apex é uma ferramenta de estudo e análise: mostra como cada estratégia se comportou, com custos, para você decidir com informação.</p></details>
-      <details class="pq"><summary>O robô opera sozinho na minha conta?</summary><p>Só se você quiser. Por padrão ele apenas analisa e simula. Se você conectar o seu MetaTrader 5 na aba Conectar, as ordens saem do seu MetaTrader, na sua conta, depois de você aceitar um termo e ligar o envio. Começa travado em conta demo.</p></details>
-      <details class="pq"><summary>Preciso ter conta em corretora?</summary><p>Para estudar, testar e treinar na boleta simulada, não. Para automatizar, sim: uma corretora com MetaTrader 5.</p></details>
-      <details class="pq"><summary>Os dados são em tempo real?</summary><p>Cripto: sim, direto da Binance. Ações e mini contratos da B3 nos dados gratuitos chegam com cerca de 15 minutos de atraso. Conectando o seu MetaTrader, o robô usa os dados da sua corretora em tempo real.</p></details>
-      <details class="pq"><summary>Funciona no celular?</summary><p>O site funciona no navegador do computador e do celular. A experiência completa, com gráfico grande, é melhor no computador.</p></details>
-      <details class="pq"><summary>Posso cancelar?</summary><p>Quando quiser, pela plataforma de pagamento. Nos primeiros 7 dias você pode pedir o reembolso.</p></details>
-      <details class="pq"><summary>Isso é recomendação de investimento?</summary><p>Não. O Robô Apex não é consultoria, não é analista de valores mobiliários e não recomenda comprar ou vender nada. As decisões são sempre suas.</p></details>
-    </div>
+<section class="bloco" id="duvidas" style="border-bottom:0">
+  <div class="env duvidas">
+    <div class="cab"><span class="sobre">Dúvidas</span><h2>Perguntas frequentes</h2></div>
+    <details class="pq"><summary>Os resultados dos prints são garantidos?</summary><p>Não. São simulações do passado com dados reais e custos, no período mostrado em cada print. Em outros ativos, tempos gráficos e períodos a mesma estratégia pode perder, e o robô mostra isso também. Nenhuma estratégia garante lucro.</p></details>
+    <details class="pq"><summary>Preciso instalar alguma coisa?</summary><p>Não. Depois do cadastro o robô abre no navegador, com todas as funções. Se preferir, baixe a versão para Windows na sua conta. Seus desenhos, edições, o que a IA aprendeu, testes ao vivo e configurações ficam salvos na sua conta e aparecem nos dois.</p></details>
+    <details class="pq"><summary>O robô opera sozinho na minha conta?</summary><p>Só se você ligar. Pelo MetaTrader 5, na sua conta, depois de aceitar um termo. Começa travado em conta demo, com lote máximo, perda máxima do dia e botão de emergência.</p></details>
+    <details class="pq"><summary>Os dados são em tempo real?</summary><p>Cripto, moedas, ouro e prata: sim, em segundos. Mini contratos e ações da B3 pelos dados gratuitos chegam com cerca de 15 minutos de atraso; com o MetaTrader conectado, o robô usa os dados da sua corretora.</p></details>
+    <details class="pq"><summary>O que vem nos 3 volumes de treinamento?</summary><p>Volume 1: as telas e os botões. Volume 2: ativar estratégias, backtest, replay, editar trades e gestão. Volume 3: as estratégias por dentro e as funções avançadas. Os volumes são liberados na sua conta depois da assinatura.</p></details>
+    <details class="pq"><summary>Posso cancelar?</summary><p>Quando quiser, pela Hotmart. Nos primeiros 7 dias você pode pedir o reembolso.</p></details>
+    <details class="pq"><summary>Isso é recomendação de investimento?</summary><p>Não. O Robô Apex é uma ferramenta de estudo e análise. Não é consultoria e não recomenda comprar ou vender nada. As decisões são sempre suas.</p></details>
   </div>
 </section>
 
 <footer>
-  <div class="envolve">
-    <div class="risco"><b>Aviso de risco.</b> Day trade envolve alto risco e a maioria das pessoas perde dinheiro. O Robô Apex é uma ferramenta de estudo e análise de estratégias. Não é recomendação de investimento, não garante resultado e não se responsabiliza por valores perdidos. Não obrigamos nem influenciamos ninguém a adquirir o robô ou a operar no mercado. Simulações e resultados passados não garantem resultados futuros. Opere apenas com dinheiro que você pode perder.</div>
+  <div class="env">
+    <div class="risco"><b>Aviso de risco.</b> Day trade envolve alto risco e a maioria das pessoas perde dinheiro. O Robô Apex é uma ferramenta de estudo e análise de estratégias; não é recomendação de investimento e não garante resultado. Os prints são simulações com dados passados, com custos, nos períodos indicados. Resultados passados não garantem resultados futuros. Opere apenas com dinheiro que você pode perder; as decisões são suas e não nos responsabilizamos por perdas.</div>
     <div class="linhas">
       <span>© <span id="ano"></span> Robô Apex · <a href="termos.html">Termos de uso</a> · <a href="privacidade.html">Privacidade</a></span>
-      <span>Suporte: <a href="mailto:suporte@exemplo.com.br" id="email-suporte">suporte@exemplo.com.br</a></span>
+      <span>Suporte: <a href="mailto:suporte@exemplo.com.br">suporte@exemplo.com.br</a></span>
     </div>
   </div>
 </footer>
-<div class="fixo-celular"><a class="bt bt-pri" data-app="/entrar?cadastro=1">Assinar · R$ 49,99/mês</a></div>
+<div class="modal" id="avisoCad" hidden role="dialog" aria-modal="true" aria-labelledby="avisoTit"><div class="cx">
+  <h3 id="avisoTit">O cadastro abre em instantes</h3>
+  <p>Estamos ligando o robô online. Em instantes o cadastro e o login abrem aqui mesmo. Tente de novo daqui a pouco.</p>
+  <button class="bt bt-pri" id="avisoFechar" type="button">Fechar</button></div></div>
+<div class="fixo-cel"><a class="bt bt-verde" data-app="/entrar?cadastro=1">Assinar · R$ 49,99/mês · tudo incluso</a></div>
 
 <script>
 (() => {
   "use strict";
-  // Endereco do robo online. Vazio = a pagina e servida pelo proprio robo (mesmo dominio).
-  const APP = "";
-  document.querySelectorAll("[data-app]").forEach((a) => (a.href = APP + a.dataset.app));
+  // endereco do robo online: vem da <meta name="apex-app">; vazio = mesmo dominio
+  const meta = document.querySelector('meta[name="apex-app"]');
+  const APP = ((meta && meta.content) || "").trim().replace(/\/+$/, "");
   document.getElementById("ano").textContent = new Date().getFullYear();
 
-  // Faixa que passa: destaques do produto e, abaixo, os depoimentos. SO coloque depoimentos REAIS, de quem usou de verdade
-  // e autorizou por escrito (nome ou iniciais e cidade). Depoimento inventado e propaganda enganosa (CDC art. 37).
-  const DESTAQUES = ["46 estratégias de day trade", "Entrada, stop e alvo no gráfico", "Replay de cada operação", "Boleta simulada ao vivo",
-    "Testar em 5, 15 e 60 minutos", "Piloto automático no MetaTrader 5", "Rodízio automático de estratégias", "Nota A, B e C em cada entrada", "Gráfico em tempo real", "Gestão e stop lado a lado", "Cripto 24 horas", "Opções da B3", "Conexão com MetaTrader 5", "Resultado em reais, com custos"];
-  const DEPOIMENTOS = [
-    // { nome: "Carlos M., Campinas", texto: "Escreva aqui o que a pessoa disse, com as palavras dela." },
+  // resultados: um painel por print (numeros copiados dos prints, com o periodo e as operacoes de cada um)
+  const RES = [
+    { id: "win15", aba: "WIN 15 min", img: "r_win15", w: 1868, h: 866, tit: "Mini índice · 15 minutos", total: "+R$ 5.564,50", per: "15/09 a 15/10/2026",
+      linhas: [["Contratos", "10"], ["Operações", "9"], ["Acerto", "44%"], ["Maior ganho", "+R$ 4.534,00"], ["Maior perda", "−R$ 1.666,00"]],
+      txt: "A mesma estratégia de virada em V do gráfico de 5 minutos, agora no 15: menos operações e ganhos maiores. Duas compras nos dias 14 e 15/10 saíram no alvo 2:1." },
+    { id: "eur60", aba: "EURUSD 60 min", img: "r_eur60", w: 1907, h: 892, tit: "Euro × dólar · 60 minutos", total: "+R$ 4.230,28", per: "16/09 a 16/10/2026",
+      linhas: [["Operações", "6"], ["Acerto", "50%"], ["Maior ganho", "+R$ 4.738,80"], ["Maior perda", "−R$ 1.295,40"]],
+      txt: "Em moedas, no gráfico de 60 minutos: três ganhos grandes pagaram as três perdas do mês. O resultado é convertido para reais." },
+    { id: "win5b", aba: "WIN 5 min", img: "r_win5b", w: 1902, h: 913, tit: "Mini índice · 5 minutos", total: "+R$ 3.277,06", per: "15/09 a 15/10/2026",
+      linhas: [["Contratos", "10"], ["Operações", "19"], ["Acerto", "42%"]],
+      txt: "Outra estratégia de virada no mini índice: as vendas da tarde de 25/09 aparecem no gráfico, uma no stop e outra no alvo." },
+    { id: "eur5", aba: "EURUSD 5 min", img: "r_eur5", w: 1887, h: 892, tit: "Euro × dólar · 5 minutos", total: "+R$ 1.795,20", per: "16/09 a 16/10/2026",
+      linhas: [["Operações", "13"], ["Acerto", "46%"], ["Maior ganho", "+R$ 2.825,40"], ["Maior perda", "−R$ 1.428,00"]],
+      txt: "A estratégia de virada em V a favor da tendência no EUR/USD de 5 minutos, com a lista de todas as operações do mês ao lado." },
+    { id: "win5", aba: "WIN 5 min · Bollinger", img: "r_win5", w: 1895, h: 892, tit: "Mini índice · 5 minutos", total: "+R$ 965,38", per: "15/09 a 15/10/2026",
+      linhas: [["Contratos", "2"], ["Operações", "28"], ["Acerto", "36%"]],
+      txt: "Virada nas Bandas de Bollinger: acerta pouco mais de um terço, mas o ganho médio é maior que a perda média." },
+    { id: "win2", aba: "WIN 2 min", img: "r_win2", w: 1901, h: 906, tit: "Mini índice · 2 minutos", total: "+R$ 898,08", per: "15/09 a 15/10/2026",
+      linhas: [["Contratos", "2"], ["Operações", "13"], ["Acerto", "46%"], ["Maior ganho", "+R$ 464,86"], ["Maior perda", "−R$ 193,20"]],
+      txt: "No gráfico de 2 minutos as perdas ficam curtas: a maior do mês foi de R$ 193,20. No gráfico, a compra de 15/10 às 12:42 que bateu no stop." },
   ];
-  const itens = DESTAQUES.map((t) => `<span>${t}</span>`).concat(DEPOIMENTOS.map((d) => `<span class="dep">“${d.texto}” <b>${d.nome}</b></span>`));
-  const faixa = document.getElementById("faixa");
-  faixa.innerHTML = itens.join("") + itens.join("");
+  const abas = document.getElementById("abasRes"), pain = document.getElementById("paineisRes");
+  abas.innerHTML = RES.map((r, k) => `<button role="tab" aria-selected="${k === 0}" data-r="${r.id}">${r.aba}<span class="num">${r.total.replace("+R$ ", "+")}</span></button>`).join("");
+  pain.innerHTML = RES.map((r, k) => `<div class="res-painel" data-r="${r.id}"${k ? " hidden" : ""}>
+      <div class="tela"><div class="barra-j"><i></i><i></i><i></i><span>Robô Apex · ${r.tit} · nome da estratégia borrado</span></div><img src="img/${r.img}.webp" alt="${r.tit}" width="${r.w}" height="${r.h}" loading="lazy"></div>
+      <div class="res-info">
+        <div><span class="etiqueta">${r.per}</span><h3>${r.tit}</h3><span class="rot">Lucro no período</span><div class="grande num">${r.total}</div></div>
+        <table class="tabela-mini">${r.linhas.map(([a, b]) => `<tr><td>${a}</td><td class="num ${b.startsWith("+") ? "verde" : b.startsWith("−") ? "verm" : ""}">${b}</td></tr>`).join("")}</table>
+        <div><p>${r.txt}</p><a class="bt bt-verde bt-peq" data-app="/entrar?cadastro=1">Testar essa estratégia</a></div></div></div>`).join("");
+  // Entrar/Assinar: com endereco https vai direto; com "#" ou sem o robo no ar, mostra o aviso (nunca link morto)
+  const aviso = document.getElementById("avisoCad");
+  const abrirAviso = () => { aviso.hidden = false; document.getElementById("avisoFechar").focus(); };
+  const fecharAviso = () => { aviso.hidden = true; };
+  document.getElementById("avisoFechar").onclick = fecharAviso;
+  aviso.addEventListener("click", (e) => { if (e.target === aviso) fecharAviso(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !aviso.hidden) fecharAviso(); });
+  const externo = /^https?:\/\//i.test(APP);
+  document.querySelectorAll("[data-app]").forEach((a) => {
+    a.href = APP === "#" ? "#" : APP + a.dataset.app;
+    a.addEventListener("click", async (e) => {
+      if (externo) return;
+      e.preventDefault();
+      if (APP === "#" || location.protocol === "file:") { abrirAviso(); return; }
+      try { const r = await fetch(a.dataset.app, { method: "HEAD", cache: "no-store" }); if (r.ok) { location.href = a.dataset.app; return; } } catch (_) { /* sem servidor */ }
+      abrirAviso();
+    });
+  });
+  // fita: copia a trilha para o giro nao ter emenda
+  const tr = document.getElementById("trilha");
+  [...tr.children].forEach((n) => { const c = n.cloneNode(true); c.setAttribute("aria-hidden", "true"); c.tabIndex = -1; tr.appendChild(c); });
+  const mostrar = (id) => {
+    abas.querySelectorAll("button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.r === id)));
+    pain.querySelectorAll(".res-painel").forEach((p) => (p.hidden = p.dataset.r !== id));
+  };
+  abas.onclick = (e) => { const b = e.target.closest("button"); if (b) mostrar(b.dataset.r); };
+  document.querySelectorAll("[data-res]").forEach((a) => a.addEventListener("click", () => mostrar(a.dataset.res)));
 
-  // aparece ao rolar
-  const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("on"); io.unobserve(e.target); } }), { threshold: .12 });
-  document.querySelectorAll(".aparece").forEach((el) => io.observe(el));
+  // mercados
+  const mAbas = document.querySelectorAll(".merc-abas button");
+  mAbas.forEach((b) => (b.onclick = () => {
+    mAbas.forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+    document.querySelectorAll(".merc").forEach((p) => (p.hidden = p.dataset.p !== b.dataset.m));
+  }));
 
-  // video do topo: so toca quando esta na tela (economiza bateria e dados no celular)
-  const vid = document.getElementById("videoHero");
-  if (vid && "IntersectionObserver" in window) {
-    new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { const p = vid.play(); if (p && p.catch) p.catch(() => {}); } else vid.pause(); }), { threshold: .2 }).observe(vid);
+  // videos: so rodam quando aparecem na tela
+  const vids = document.querySelectorAll("video");
+  if ("IntersectionObserver" in window) {
+    vids.forEach((v) => v.pause());
+    const io = new IntersectionObserver((es) => es.forEach((e) => {
+      if (e.isIntersecting) { const p = e.target.play(); if (p && p.catch) p.catch(() => {}); } else e.target.pause();
+    }), { threshold: 0.35 });
+    vids.forEach((v) => io.observe(v));
   }
+  // ===== movimento: aparecer ao rolar e numeros contando (desligado com "reduzir movimento") =====
+  const calmo = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!calmo && "IntersectionObserver" in window) {
+    document.documentElement.classList.add("js-mov");
+    const alvos = ".cab, .livro, .confia, .abas, .res-info > *, .ia li, .ia .prints figure, .dois > div, .salvo, .merc-abas, .merc, .gestao > .tela, .gestao li, .contador .n, .familias div, .func, .argumentos h2, .linha-arg, .caixa-preco, details.pq, .risco";
+    const els = [...document.querySelectorAll(alvos)].filter((e) => !e.closest(".hero"));
+    els.forEach((e) => {
+      e.classList.add("rv");
+      const irmaos = [...e.parentElement.children].filter((x) => x.matches(alvos));
+      const k = irmaos.indexOf(e);
+      if (k > 0) e.style.transitionDelay = Math.min(k, 6) * 60 + "ms";
+    });
+    const ioR = new IntersectionObserver((es) => es.forEach((en) => {
+      if (en.isIntersecting) { en.target.classList.add("on"); ioR.unobserve(en.target); }
+    }), { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
+    els.forEach((e) => ioR.observe(e));
+  }
+  // numeros: contam uma vez ao aparecer e terminam exatamente no texto original
+  const contar = (el) => {
+    if (el.dataset.contou) return; el.dataset.contou = "1";
+    const fim = el.textContent, m = fim.match(/\d[\d.]*(,\d+)?/);
+    if (!m || calmo) return;
+    const dec = m[1] ? m[1].length - 1 : 0, alvo = parseFloat(m[0].replace(/\./g, "").replace(",", "."));
+    const fmt = (v) => v.toLocaleString("pt-BR", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+    el.style.minWidth = el.getBoundingClientRect().width + "px";
+    const t0 = performance.now(), dur = 1000;
+    const passo = (t) => {
+      const x = Math.min(1, (t - t0) / dur), v = alvo * (1 - Math.pow(1 - x, 3));
+      el.textContent = x < 1 ? fim.slice(0, m.index) + fmt(v) + fim.slice(m.index + m[0].length) : fim;
+      if (x < 1) requestAnimationFrame(passo);
+    };
+    requestAnimationFrame(passo);
+  };
+  if ("IntersectionObserver" in window) {
+    const ioC = new IntersectionObserver((es) => es.forEach((en) => {
+      if (en.isIntersecting) { contar(en.target); ioC.unobserve(en.target); }
+    }), { threshold: 0.6 });
+    document.querySelectorAll(".conta, .contas b, .caixa-preco .valor b, .res-info .grande").forEach((e) => ioC.observe(e));
+  }
+  // borda da caixa de preco acompanha o mouse
+  const cx = document.querySelector(".caixa-preco");
+  if (cx && window.matchMedia("(hover: hover)").matches) cx.addEventListener("pointermove", (e) => {
+    const r = cx.getBoundingClientRect();
+    cx.style.setProperty("--mx", e.clientX - r.left + "px"); cx.style.setProperty("--my", e.clientY - r.top + "px");
+  });
 })();
 </script>
 </body>

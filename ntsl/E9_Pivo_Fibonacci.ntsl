@@ -1,5 +1,5 @@
 // =====================================================================
-//  ROBO APEX - E9 - OGRO: rompimento de pivo + Fibonacci (estilo Andre Machado, Ogro de Wall Street)
+//  ROBO APEX - E9 - Pivo + Fibonacci com medias alinhadas
 //  Tipo no Profit: Indicador (no grafico de preco). NAO envia ordens.
 //  Linhas: BRANCA = entrada | VERMELHA = stop | VERDE = alvo
 //  (aparecem enquanto a ordem esta armada ou a operacao esta aberta).
@@ -502,7 +502,7 @@ begin
         vBarSinal := vB;
         vA1 := vCA1;
         vA2 := vCA2;
-        PlotText("COMPRA E9 OGRO", clAqua, 0, 9);
+        PlotText("COMPRA E9 PIVO FIBO", clAqua, 0, 9);
         Alert(clAqua);
       end
       else if vVOk and (not vCOk) then
@@ -516,7 +516,7 @@ begin
         vBarSinal := vB;
         vA1 := -vVA1;
         vA2 := -vVA2;
-        PlotText("VENDA E9 OGRO", clFuchsia, 1, 9);
+        PlotText("VENDA E9 PIVO FIBO", clFuchsia, 1, 9);
         Alert(clFuchsia);
       end;
     end;

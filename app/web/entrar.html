@@ -58,8 +58,14 @@
       <form class="en-form" id="enPrimeiro" novalidate aria-labelledby="enTitPrimeiro">
         <h2 class="en-titulo" id="enTitPrimeiro">Primeiro acesso</h2>
         <p class="nota">Esta é a conta do administrador: é ela que cria os outros usuários e vê o registro de acessos.</p>
-        <label class="campo" for="enAdmEmail"><span>E-mail do administrador</span>
+        <label class="campo" for="enAdmEmail" id="enAdmEmailCampo"><span>E-mail do administrador</span>
           <input type="email" id="enAdmEmail" name="email" autocomplete="username" readonly></label>
+        <label class="campo oculto" for="enPriCodigo" id="enPriCodigoCampo"><span>Código do primeiro acesso</span>
+          <input type="text" id="enPriCodigo" name="codigo" autocomplete="one-time-code" maxlength="40" spellcheck="false"
+                 aria-describedby="enPriCodigoNota"></label>
+        <p class="nota oculto" id="enPriCodigoNota">Por segurança, no site o primeiro acesso pede o código que aparece na janela do
+          servidor quando o robô abre (também fica no arquivo <code>codigo_primeiro_acesso.txt</code> da pasta de dados). O e-mail
+          do administrador também está nesse arquivo.</p>
         <label class="campo" for="enPriNova"><span>Crie a senha do administrador</span>
           <input type="password" id="enPriNova" name="nova" autocomplete="new-password" maxlength="200" required aria-describedby="enPriRegras" data-senha></label>
         <label class="campo" for="enPriRepetir"><span>Repita a senha</span>

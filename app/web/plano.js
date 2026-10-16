@@ -21,7 +21,7 @@
     $("plMetaMes").value = p.metaMes || ""; $("plQueda").value = p.quedaMax || "";
     document.querySelectorAll("#plTam button").forEach((b) => b.classList.toggle("on", b.dataset.v === p.tam));
     $("plRiscoBox").classList.toggle("oculto", p.tam !== "risco");
-    $("plAtivo").textContent = `${AX.esc(a.chave || p.ativo)} · ${AX.nomeEst(p.est)}`;
+    $("plAtivo").textContent = `${a.chave || p.ativo} · ${AX.nomeEst(p.est)}`;
   }
   function mudou() { AX.salvarPref(); mostrarForm(); AX.emit("mudou", "plano"); }
   $("plCapital").onchange = (e) => { AX.pref.capital = num(e.target, 10000, 1); mudou(); };
@@ -81,12 +81,13 @@
     else if (!m.aoVivo || !dia) h += `<div class="nota">O período do topo não chega até hoje. Escolha Hoje, 5 dias, 1 mês… para ver a situação do dia.</div>`;
     else {
       h += dia.trava ? `<div class="pl-estado ruim">PARE POR HOJE</div><div class="nota"><b>${AX.esc(dia.trava)}</b>. Resultado do dia: <b class="${AX.cls(dia.resultado)}">${din(dia.resultado, true)}</b>.</div>`
-        : `<div class="pl-estado bom">PODE OPERAR</div><div class="nota">Resultado do dia: <b class="${AX.cls(dia.resultado)}">${din(dia.resultado, true)}</b> · ${dia.stops} de ${p.maxstops} stops usados${p.lossDia > 0 ? ` · para em −${din(p.lossDia)}` : ""}${p.metaDia > 0 ? ` · para em +${din(p.metaDia)}` : ""}.</div>`;
+        : `<div class="pl-estado bom">PODE OPERAR</div><div class="nota">Resultado do dia: <b class="${AX.cls(dia.resultado)}">${din(dia.resultado, true)}</b> · ${dia.stops} stop(s) hoje (limite: ${p.maxstops} por estratégia)${p.lossDia > 0 ? ` · para em −${din(p.lossDia)}` : ""}${p.metaDia > 0 ? ` · para em +${din(p.metaDia)}` : ""}.</div>`;
     }
     // tamanho para o próximo sinal: o sinal armado agora, ou a calculadora
     const cap = (dia && dia.capital) || m.capital;
     const pend = V && V.meta.ativo === m.ativo && V.meta.aoVivo ? V.ordens.filter((o) => o.status === "pendente").slice(-1)[0] : null;
-    const ent0 = pend ? (pend.gatilho != null ? pend.gatilho : V.c[V.meta.iFim]) : "", stop0 = pend ? pend.stop : "";
+    // sem sinal armado, mantém o que a pessoa digitou (a aba se redesenha a cada dado novo)
+    const ent0 = pend ? (pend.gatilho != null ? pend.gatilho : V.c[V.meta.iFim]) : P.ent || "", stop0 = pend ? pend.stop : P.stop || "";
     h += `<div class="rot" style="margin-top:12px">TAMANHO PELO RISCO <span class="dir">${AX.num(p.risco, 1)}% de ${din(cap)}</span></div>
       <div class="grade2"><label class="campo"><span>Entrada</span><input type="number" id="plEnt" step="any" value="${ent0}"></label>
         <label class="campo"><span>Stop</span><input type="number" id="plStop" step="any" value="${stop0}"></label></div>
@@ -98,7 +99,8 @@
         : t.q > 0 ? `${pend ? `Sinal armado agora (${pend.est}): ` : ""}<b>${AX.unidade(m, t.q)}</b> · se for stopado perde ${din(t.perda)} (${AX.pct((100 * t.perda) / cap, 1)} do capital), já com os custos.`
           : `<span class="ruim"><b>Não cabe:</b> 1 ${m.fracionado ? "lote mínimo" : "contrato"} perde ${din(m.fracionado ? t.porLote * 0.01 : t.porLote)} no stop, mais que os ${din(t.orc)} do plano. Pelo plano, esta operação não entra.</span>`;
     };
-    $("plEnt").oninput = $("plStop").oninput = contaTam; contaTam();
+    $("plEnt").oninput = $("plStop").oninput = () => { P.ent = $("plEnt").value; P.stop = $("plStop").value; contaTam(); };
+    contaTam();
 
     // ---- o que cada regra fez
     const NOMES = { seletivo: "Modo seletivo", tam: "Tamanho pelo risco", lossDia: "Parar o dia na perda", metaDia: "Parar o dia no ganho",
@@ -151,6 +153,10 @@
     mostrarForm();
     clearTimeout(P.timer); P.timer = setTimeout(carregar, o === "plano" ? 50 : 400);
   });
-  AX.on("dadosVivo", () => { if (AX.aba === "plano" && P.dados && !P.velho) render(); });      // sinal novo: refaz o "tamanho"
+  AX.on("dadosVivo", () => {
+    const foco = document.activeElement, hoje = $("plHoje");
+    if (foco && hoje && hoje.contains(foco)) return;                  // não apaga a calculadora enquanto a pessoa digita
+    if (AX.aba === "plano" && P.dados && !P.velho) render();
+  });      // sinal novo: refaz o "tamanho"
   AX.on("config", mostrarForm);
 })();

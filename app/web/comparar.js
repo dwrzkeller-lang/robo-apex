@@ -77,13 +77,12 @@
   const fmtCurto = (v) => (v >= 0 ? " +" : " −") + Math.abs(v).toLocaleString("pt-BR", { maximumFractionDigits: 0 });
 
   function abrir(ativo, est, p) {
-    AX.pref.gestao = p.gestao; AX.pref.tf = +p.tf; AX.pref.ativo = ativo; AX.pref.est = est;
-    if (est !== "TODAS") AX.pref.ultEst = est;
-    AX.salvarPref();
-    AX.atualizarTopo();                                          // selects, contratos/lotes e estratégia
-    AX.emit("mudou", "ativo");
+    const mudouG = AX.pref.gestao !== p.gestao;
+    AX.pref.gestao = p.gestao;
+    // AX.irPara acerta mercado, ativo, tempo e estratégia no topo (o mesmo caminho dos outros "abrir no gráfico")
+    if (!AX.irPara({ ativo, tf: +p.tf, est }) && mudouG) { AX.salvarPref(); AX.atualizarTopo(); AX.emit("mudou", "gestao"); }
     AX.trocarAba("sim");
-    $("btSimular").click();
+    if (!AX.sim || !AX.sim.D) $("btSimular").click();          // com uma simulação antiga, a própria aba já refaz (sem simular duas vezes)
   }
 
   $("btComparar").onclick = comparar;

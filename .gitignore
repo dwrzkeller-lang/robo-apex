@@ -7,3 +7,6 @@ __pycache__/
 build/
 dist/
 # (o RoboApex.spec fica no repositorio: e a receita do executavel)
+
+# curso pago: os PDFs nunca vao para o repositorio publico (o servidor e o exe pegam da pasta app/curso local)
+app/curso/*.pdf

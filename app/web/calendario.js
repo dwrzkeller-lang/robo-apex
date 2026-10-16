@@ -112,9 +112,9 @@
   $("calFiltro").onchange = (e) => { C.filtro = e.target.value; C.dia = null; render(); };
   AX.on("aba", (nome) => {
     if (nome !== "cal") return;
+    // dados velhos: o app.js (trocarAba) já pede de novo; aqui só desenha o que existe
     if (AX.vivo.D && !AX.vivo.velho) { if (AX.graficoMostra() !== AX.vivo.D) AX.mostrar(AX.vivo.D, AX.vivo.D.meta.iFim); render(); }
-    else AX.carregarVivo();
   });
   AX.on("dadosVivo", () => { if (AX.aba === "cal") setTimeout(render, 0); });
-  AX.on("mudou", () => { if (AX.aba === "cal") AX.carregarVivo(); });
+  // "mudou": o app.js já recarrega o ao vivo na aba Calendário (ela está em ABAS_VIVAS); pedir aqui de novo duplicava
 })();

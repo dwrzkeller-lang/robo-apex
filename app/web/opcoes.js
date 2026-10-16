@@ -10,7 +10,7 @@
   const S = { ativo: "PETR4", venc: null, painel: null, grade: null, estr: null, oport: null, sim: null, pernas: [],
     selK: null, ativa: false, seq: 0, relogio: null, ocupado: false, montado: false, graf: {}, abertos: {}, opSeg: "vi",
     oportData: null, simT: null, simSeq: 0, rolou: "" };
-  try { const a = localStorage.getItem("apex_opcoes_ativo"); if (a && ATIVO_OK.test(a)) S.ativo = a; } catch (e) { /* sem armazenamento */ }
+  { const a = AX.pref.ui && AX.pref.ui.opcoesAtivo; if (a && ATIVO_OK.test(a)) S.ativo = a; }        // salvo na conta do usuário
 
   // ---------------------------------------------------------------- formatação
   const esc = AX.esc, q = AX.q;
@@ -432,7 +432,7 @@
     S.ativo = a; S.venc = venc || (outro ? null : S.venc);
     if (outro) S.painel = null;
     S.grade = null; S.estr = null; S.selK = null; S.pernas = []; S.sim = null; S.graf = {};
-    try { localStorage.setItem("apex_opcoes_ativo", a); } catch (e) { /* ok */ }
+    AX.pref.ui = Object.assign({}, AX.pref.ui, { opcoesAtivo: a }); AX.salvarPref();
     tudo();
     S.ocupado = false;
     carregar(true);

@@ -43,7 +43,8 @@ VIDA_CANDLES = 7.0                         # segundos: o mesmo pedido dentro des
 _trava = threading.Lock()
 _mem = {}                                  # (mercado, sym, intervalo) -> dict(linhas, lido, salvo)
 _info_mem = {}
-_b_mem = {}                                # (chave, tf) -> (linhas cruas, (B, fonte, cfg))
+_b_mem = {}                                # (chave, tf) -> (linhas cruas, (B, fonte, cfg), lote)
+_lotes_mem = {}                            # (arquivo, chave) -> tamanho do lote (copia em memoria do lotes.json)
 
 
 _local = threading.local()
@@ -203,7 +204,10 @@ def linhas(base, mercado, sym, intervalo):
             ant = ant[:k] + novos
     else:
         ant = _baixar_tudo(mercado, sym, intervalo)
-    ant = ant[-alvo:]
+    # corta os mais antigos em blocos (so quando passar 10% do tamanho): cortar 1 candle a cada candle novo mudaria o
+    # indice de todos os candles e o servidor teria de refazer a simulacao inteira a cada candle (retomada perdida)
+    if len(ant) > alvo + max(1, alvo // 10):
+        ant = ant[-alvo:]
     with _trava:
         salvo = m["salvo"] if m else 0.0
         if agora - salvo > 300:                           # grava no disco no maximo a cada 5 min
@@ -252,13 +256,16 @@ def _lote(base, chave, preco):
     """1 lote = potencia de 10 de moedas que vale entre US$ 10 e US$ 100 (ex.: 1.000 DOGE). Fica guardado para o
     tamanho nao mudar sozinho de um dia para o outro; so e refeito se o preco mudar mais de 20 vezes."""
     arq = os.path.join(_pasta(base), "lotes.json")
+    q = _lotes_mem.get((arq, chave))
+    if q and 2.0 <= q * preco <= 2000.0:
+        return q                                           # ja lido: nao abre o arquivo a cada pedido
     lotes = _ler_json(arq, {}) or {}
     q = lotes.get(chave)
-    if q and 2.0 <= q * preco <= 2000.0:
-        return q
-    q = 10.0 ** math.floor(math.log10(100.0 / preco)) if preco > 0 else 1.0
-    lotes[chave] = q
-    _gravar_json(arq, lotes)
+    if not (q and 2.0 <= q * preco <= 2000.0):
+        q = 10.0 ** math.floor(math.log10(100.0 / preco)) if preco > 0 else 1.0
+        lotes[chave] = q
+        _gravar_json(arq, lotes)
+    _lotes_mem[(arq, chave)] = q
     return q
 
 
@@ -280,10 +287,10 @@ def candles(base, chave, tf):
     L = linhas(base, mercado, sym, inter)
     if not L:
         raise RuntimeError("A Binance não devolveu candles de %s." % sym)
-    pronto = _b_mem.get((chave, tf))
-    if pronto and pronto[0] is L:
-        return pronto[1]
     preco = L[-1][4]
+    pronto = _b_mem.get((chave, tf))
+    if pronto and pronto[0] is L and pronto[2] == _lote(base, chave, preco):
+        return pronto[1]                                   # mesmos candles e mesmo tamanho de lote (valor do ponto)
     lote = _lote(base, chave, preco)
     tick = inf["tick"]
     nome = "%s/%s" % (inf["moeda"], inf["cotacao"])
@@ -321,7 +328,7 @@ def candles(base, chave, tf):
         "futuro perpétuo" if mercado == "BF" else "à vista", dias, ("%.2f" % (100 * TAXA[mercado])).replace(".", ","))
     if len(_b_mem) > 40:
         _b_mem.clear()
-    _b_mem[(chave, tf)] = (L, (b, fonte, cfg))
+    _b_mem[(chave, tf)] = (L, (b, fonte, cfg), lote)
     return b, fonte, cfg
 
 

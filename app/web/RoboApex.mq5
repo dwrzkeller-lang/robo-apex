@@ -22,7 +22,7 @@
 //| Voce e o unico responsavel pelas ordens enviadas pela sua conta. |
 //+------------------------------------------------------------------+
 #property copyright "Robo Apex"
-#property version   "1.00"
+#property version   "1.01"
 #property description "Liga o MetaTrader 5 ao Robo Apex (aba Conectar). Use primeiro em conta DEMO."
 
 #include <Trade\Trade.mqh>
@@ -144,6 +144,19 @@ void OnTimer()
       EnviarEstado();
   }
 
+// Uma ordem do robo executou: cancela na hora as outras ordens armadas (sem esperar a proxima consulta), para duas
+// ordens stop nunca executarem juntas.
+void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest &request, const MqlTradeResult &result)
+  {
+   if(trans.type != TRADE_TRANSACTION_DEAL_ADD || trans.symbol != _Symbol)
+      return;
+   if(!HistoryDealSelect(trans.deal))
+      return;
+   if(HistoryDealGetInteger(trans.deal, DEAL_MAGIC) != Magico || HistoryDealGetInteger(trans.deal, DEAL_ENTRY) != DEAL_ENTRY_IN)
+      return;
+   CancelarPendentes();
+  }
+
 //+------------------------------------------------------------------+
 //| candles de 1 minuto para o robo                                  |
 //+------------------------------------------------------------------+
@@ -195,7 +208,7 @@ void EnviarEstado()
    string s = "{\"conta\":\"" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "\",\"tipo\":\"" + tipo + "\",\"corretora\":\"" + Esc(AccountInfoString(ACCOUNT_COMPANY))
               + "\",\"servidor\":\"" + Esc(AccountInfoString(ACCOUNT_SERVER)) + "\",\"saldo\":" + DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2)
               + ",\"patrimonio\":" + DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY), 2) + ",\"moeda\":\"" + Esc(AccountInfoString(ACCOUNT_CURRENCY))
-              + "\",\"simbolo\":\"" + Esc(_Symbol) + "\",\"versao\":\"1.00\",\"resultadoDia\":" + DoubleToString(ResultadoDia(), 2)
+              + "\",\"simbolo\":\"" + Esc(_Symbol) + "\",\"versao\":\"1.01\",\"resultadoDia\":" + DoubleToString(ResultadoDia(), 2)
               + ",\"posicoes\":[" + pos + "],\"eventos\":[" + g_eventos + "]}";
    string resp;
    if(Pedir("POST", "/api/ea/estado", s, resp))
@@ -411,6 +424,8 @@ void Executar(string sinal)
    double vol, sl, tp;
    ulong tk;
    bool tenho = MinhaPosicao(lado, vol, sl, tp, tk);
+   if(tenho)
+      CancelarPendentes();                             // uma posicao por vez: nenhuma outra ordem fica armada
    if(pos == "")
      {
       if(tenho)
@@ -439,8 +454,10 @@ void Executar(string sinal)
         }
      }
    // ---------------- ordens armadas
+   if(tenho)
+      return;                                          // posicionado: nenhuma ordem nova (as pendentes ja foram canceladas)
    string manter = "|";
-   for(int i = 0; i < ArraySize(ords); i++)
+   for(int i = 0; i < ArraySize(ords) && i < 1; i++)  // no maximo UMA ordem de entrada armada (robo antigo podia mandar varias)
      {
       string c[];
       if(StringSplit(ords[i], ';', c) < 7)

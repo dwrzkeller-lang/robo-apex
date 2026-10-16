@@ -459,10 +459,16 @@
   AX.on("aba", (n) => {
     if (n !== "vivo") fecharEse();
     // o replay fecha sem repintar o gráfico ao vivo quando a aba nova é a Simulação (ela mostra os candles dela)
-    if (R.on && n !== "vivo") { if (n === "sim") { clearTimeout(R.relogio); R.on = false; AX.emReplay = false; AX.chart.applyOptions({ timeScale: { shiftVisibleRangeOnNewBar: true } }); if (barra) barra.classList.add("oculto"); } else fechar(); }
+    if (R.on && n !== "vivo") { if (n === "sim") { clearTimeout(R.relogio); if (R.cancelar) R.cancelar(); R.on = false; AX.emReplay = false; AX.chart.applyOptions({ timeScale: { shiftVisibleRangeOnNewBar: true } }); if (barra) barra.classList.add("oculto"); } else fechar(); }
     if (n === "ia") renderLicoes();
   });
   AX.on("mudou", () => { fecharEse(); fechar(); if (AX.aba === "ia") setTimeout(renderLicoes, 1500); });
-  AX.on("dadosVivo", () => { if (AX.aba === "ia") renderLicoes(); });
+  // só refaz as lições quando os dados que elas usam mudaram (o ao vivo chega a cada 2 s)
+  AX.on("dadosVivo", (D) => {
+    if (AX.aba !== "ia" || !D) return;
+    const m = D.meta, ch = [m.sid, m.n, m.iIni, m.iFim, D.trades.length, L.lista ? L.lista.length : -1].join("|");
+    if (ch === L.chave) return;
+    L.chave = ch; renderLicoes();
+  });
   AX.on("tecla", (e) => { if (R.on && e.key === "Escape") fechar(); if (R.on && e.key === " ") { e.preventDefault(); barra.querySelector("[data-a=pausa]").click(); } });
 })();

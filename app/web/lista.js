@@ -26,6 +26,7 @@
     const nome = (AX.infoAtivo(atual) || {}).nome || atual;
     const aberto = meu ? meu.aberto : D && D.meta.ativo === atual ? D.meta.formando : false;     // a lista sabe se negociou há pouco (fonte com atraso também)
     const var_ = meu ? meu.var : null, varPct = meu ? meu.varPct : null;
+    const rolou = c.querySelector(".ls-linhas"), topo = rolou ? rolou.scrollTop : 0;   // a lista se redesenha a cada dado novo: guarda a rolagem
     c.innerHTML = `<div class="ls-det">
         <div class="ls-nome"><b>${AX.esc(AX.rotAtivo(atual))}</b><span>${AX.esc(String(nome).split(" - ").slice(-1)[0])}</span></div>
         <div class="ls-preco"><b>${fmt(preco, dec)}</b>${varPct != null ? `<span class="${var_ >= 0 ? "lg-alta" : "lg-baixa"}">${var_ >= 0 ? "+" : "−"}${fmt(Math.abs(var_), dec)} ${var_ >= 0 ? "+" : "−"}${AX.num(Math.abs(varPct), 2)}%</span>` : ""}</div>
@@ -36,6 +37,7 @@
           <span class="ls-s"><i class="${x.aberto ? "on" : ""}"></i>${AX.esc(AX.rotAtivo(x.chave))}</span><span>${fmt(x.preco, x.dec)}</span>
           <span class="${x.var >= 0 ? "lg-alta" : "lg-baixa"}">${x.var >= 0 ? "+" : "−"}${fmt(Math.abs(x.var), x.dec)}</span>
           <span class="${x.varPct >= 0 ? "lg-alta" : "lg-baixa"}">${x.varPct >= 0 ? "+" : "−"}${AX.num(Math.abs(x.varPct), 2)}%</span></div>`).join("") : '<div class="nota">Buscando cotações…</div>'}</div></details>`;
+    const linhas = c.querySelector(".ls-linhas"); if (linhas && topo) linhas.scrollTop = topo;
     const tr = c.querySelector(".ls-tr");
     if (tr) tr.onclick = (e) => { e.preventDefault(); AX.trocarAba("conectar"); };
     const det = c.querySelector(".ls-lista");

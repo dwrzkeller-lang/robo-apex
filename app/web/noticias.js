@@ -4,8 +4,8 @@
   "use strict";
   const AX = window.AX, $ = AX.$;
   const N = { dados: null, vistos: new Set(), primeira: true, novos: 0, carregando: false };
-  const PREF = "apex_news";
-  try { const p = JSON.parse(localStorage.getItem(PREF) || "{}"); if (p.imp) $("newsImpacto").value = p.imp; if (p.at != null) $("newsAtivo").value = p.at; } catch (e) { /* ok */ }
+  const ui = () => (AX.pref.ui = AX.pref.ui && typeof AX.pref.ui === "object" ? AX.pref.ui : {});             // filtros das notícias: salvos na conta do usuário
+  { const p = ui().news || {}; if (p.imp) $("newsImpacto").value = p.imp; if (p.at != null) $("newsAtivo").value = p.at; }
 
   const chave = (it) => it.titulo.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 60);
   const ha = (t) => {
@@ -113,7 +113,7 @@
   AX.on("config", () => { buscarAgenda(); setInterval(buscarAgenda, 30 * 60000); });
   AX.on("mudou", (o) => { if (o === "ativo" && AX.aba === "news") renderAgenda(); });
 
-  const salvar = () => { try { localStorage.setItem(PREF, JSON.stringify({ imp: $("newsImpacto").value, at: $("newsAtivo").value })); } catch (e) { /* ok */ } render(); };
+  const salvar = () => { ui().news = { imp: $("newsImpacto").value, at: $("newsAtivo").value }; AX.salvarPref(); render(); };
   $("newsImpacto").onchange = salvar; $("newsAtivo").onchange = salvar; $("newsBusca").oninput = render;
   AX.on("aba", (nome) => {
     if (nome !== "news") return;

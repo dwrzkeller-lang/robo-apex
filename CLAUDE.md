@@ -16,6 +16,8 @@ simples, sem jargão.
   CVM). A página de vendas (`app/web/site`) mostra prints reais com o aviso de simulação.
 - Nada de promessa de resultado nem de "infalível". Toda estatística é com custos e escorregamento. Desde a 3.1 o
   selo "comprovada / não comprovada" saiu da tela (pedido do dono); fica o aviso de POUCOS DADOS e os textos de risco. Não dar recomendação pessoal de investimento.
+- Nomes de estratégia genéricos ("price action"): sem nome de professores, cursos ou apostilas no app, no site, no curso e
+  nas docs (pedido do dono, 16/10/2026); estudos e livros publicados podem ser citados no app e no LEIA-ME, nunca no curso. As regras são leituras próprias; nunca copiar texto ou desenho de material de terceiros.
 - As estratégias **E2 e E9 não são alteradas**. Melhoria entra como estratégia nova (E14, E15…).
 - Tela simples: tudo que não for óbvio tem um "?" com explicação (`data-dica` ou `AX.q("texto")`).
 - Sem dependências novas no servidor (só biblioteca padrão do Python 3.12).
@@ -43,8 +45,8 @@ sem candles.
 ## Mapa
 
 - `app/robo_apex.py` — servidor HTTP, rotas `/api/*`, Sentinela (testes ao vivo), `VERSAO`.
-- `app/estrategias.py` (E1–E25, gestões), `app/pisani_setups.py` (E26–E46: os setups da apostila do Pisani, um por
-  um, com as regras gerais da planilha dele; `abertura_real` = gap de abertura de verdade, inclusive ações), `app/simulador.py` (execução, custos, proteções), `app/ia.py`,
+- `app/estrategias.py` (E1–E25, gestões), `app/setups_pivo.py` (E26–E46: setups de pivô, virada e rompimento, um por
+  um, com regras gerais de price action; `abertura_real` = gap de abertura de verdade, inclusive ações), `app/simulador.py` (execução, custos, proteções), `app/ia.py`,
   `app/auth.py`, `app/dados_fonte.py`, `app/opcoes.py`, `app/profit.py`, `app/avisos.py`.
 - `app/qualidade.py` — nota de qualidade A+/A/B/C de cada sinal (price action, só com o passado) e o filtro `qual`.
 - Rodízio automático: estratégia `AUTO` (`rodizio_mapa` + `simular_c` em robo_apex.py; filtro `rodizio` no simulador).
@@ -61,6 +63,13 @@ sem candles.
   Agora, rota `/api/lista`); `tv.css` (visual limpo no estilo do TradingView, carregado por último: sem brilho, degradê
   ou desfoque); `boleta.js` (boleta e as etiquetas dela no gráfico: clique edita, dois cliques gestão, ✕ zera/tira); `mercado.js` (modo Cripto); `conectar.js`; `tutorial.js`; `vitrine.js` (`?vitrine=1` borra
   o nome das estratégias para prints); `tema.css` (visual da 3.0); `desenho.js` ferramentas de desenho; `dicas.js` os "?".
+- `app/web/inicio.html` — menu depois do login: os 3 volumes do treinamento ou o robô (`/app`). Os PDFs ficam em `app/curso/`
+  (fora do Git: repositório público) e só abrem em `/curso/volumeN.pdf` para quem está logado e com assinatura; `/baixar`
+  entrega `dados/baixar/RoboApex.exe` do mesmo jeito. A página de vendas é `app/web/site/index.html` (no Firebase pelo
+  `publicar_site.py` da pasta `online`, fora do repositório; `<meta name="apex-app">` aponta os botões para o robô online).
+- Tudo de cada usuário fica na pasta dele (`pasta_de(uid)`): preferências (`estado_pref.json`, inclusive as regras que a IA
+  aprendeu), desenhos, edições, lições, testes, boleta, MetaTrader. `/api/estado` só aceita pref, edicoes, licoes e desenhos_*.
+- Conferência visual de páginas: skill `.claude/skills/conferir-visual`.
 - `ntsl/` — scripts para o Profit, gerados por `ferramentas/gerar_ntsl.py`.
 - `ferramentas/backtest.py` — testes das estratégias com custos.
 

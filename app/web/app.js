@@ -30,7 +30,29 @@
   const chavePref = () => "apex_pref:" + uidPref;
   AX.pref = Object.assign({}, PADRAO, (uidPref && lerLS(chavePref())) || lerLS("rk_pref") || {});
   if (/[?&]ativo=B[NF]%3A|[?&]ativo=B[NF]:/.test(location.search)) AX.pref.mercado = "cripto";
-  AX.salvarPref = () => { if (!uidPref) return; try { localStorage.setItem(chavePref(), JSON.stringify(AX.pref)); } catch (e) { /* ok */ } };
+  // As preferências (inclusive as regras que o robô aprendeu com as edições) moram na CONTA do usuário, no servidor:
+  // abrem iguais em qualquer computador. O navegador guarda só uma cópia para a tela abrir rápido.
+  let tPref = 0;
+  const enviarPref = (ja) => {
+    clearTimeout(tPref); tPref = 0;
+    const mandar = () => { tPref = 0; fetch("/api/estado?nome=pref", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(AX.pref), keepalive: true, credentials: "same-origin" }).catch(() => {}); };
+    if (ja) mandar(); else tPref = setTimeout(mandar, 700);
+  };
+  AX.salvarPref = () => { if (!uidPref) return; try { localStorage.setItem(chavePref(), JSON.stringify(AX.pref)); } catch (e) { /* ok */ } enviarPref(); };
+  addEventListener("pagehide", () => { if (tPref) enviarPref(true); });
+  async function sincronizarPref() {           // traz as preferências da conta; true = a página recomeça com elas
+    if (!uidPref) return false;
+    let srv;
+    try { srv = await AX.api.get("pref"); } catch (e) { return false; }
+    if (!srv || typeof srv !== "object" || Array.isArray(srv)) { enviarPref(true); return false; }   // 1ª vez: leva as deste navegador
+    let local = null; try { local = localStorage.getItem(chavePref()); } catch (e) { /* sem armazenamento */ }
+    if (local === JSON.stringify(srv)) return false;
+    let jaRecomecou = false;
+    try { jaRecomecou = sessionStorage.getItem("apex_pref_sinc") === uidPref; sessionStorage.setItem("apex_pref_sinc", uidPref); } catch (e) { jaRecomecou = true; }
+    try { localStorage.setItem(chavePref(), JSON.stringify(srv)); } catch (e) { jaRecomecou = true; }
+    if (!jaRecomecou) { location.reload(); return true; }
+    return false;
+  }
   function identificar(u) {
     if (!u || u.id === uidPref) return false;
     uidPref = u.id;
@@ -1000,7 +1022,7 @@
     document.querySelectorAll("#ouvirSons button").forEach((b) => (b.onclick = () => AX.som(b.dataset.s, true)));
     $("btAtualizar").onclick = () => { AX.fecharPopovers(); V.velho = true; carregarVivo(); };
     document.addEventListener("pointerdown", (e) => {
-      if (!e.target.closest(".popover") && !e.target.closest("#btAjustes") && !e.target.closest("#periodo") && !e.target.closest("#btInd") && !e.target.closest("#btCandles")) AX.fecharPopovers();
+      if (!e.target.closest(".popover") && !e.target.closest("#btAjustes") && !e.target.closest("#periodo") && !e.target.closest("#btInd") && !e.target.closest("#btCandles") && !e.target.closest("#btAoVivo") && !e.target.closest("#btReplay")) AX.fecharPopovers();
     });
   }
 
@@ -1159,14 +1181,18 @@
   }
 
   // ---------------------------------------------------------------- resumo do período (aba Ao vivo)
-  const GEST = { aberto: false, chave: "", dados: null };
+  const GEST = { aberto: false, chave: "", dados: null, buscando: "" };
   async function gestoesLado() {
     const el = $("gestLado"); if (!el) return;
     const chave = AX.parametros();
     if (GEST.chave !== chave || !GEST.dados) {
       el.innerHTML = '<div class="nota">comparando as gestões neste período…</div>';
-      try { GEST.dados = await AX.json("/api/gestoes?stops=1&" + chave); GEST.chave = chave; } catch (e) { el.innerHTML = `<div class="nota ruim">${AX.esc(e.message)}</div>`; return; }
-      if (!$("gestLado")) return;
+      if (GEST.buscando === chave) return;            // o mesmo pedido já está a caminho: ele desenha quando chegar
+      GEST.buscando = chave;
+      try { GEST.dados = await AX.json("/api/gestoes?stops=1&" + chave); GEST.chave = chave; }
+      catch (e) { const z = $("gestLado"); if (z) z.innerHTML = `<div class="nota ruim">${AX.esc(e.message)}</div>`; return; }
+      finally { if (GEST.buscando === chave) GEST.buscando = ""; }
+      if (!$("gestLado") || AX.parametros() !== chave) return;
     }
     const g = GEST.dados, D = { meta: { moeda: g.moeda } }, max = Math.max(1, ...g.linhas.map((x) => Math.abs(x.total)));
     // Gestão (o que fazer com o ganho) × stop (como limitar a perda): cada célula é o resultado do período naquela combinação.
@@ -1199,10 +1225,10 @@
       AX.escolherGestao(tr.dataset.g);
     }));
   }
-  // abre a comparação das gestões no painel Ao vivo (chamado pela aba IA)
+  // abre a comparação das gestões no resumo do período (fica na aba Resultado; chamado pela aba IA)
   AX.abrirGestoes = () => {
     GEST.aberto = true;
-    if (AX.aba !== "vivo") AX.trocarAba("vivo"); else if (V.D) renderVivo(V.D);
+    if (AX.aba !== "sim") AX.trocarAba("sim"); else if (V.D) renderVivo(V.D);
     setTimeout(() => { const g = $("btGestLado"); if (g) g.scrollIntoView({ block: "center", behavior: "smooth" }); }, 80);
   };
   AX.rerenderVivo = () => { if (V.D) renderVivo(V.D); };
@@ -1231,7 +1257,9 @@
     if (AX.aba !== "vivo") trocarAba("vivo");
     V.velho = true;
     AX.carga(true);
-    try { await AX.carregarVivo(); } finally { AX.carga(false); }
+    let ok = false;
+    try { ok = await AX.carregarVivo(); } catch (e) { ok = false; } finally { AX.carga(false); }   // o erro já virou aviso
+    if (!ok) return;                                   // não diz "ao vivo" se a carga falhou
     if (V.D) { AX.mostrar(V.D, V.D.meta.iFim); AX.centralizar(); }
     AX.toast(mudouPer ? "Ao vivo: período mudado para hoje." : "Ao vivo: mostrando o candle de agora.", "ok");
   };
@@ -1404,7 +1432,7 @@
       // espera os outros módulos (ind, sim, calendário, operações…) carregarem: eles ouvem o evento "config"
       if (document.readyState === "loading") await new Promise((ok) => document.addEventListener("DOMContentLoaded", ok, { once: true }));
       AX.cfg = await AX.json("/api/config");
-      if (identificar(AX.cfg.usuario)) return;
+      if (identificar(AX.cfg.usuario) || await sincronizarPref()) return;
       document.querySelector(".topo .titulo").innerHTML = 'ROBÔ APEX <small class="versao">' + AX.esc(AX.cfg.versao || "") + "</small>";         // outro usuário neste navegador: a página recomeça com as preferências dele
       AX.cfg.estMap = Object.fromEntries(AX.cfg.estrategias.map((e) => [e.cod, e]));
       // link direto: ?ativo=WIN&tf=5&est=TODAS&per=5d&aba=sim&acao=simular|replay|robo&passos=40

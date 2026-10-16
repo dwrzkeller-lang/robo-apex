@@ -27,6 +27,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import traceback
@@ -108,19 +109,42 @@ def _ao_vivo(chave, tf):
 
 
 _MT5_MEM = {}
+_UID = threading.local()            # usuario do pedido (ou do teste ao vivo) que esta sendo atendido nesta thread
+
+
+def _dono_mt5(chave):
+    """'MT5:SIMBOLO' (o do usuario desta thread) ou 'MT5:SIMBOLO@usuario' (uso interno) -> (simbolo, usuario).
+    Cada usuario so enxerga os candles que o EA DELE mandou."""
+    sim, _, uid = chave[4:].partition("@")
+    atual = getattr(_UID, "v", None)
+    if not uid:
+        uid = atual
+    elif atual and uid != atual:
+        raise ValueError("ativo inválido")
+    sim = sim.strip().upper()
+    if not uid or not (uid == auth.ADMIN_ID or auth.ID_OK.match(uid)) or not corretora.simbolo_ok(sim):
+        raise ValueError("ativo do MetaTrader inválido: %s" % chave[:40])
+    return sim, uid
+
+
+def _ck(chave):
+    """Chave interna dos calculos guardados: o MT5:SIMBOLO de cada usuario e um ativo diferente (nada se mistura)."""
+    if chave.startswith("MT5:") and "@" not in chave:
+        return "MT5:%s@%s" % _dono_mt5(chave)
+    return chave
 
 
 def _mt5(chave, tf):
     """Candles que o EA mandou do MetaTrader 5 (dados da corretora, tempo real), agrupados no tempo grafico pedido.
     Custos, horario e valor do ponto vem do ativo do robo escolhido na aba Conectar (WIN, WDO, PETR4...)."""
-    sim = chave[4:].upper()
-    minutos, versao = CONEX.minutos(sim)
+    sim, uid = _dono_mt5(chave)
+    minutos, versao = CONEX.minutos(uid, sim)
     if not minutos:
         raise RuntimeError("Ainda não chegaram candles do MetaTrader para %s: ligue o EA no MetaTrader 5." % sim)
-    base_at = CONEX.ativo_de(sim)
+    base_at = CONEX.ativo_de(uid, sim)
     cfg = dict(df.ATIVOS.get(base_at) or df.ATIVOS["WIN"])
     cfg.update(nome="%s - MetaTrader 5 (dados da sua corretora, tempo real)" % sim, curto=sim, yahoo=None)
-    ck = (sim, tf)
+    ck = (uid, sim, tf)
     v = _MT5_MEM.get(ck)
     if v and v[0] == versao:
         return v[1], v[2], cfg
@@ -181,7 +205,7 @@ def graficos(chave, tf, B, sc, aberto=False):
     mesmos candles fechados, so o candle aberto e atualizado. Chamar com a TRAVA de calculo."""
     n = len(B["c"])
     nf = n - 1 if aberto else n
-    ck = (chave, tf)
+    ck = (_ck(chave), tf)
     v = _GS.get(ck)
     if v and v["n"] == n and v["nf"] == nf:
         if v["B"] is B:
@@ -232,7 +256,7 @@ def rodizio_mapa(chave, tf, B, Gs, sc, gestao, contratos, max_stops, plano):
     hoje = d[-1]
     i_ontem = bisect.bisect_left(d, hoje) - 1
     pl = {k: v for k, v in (plano or {}).items() if k != "rodizio"}
-    key = (chave, tf, hoje, i_ontem, B.get("sid") if i_ontem < 0 else impressao(B, max(AQUECIMENTO, i_ontem)), gestao,
+    key = (_ck(chave), tf, hoje, i_ontem, B.get("sid") if i_ontem < 0 else impressao(B, max(AQUECIMENTO, i_ontem)), gestao,
            float(contratos), max_stops, json.dumps(pl, sort_keys=True, default=str))
     if key in _ROD:
         _ROD.move_to_end(key)
@@ -277,7 +301,8 @@ def simular_c(chave, tf, B, Gs, sc, cods, i_ini=None, i_fim=None, aberto=False, 
     pk = None if not plano else tuple(sorted((k, json.dumps(v, sort_keys=True) if isinstance(v, (dict, list)) else v)
                                              for k, v in plano.items() if v))
     ak = None if not ajustes else json.dumps(ajustes, sort_keys=True)
-    key = (chave, tf, tuple(cods), gestao, float(contratos), max_stops, juntas, ini, com_atencao, pk, ak, None if vivo else i_fim)
+    custos = (sc.get("valor_ponto"), sc.get("custo"), sc.get("custo_pct"), sc.get("tick"))     # lote da cripto pode mudar: retrato antigo nao vale
+    key = (_ck(chave), tf, tuple(cods), gestao, float(contratos), max_stops, juntas, ini, com_atencao, pk, ak, None if vivo else i_fim, custos)
     ck = _RET.get(key)
     ret = None
     if ck and ini - 1 <= ck["m"] <= alvo and ck["fp"] == impressao(B, ck["m"]):
@@ -491,7 +516,7 @@ class MotorIA:
         self.fila = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ia")
 
     def obter(self, chave, tf, gestao, contratos, agendar=True):
-        k = (chave, tf, gestao, float(contratos))
+        k = (_ck(chave), tf, gestao, float(contratos))          # MT5: o modelo de cada usuario e so dele
         v = self.mem.get(k)
         if agendar and (v is None or time.time() - v["feito"] > self.VALIDADE):
             with self.trava:
@@ -501,7 +526,7 @@ class MotorIA:
         return v
 
     def treinando(self, chave, tf, gestao, contratos):
-        return (chave, tf, gestao, float(contratos)) in self.fazendo
+        return (_ck(chave), tf, gestao, float(contratos)) in self.fazendo
 
     def _treinar(self, k):
         chave, tf, gestao, contratos = k
@@ -559,6 +584,8 @@ class MotorIA:
         """Historico da nota da IA (um ponto por dia, ou quando o numero de operacoes muda bastante)."""
         chave, tf, gestao, contratos = k
         pasta = os.path.join(df.pasta_dados(BASE), "ia")
+        if chave.startswith("MT5:") and "@" in chave:              # ativo MT5 de um usuario: o historico fica na pasta dele
+            pasta = os.path.join(pasta_de(chave.rpartition("@")[2]), "ia")
         arq = os.path.join(pasta, re.sub(r"[^A-Za-z0-9_\-]", "_", "%s_%d_%s" % (chave, tf, gestao)) + ".json")
         try:
             with open(arq, encoding="utf-8") as f:
@@ -782,7 +809,7 @@ def _sem_f(lista):
 
 def IA_estado(chave, tf, gestao, contratos):
     """Selo curto do modelo que a tela esta usando (quando ele muda, a tela pede os dados de novo)."""
-    v = IA.mem.get((chave, tf, gestao, float(contratos)))
+    v = IA.mem.get((_ck(chave), tf, gestao, float(contratos)))
     return "%s:%d" % (v["estado"], v["n"]) if v else "-"
 
 
@@ -903,13 +930,17 @@ def _ligar_piloto(uid, p, ip, u):
     sim = str(p.get("simbolo") or CONEX.publico(uid)["cfg"].get("simbolo") or "").strip().upper()
     if not sim:
         raise ValueError("Escreva o símbolo do MetaTrader (o do gráfico onde o EA está).")
+    if not corretora.simbolo_ok(sim):
+        raise ValueError("Símbolo inválido.")
     if sim not in CONEX.simbolos_de(uid):
         raise ValueError("O EA ainda não mandou os candles de %s. Abra o MetaTrader, coloque o EA no gráfico desse símbolo "
                          "com o seu código de conexão e espere o \"EA CONECTADO\"." % sim)
     est = str(p.get("est") or "")
     if est not in ("TODAS", "AUTO") and est not in ESTRATEGIAS:
         raise ValueError("Escolha a estratégia.")
-    antigo = CONEX.publico(uid)["cfg"].get("teste")
+    corretora._hhmm(p.get("hora_ini") or 0)                   # horario invalido: erro ANTES de ligar o teste
+    corretora._hhmm(p.get("hora_fim") or 0)
+    antigo =CONEX.publico(uid)["cfg"].get("teste")
     x = TESTES.ligar(uid, dict(ativo="MT5:" + sim, tf=_int({"tf": [p.get("tf")]}, "tf", 5), est=est, gestao=p.get("gestao"),
                                contratos=p.get("contratos") or 1, capital=p.get("capital") or 10000, maxstops=p.get("maxstops") or 2,
                                qual=p.get("qual") or "", cods=p.get("cods") or "", regra=p.get("regra") or "", brl=p.get("brl"),
@@ -1109,6 +1140,12 @@ def pasta_de(uid):
     return p
 
 
+def _pode_usar(uid):
+    """O usuario existe, esta ativo e (se o site exige) tem assinatura valida. Sem isso: nada de EA, testes ao vivo ou avisos."""
+    u = ACESSOS.por_id(uid) if ACESSOS else None
+    return bool(u and u.get("ativo") and SITE.ativa(u))
+
+
 def _ler_json(arq, padrao):
     try:
         with open(arq, encoding="utf-8") as f:
@@ -1117,12 +1154,29 @@ def _ler_json(arq, padrao):
         return padrao
 
 
+_TRAVAS_ARQ = {}
+_TRAVAS_ARQ_T = threading.Lock()
+
+
 def _gravar_json(arq, obj):
-    if os.path.exists(arq):
-        shutil.copyfile(arq, arq + ".bak")
-    with open(arq + ".tmp", "w", encoding="utf-8") as f:
-        json.dump(obj, f, ensure_ascii=False)
-    os.replace(arq + ".tmp", arq)
+    """Grava num arquivo temporario so desta gravacao e troca de uma vez; um arquivo e gravado por uma thread por vez."""
+    k = os.path.normcase(os.path.abspath(arq))
+    with _TRAVAS_ARQ_T:
+        trava = _TRAVAS_ARQ.setdefault(k, threading.Lock())
+    with trava:
+        if os.path.exists(arq):
+            shutil.copyfile(arq, arq + ".bak")
+        fd, tmp = tempfile.mkstemp(prefix=os.path.basename(arq) + ".", suffix=".tmp", dir=os.path.dirname(arq) or ".")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(obj, f, ensure_ascii=False)
+            os.replace(tmp, arq)
+        except BaseException:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            raise
 
 
 CAMPOS_TESTE = ("ativo", "tf", "est", "gestao", "contratos", "capital", "maxstops", "tam", "risco", "lossDia", "metaDia", "seletivo", "prot",
@@ -1450,6 +1504,7 @@ class Sentinela:
     def rodar(self, uid, x, forcar=False):
         """Refaz o teste x se os candles mudaram. Devolve o resultado (ou None se o teste foi apagado no meio)."""
         k = (uid, x["id"])
+        _UID.v = uid                                  # ativo MT5:... do teste = os candles do EA DESTE usuario
         with self.trava:
             vez = self.vez.setdefault(k, threading.Lock())
         # Um calculo por vez de cada teste (a thread do Sentinela e os pedidos da tela chegam ao mesmo tempo): os candles
@@ -1494,6 +1549,8 @@ class Sentinela:
             if tipo == "ordem":
                 ev.update(gatilho=o.get("gatilho"), ordem=o.get("tipo"))
                 try:                                           # ponte com o Profit em modo simulador: a ordem fica so registrada
+                    if uid != auth.ADMIN_ID:                   # (so a do administrador: o arquivo do Profit e um so)
+                        raise ValueError("so o administrador")
                     profit.Roteador(df.pasta_dados(BASE)).enviar(profit.Ordem(
                         x["ativo"], o["dir"], "mercado" if o.get("gatilho") is None else ("limite" if o.get("tipo") == "limite" else "stop"),
                         o.get("gatilho"), o.get("stop"), o.get("alvo"), o.get("q") or x.get("contratos") or 1, "%s teste %s" % (o["est"], x["id"])))
@@ -1506,7 +1563,7 @@ class Sentinela:
                           ganho=o["R"] > 0)
             self.eventos[uid].append(ev)
             linhas.append(json.dumps(ev, ensure_ascii=False))
-            if cfg["tipos"].get(tipo, True):
+            if cfg["tipos"].get(tipo, True) and _pode_usar(uid):      # conta desativada ou sem assinatura: sem avisos
                 self.carteiro.postar(uid, cfg, avisos.texto_evento(ev))
         try:
             with open(os.path.join(pasta_de(uid), "sinais.jsonl"), "a", encoding="utf-8") as f:
@@ -1535,6 +1592,8 @@ class Sentinela:
             try:
                 uids = [u["id"] for u in (ACESSOS.usuarios if ACESSOS else [])]
                 for uid in uids:
+                    if not _pode_usar(uid):                   # desativado ou assinatura vencida: os testes dele param de rodar
+                        continue
                     for x in list(self.lista(uid)):
                         if x.get("ate"):
                             continue
@@ -1680,7 +1739,7 @@ def api_radar(q):
     with RADAR_LOCK:
         if q.get("forcar", ["0"])[0] != "1" and ck in RADAR_CACHE and time.time() - RADAR_CACHE[ck][0] < 600:
             return RADAR_CACHE[ck][1]
-    res = radar.rodar(carregar, df.sessao_cfg, chave, gestao, contratos, capital, max_stops, plano=pl)
+    res = radar.rodar(carregar, df.sessao_cfg, chave, gestao, contratos, capital, max_stops, plano=pl, formando=formando)
     res.update(calculado=time.time(), seletivo=pl["seletivo"], tam=pl["tam"], riscoPct=pl["risco_pct"])
     with RADAR_LOCK:
         if len(RADAR_CACHE) > 40:
@@ -1690,11 +1749,20 @@ def api_radar(q):
 
 
 # ------------------------------------------------------------------------------------------ comparar (fundo)
-CMP = dict(rodando=False, feito=0, total=0, linhas=[], erro=None, pedido=None)
+CMPS = {}                                       # usuario -> dict(rodando, feito, total, linhas, erro, pedido): cada um ve o seu
 CMP_LOCK = threading.Lock()
+CMP_MAX = 2                                     # comparativos rodando ao mesmo tempo no servidor (somando todos os usuarios)
 
 
-def _comparar(pedido):
+def _cmp_de(uid):
+    """Chamar com CMP_LOCK."""
+    return CMPS.setdefault(uid, dict(rodando=False, feito=0, total=0, linhas=[], erro=None, pedido=None))
+
+
+def _comparar(uid, pedido):
+    _UID.v = uid
+    with CMP_LOCK:
+        CMP = _cmp_de(uid)
     try:
         ativos = pedido["ativos"]
         with CMP_LOCK:
@@ -1729,7 +1797,7 @@ def _comparar(pedido):
     except Exception as e:
         traceback.print_exc()
         with CMP_LOCK:
-            CMP["erro"] = str(e)
+            CMP["erro"] = "não consegui terminar o comparativo"
     finally:
         with CMP_LOCK:
             CMP["rodando"] = False
@@ -1744,7 +1812,7 @@ def config(usuario=None):
     out = _config(usuario)
     if usuario and usuario.get("id"):
         for sim in CONEX.simbolos_de(usuario["id"]):
-            a = CONEX.ativo_de(sim)
+            a = CONEX.ativo_de(usuario["id"], sim)
             base_cfg = df.ATIVOS.get(a) or df.ATIVOS["WIN"]
             out["ativos"].append(dict(chave="MT5:" + sim, nome="%s - MetaTrader 5 (sua corretora, tempo real)" % sim, moeda=base_cfg["moeda"],
                                       lote=base_cfg["lote"], fracionado=base_cfg.get("fracionado", False), mercado=base_cfg.get("mercado", "b3"),
@@ -1764,7 +1832,7 @@ def _config(usuario=None):
             for k, v in ESTRATEGIAS.items()]
     tempos = [dict(tf=k, nome=df.NOME_TEMPO[k], periodo="10 anos" if k >= 1440 else "") for k in df.TEMPOS]
     return dict(ativos=ativos, estrategias=ests, gestoes=GESTOES, gestoesCurto=GESTOES_CURTO, tempos=tempos, protecoes=PROTECOES,
-                pastaDados=df.pasta_dados(BASE), usuario=usuario, versao=VERSAO)
+                usuario=usuario, versao=VERSAO)                  # sem caminhos de pasta do servidor (a tela nao usa)
 
 
 # ------------------------------------------------------------------------------------------ HTTP
@@ -1775,8 +1843,28 @@ COM_SENHA_PROVISORIA = ("/api/acesso/estado", "/api/acesso/sair", "/api/conta/se
 SEM_ASSINATURA = ("/api/acesso/estado", "/api/acesso/sair", "/api/conta/senha", "/api/conta", "/api/site/minha")
 
 
+# nomes que a tela pode gravar/ler em /api/estado (estado_<nome>.json na pasta do usuario). Os arquivos em que o servidor
+# confia (conexao, testes, avisos, boleta...) nunca entram aqui.
+ESTADO_NOMES = ("pref", "edicoes", "licoes")
+ESTADO_DESENHOS = re.compile(r"^desenhos_[A-Za-z0-9_.\-]{1,40}$")
+ESTADO_MAX = 2 * 1024 * 1024                        # tamanho maximo de cada estado gravado pela tela
+ESTADO_MAX_DESENHOS = 300                           # arquivos de desenho por usuario
+# limite de pedidos por IP (balde de fichas): rajada e depois N por minuto
+LIMITES = {"/api/acesso/entrar": auth.Limite(10, 10), "/api/acesso/cadastrar": auth.Limite(5, 2),
+           "/api/acesso/primeiro": auth.Limite(5, 3)}
+
+
+def _nome_estado(nome):
+    """Nome aceito para /api/estado (ou None). A comparacao ignora maiusculas: no Windows Testes == testes."""
+    n = (nome or "").strip()
+    if n.lower() in ESTADO_NOMES:
+        return n.lower()
+    return n if ESTADO_DESENHOS.match(n) else None
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "RoboApex/" + VERSAO
+    timeout = 30                                    # conexao parada (sem mandar nada) cai depois de 30 s
 
     def log_message(self, *a):
         pass
@@ -1806,11 +1894,17 @@ class Handler(BaseHTTPRequestHandler):
     def _corpo(self, limite):
         if "application/json" not in (self.headers.get("Content-Type") or "").lower():
             raise ValueError("pedido inválido")
-        tam = int(self.headers.get("Content-Length", "0"))
+        try:
+            tam = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            raise ValueError("tamanho inválido")
         if tam <= 0 or tam > limite:
             raise ValueError("tamanho inválido")
-        corpo = json.loads(self.rfile.read(tam).decode("utf-8"))
-        if not isinstance(corpo, (dict, list)) or (isinstance(corpo, list) and "/api/estado" not in self.path):
+        try:
+            corpo = json.loads(self.rfile.read(tam).decode("utf-8"))
+        except (UnicodeDecodeError, RecursionError):
+            raise ValueError("pedido inválido")
+        if not isinstance(corpo, (dict, list)) or (isinstance(corpo, list) and urllib.parse.urlparse(self.path).path != "/api/estado"):
             raise ValueError("pedido inválido")
         return corpo
 
@@ -1843,9 +1937,22 @@ class Handler(BaseHTTPRequestHandler):
 
     def _ip(self):
         ip = self.client_address[0] if self.client_address else ""
-        if PUBLICO and ip in ("127.0.0.1", "::1"):              # atras do proxy: o IP verdadeiro vem no cabecalho dele
-            ip = (self.headers.get("X-Forwarded-For") or ip).split(",")[0].strip()[:60]
+        if PROXY and ip in ("127.0.0.1", "::1"):
+            # atras do proxy (--proxy): o IP verdadeiro e o ULTIMO do cabecalho, o que o proprio proxy acrescentou (os da
+            # esquerda vem de quem fez o pedido e podem ser inventados)
+            xff = [x.strip() for x in (self.headers.get("X-Forwarded-For") or "").split(",") if x.strip()]
+            if xff:
+                ip = xff[-1][:60]
         return ip
+
+    def _limite(self, cam):
+        """False (ja respondeu 429) se este IP passou do limite de pedidos desta rota."""
+        lim = LIMITES.get(cam)
+        if lim is None or lim.pode(self._ip()):
+            return True
+        ACESSOS.registrar("limite_ip", "", cam, self._ip())
+        self._json(dict(erro="Muitas tentativas a partir deste endereço. Espere um minuto e tente de novo."), 429)
+        return False
 
     def _sessao(self, caminho, publicas):
         """Usuario da sessao, ou None depois de ja ter respondido 401/403."""
@@ -1874,18 +1981,22 @@ class Handler(BaseHTTPRequestHandler):
         url = urllib.parse.urlparse(self.path)
         q = urllib.parse.parse_qs(url.query)
         cam = url.path
+        _UID.v = None
         try:
             u = self._sessao(cam, PUBLICAS_POST)
             if u is None:
                 return
+            _UID.v = u.get("id")
             ip = self._ip()
+            if not self._limite(cam):
+                return
             if cam == "/api/acesso/entrar":
                 p = self._corpo(4000)
                 tok, usuario = ACESSOS.entrar(p.get("email"), p.get("senha"), bool(p.get("manter")), ip)
                 return self._json(dict(ok=True, usuario=usuario), cookies=[self._cookie(tok, bool(p.get("manter")))])
             if cam == "/api/acesso/primeiro":
                 p = self._corpo(4000)
-                tok, usuario = ACESSOS.primeiro_acesso(p.get("senha"), ip)
+                tok, usuario = ACESSOS.primeiro_acesso(p.get("senha"), ip, p.get("codigo"))
                 return self._json(dict(ok=True, usuario=usuario), cookies=[self._cookie(tok)])
             if cam == "/api/hotmart":
                 try:
@@ -1899,15 +2010,27 @@ class Handler(BaseHTTPRequestHandler):
                 if not SITE.cfg["cadastro_aberto"]:
                     return self._json(dict(erro="O cadastro não está aberto. Fale com o administrador."), 403)
                 p = self._corpo(8000)
-                pend = SITE.pendente(p.get("email"))
-                assin = dict(status=pend[0], ate=pend[1], origem="hotmart", transacao="") if pend else None
-                tok, usuario = ACESSOS.cadastrar(p.get("nome"), p.get("email"), p.get("senha"), p.get("aceite") or {}, ip, assin)
+                pend = SITE.pendente(p.get("email"))          # so olha: a compra sai da lista depois que o cadastro deu certo
+                assin = None
+                if pend:
+                    assin = dict(status=pend.get("status"), ate=pend.get("ate"), origem="hotmart", transacao=pend.get("transacao") or "",
+                                 quando=time.time())
+                    if pend.get("encerradas"):
+                        assin["encerradas"] = list(pend["encerradas"])[-20:]
+                tok, usuario = ACESSOS.cadastrar(p.get("nome"), p.get("email"), p.get("senha"), p.get("aceite"), ip, assin)
+                if pend:
+                    SITE.pendente_usada(p.get("email"))
                 return self._json(dict(ok=True, usuario=usuario, checkout=SITE.checkout_para(usuario["email"], usuario["nome"])),
                                   cookies=[self._cookie(tok)])
             if cam in ("/api/ea/estado", "/api/ea/candles"):
                 uid_ea = CONEX.uid_do_token(self.headers.get("X-Apex-Token") or q.get("token", [""])[0])
                 if not uid_ea:
                     return self._texto("OK=0\nMOTIVO=código de conexão inválido\n", 403)
+                _UID.v = uid_ea
+                if not _pode_usar(uid_ea):                    # conta desativada ou assinatura vencida: nada de ordem nova
+                    if cam == "/api/ea/estado":
+                        return self._texto("OK=1\nLIGADO=0\nREAL=0\nMOTIVO=conta sem acesso ao robô (desativada ou assinatura vencida)\n")
+                    return self._texto("OK=0\nMOTIVO=conta sem acesso ao robô (desativada ou assinatura vencida)\n", 403)
                 p = self._corpo(4 * 1024 * 1024)
                 if cam == "/api/ea/estado":
                     return self._texto(CONEX.receber_estado(uid_ea, p))
@@ -2014,7 +2137,8 @@ class Handler(BaseHTTPRequestHandler):
             if cam == "/api/comparar":
                 p = self._corpo(100000)
                 tf = int(p.get("tf", 5))
-                pedido = dict(ativos=[a for a in p.get("ativos", []) if a in df.ATIVOS or a.startswith("CSV:") or cripto.eh_cripto(a)][:30],
+                ativos = p.get("ativos") if isinstance(p.get("ativos"), list) else []
+                pedido = dict(ativos=[a for a in ativos if isinstance(a, str) and (a in df.ATIVOS or a.startswith("CSV:") or cripto.eh_cripto(a))][:30],
                               seletivo=bool(p.get("seletivo")),
                               tf=tf if tf in df.TEMPOS else 5, gestao=p.get("gestao") if p.get("gestao") in GESTOES else "padrao",
                               maxstops=max(1, min(50, int(p.get("maxstops", 2)))), de=int(p.get("de") or 0),
@@ -2022,17 +2146,25 @@ class Handler(BaseHTTPRequestHandler):
                 if not pedido["ativos"]:
                     return self._json(dict(erro="Escolha pelo menos um ativo."), 400)
                 with CMP_LOCK:
+                    CMP = _cmp_de(uid)
                     if CMP["rodando"]:
                         return self._json(dict(ok=False, jaRodando=True))
+                    if sum(1 for c in CMPS.values() if c["rodando"]) >= CMP_MAX:
+                        return self._json(dict(erro="O servidor já está fazendo outros comparativos. Tente de novo em alguns minutos."), 429)
                     CMP.update(rodando=True, pedido=pedido, feito=0, total=len(pedido["ativos"]), linhas=[], erro=None)
-                threading.Thread(target=_comparar, args=(pedido,), daemon=True).start()
+                threading.Thread(target=_comparar, args=(uid, pedido), daemon=True).start()
                 return self._json(dict(ok=True))
             if cam == "/api/estado":
-                nome = q.get("nome", [""])[0]
-                if not NOME_OK.match(nome) or nome in ("testes", "avisos"):
+                nome = _nome_estado(q.get("nome", [""])[0])
+                if not nome:
                     return self._json(dict(erro="nome inválido"), 400)
-                corpo = self._corpo(20 * 1024 * 1024)
-                _gravar_json(os.path.join(pasta_de(uid), "estado_%s.json" % nome), corpo)
+                corpo = self._corpo(ESTADO_MAX)
+                pasta = pasta_de(uid)
+                arq = os.path.join(pasta, "estado_%s.json" % nome)
+                if nome.startswith("desenhos_") and not os.path.exists(arq) and \
+                        sum(1 for a in os.listdir(pasta) if a.lower().startswith("estado_desenhos_") and a.endswith(".json")) >= ESTADO_MAX_DESENHOS:
+                    return self._json(dict(erro="Limite de %d ativos com desenhos. Apague os desenhos de algum ativo." % ESTADO_MAX_DESENHOS), 400)
+                _gravar_json(arq, corpo)
                 return self._json(dict(ok=True))
             return self._json(dict(erro="rota desconhecida"), 404)
         except ConnectionError:
@@ -2041,9 +2173,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(dict(erro=str(e)), 403)
         except (ValueError, RuntimeError, KeyError, TypeError) as e:
             return self._json(dict(erro=str(e) or "pedido inválido"), 400)
-        except Exception as e:
+        except Exception:
             traceback.print_exc()
-            return self._json(dict(erro="%s: %s" % (type(e).__name__, e)), 500)
+            return self._json(dict(erro="Erro interno do robô. Tente de novo; se continuar, avise o suporte."), 500)
 
     # ---------------------------------------------------------------- GET
     def do_GET(self):
@@ -2056,13 +2188,26 @@ class Handler(BaseHTTPRequestHandler):
             if cam.startswith("/api/"):
                 return self._api_get(cam, q)
             u = ACESSOS.sessao(self._token())
+            raiz_extra = None
             pagina_app = lambda: ("assinar.html" if not SITE.ativa(u) else "index.html") if (u and not u["provisoria"]) else "entrar.html"   # noqa: E731
-            if PUBLICO and cam in ("/", "") and not u:
+            # quem ainda tem o cookie de uma sessao que venceu (ex.: a tela mandou de volta para "/") vai para a entrada
+            if PUBLICO and cam in ("/", "") and not u and not self._token():
                 caminho = "site/index.html"                        # quem chega pelo endereco do site ve a pagina de vendas
                 SITE.visita(cam, self._ip(), self.headers.get("Referer"), self.headers.get("User-Agent") or "",
                             "&".join(x for x in (url.query or "").split("&") if x.startswith("utm_")))
             elif cam in ("/", "", "/index.html", "/app", "/entrar"):
                 caminho = pagina_app()
+            elif cam == "/inicio":                             # menu depois do login: os 3 volumes ou o robo ao vivo
+                caminho = "inicio.html" if (u and not u["provisoria"]) else "entrar.html"
+            elif re.fullmatch(r"/curso/volume[1-3]\.pdf", cam) or cam == "/baixar":
+                # treinamento e versao para Windows: so para quem esta logado e com a assinatura em dia
+                if not (u and not u["provisoria"] and SITE.ativa(u)):
+                    self.send_response(302)
+                    self.send_header("Location", "/inicio" if u else "/entrar")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                raiz_extra = (os.path.join(RECURSOS, "curso"), cam.rsplit("/", 1)[1]) if cam != "/baixar" else                     (os.path.join(df.pasta_dados(BASE), "baixar"), "RoboApex.exe")
             elif cam in ("/site", "/site/") or (cam.startswith("/site/") and cam.endswith(".html")):
                 caminho = "site/index.html" if cam in ("/site", "/site/") else cam.lstrip("/")
                 SITE.visita(cam, self._ip(), self.headers.get("Referer"), self.headers.get("User-Agent") or "",
@@ -2070,7 +2215,9 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 caminho = urllib.parse.unquote(cam.lstrip("/"))
             raiz = WEB
-            if caminho.startswith("sons/"):                    # sons proprios ficam na pasta de dados
+            if raiz_extra:
+                raiz, caminho = raiz_extra
+            elif caminho.startswith("sons/"):                    # sons proprios ficam na pasta de dados
                 if not u:
                     self.send_error(404)
                     return
@@ -2118,20 +2265,23 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(dados)
         except ConnectionError:
             return
-        except Exception as e:
+        except Exception:
             traceback.print_exc()
-            self._json(dict(erro="%s: %s" % (type(e).__name__, e)), 500)
+            self._json(dict(erro="Erro interno do robô. Tente de novo; se continuar, avise o suporte."), 500)
 
     def _api_get(self, cam, q):
+        _UID.v = None
         try:
             u = self._sessao(cam, PUBLICAS_GET)
             if u is None:
                 return
+            _UID.v = u.get("id")
             if cam == "/api/acesso/estado":
                 est = ACESSOS.estado()
-                out = dict(primeiroAcesso=est["primeiroAcesso"], logado=bool(u), usuario=u or None, versao=VERSAO, site=SITE.publico_cfg(), publico=PUBLICO)
-                if est["primeiroAcesso"]:
-                    out["adminEmail"] = est["adminEmail"]      # so aparece enquanto ninguem definiu a senha
+                out = dict(primeiroAcesso=est["primeiroAcesso"], logado=bool(u), usuario=u or None, versao=VERSAO, site=SITE.publico_cfg(),
+                           publico=PUBLICO, pedeCodigo=bool(est["primeiroAcesso"] and est["pedeCodigo"]))
+                if est["primeiroAcesso"] and not PUBLICO:
+                    out["adminEmail"] = est["adminEmail"]      # so no computador da pessoa, enquanto ninguem definiu a senha
                 return self._json(out)
             if cam == "/api/site/termos":
                 return self._json(dict(termos=assinaturas.TERMOS, versao=assinaturas.TERMOS_VERSAO, site=SITE.publico_cfg()))
@@ -2139,10 +2289,14 @@ class Handler(BaseHTTPRequestHandler):
                 uid_ea = CONEX.uid_do_token(self.headers.get("X-Apex-Token") or q.get("token", [""])[0])
                 if not uid_ea:
                     return self._texto("OK=0\nMOTIVO=código de conexão inválido\n", 403)
+                _UID.v = uid_ea
+                if not _pode_usar(uid_ea):                    # LIGADO=0: o EA cancela as ordens pendentes e nao manda nenhuma nova
+                    return self._texto("OK=1\nLIGADO=0\nREAL=0\nMOTIVO=conta sem acesso ao robô (desativada ou assinatura vencida)\n")
                 return self._texto(CONEX.sinal(uid_ea, TESTES.para_ea))
             uid = u["id"]
             if cam == "/api/site/minha":
-                return self._json(dict(usuario=u, ativa=SITE.ativa(u), site=SITE.publico_cfg(), checkout=SITE.checkout_para(u["email"], u.get("nome"))))
+                return self._json(dict(usuario=u, ativa=SITE.ativa(u), site=SITE.publico_cfg(), checkout=SITE.checkout_para(u["email"], u.get("nome")),
+                                       baixar=os.path.isfile(os.path.join(df.pasta_dados(BASE), "baixar", "RoboApex.exe"))))
             if cam == "/api/admin/site":
                 us = ACESSOS.listar()
                 ativos = [x for x in us if x["papel"] != "admin" and SITE.ativa(dict(x, papel="usuario")) and (x.get("assinatura") or {}).get("status") == "ativa"]
@@ -2189,6 +2343,8 @@ class Handler(BaseHTTPRequestHandler):
             if cam == "/api/profit/estado":
                 e = profit.estado(df.pasta_dados(BASE))
                 e["ultimas"] = profit.ordens(df.pasta_dados(BASE), 20) if u["papel"] == "admin" else []
+                if PUBLICO:                                        # online: nao mostra o caminho das pastas do servidor
+                    e["pasta"] = "dados/profit"
                 return self._json(e)
             if cam == "/api/opcoes/painel":
                 return self._json(opcoes.painel(BASE, q.get("ativo", ["PETR4"])[0]))
@@ -2206,7 +2362,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(dict(chave="%s:%s" % (mercado, sym),
                                        nome="%s/%s%s" % (inf["moeda"], inf["cotacao"], " (futuro)" if mercado == "BF" else "")))
             if cam == "/api/sons":
-                return self._json(dict(sons=sons_proprios(), pasta=os.path.join(df.pasta_dados(BASE), "sons")))
+                return self._json(dict(sons=sons_proprios()))     # sem o caminho da pasta do servidor (a tela nao usa)
             if cam == "/api/radar":
                 return self._json(api_radar(q))
             if cam == "/api/noticias":
@@ -2219,10 +2375,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(est)
             if cam == "/api/comparar":
                 with CMP_LOCK:
-                    return self._json(dict(CMP))
+                    return self._json(dict(_cmp_de(uid)))
             if cam == "/api/estado":
-                nome = q.get("nome", [""])[0]
-                if not NOME_OK.match(nome) or nome in ("testes", "avisos"):
+                nome = _nome_estado(q.get("nome", [""])[0])
+                if not nome:
                     return self._json(dict(erro="nome inválido"), 400)
                 return self._json(dict(valor=_ler_json(os.path.join(pasta_de(uid), "estado_%s.json" % nome), None)))
             if cam == "/api/admin/usuarios":
@@ -2236,9 +2392,9 @@ class Handler(BaseHTTPRequestHandler):
             self._json(dict(erro=str(e)), 403)
         except (ValueError, RuntimeError) as e:
             self._json(dict(erro=str(e)), 400)
-        except Exception as e:
+        except Exception:
             traceback.print_exc()
-            self._json(dict(erro="%s: %s" % (type(e).__name__, e)), 500)
+            self._json(dict(erro="Erro interno do robô. Tente de novo; se continuar, avise o suporte."), 500)
 
 
 def porta_livre(pref):
@@ -2295,6 +2451,7 @@ class Servidor(ThreadingHTTPServer):
 SITE = assinaturas.Site(df.pasta_dados(BASE))
 PUBLICO = "--publico" in ARGS                      # na internet, atras de um proxy com HTTPS (Caddy/Nginx)
 DOMINIO = (_arg("--dominio") or "").strip().lower()
+PROXY = "--proxy" in ARGS                          # ha um proxy confiavel na frente (Caddy/Nginx): o IP do cliente vem dele
 CONEX = corretora.Conexao(df.pasta_dados(BASE), lambda uid: pasta_de(uid), lambda a, p: _ler_json(a, p), lambda a, o: _gravar_json(a, o))
 BOLETA = boleta.Boleta(lambda c, tf: carregar(c, tf), df.sessao_cfg, lambda B, cfg, c: formando(B, cfg, c), lambda uid: pasta_de(uid))
 _aquecido = threading.Event()
@@ -2347,6 +2504,11 @@ def main():
     print(" Tela: %s" % url)
     print(" Dados e desenhos: %s" % df.pasta_dados(BASE))
     print(" Feche esta janela para encerrar o robo.")
+    if PUBLICO:
+        cod = ACESSOS.preparar_codigo()                        # online: so quem ve o servidor faz o primeiro acesso
+        if cod:
+            print(" PRIMEIRO ACESSO: o administrador ainda nao tem senha. Na tela de entrada use o codigo %s" % cod)
+            print(" (tambem gravado em %s)." % os.path.join(df.pasta_dados(BASE), auth.ARQ_CODIGO))
     print("=" * 66)
     threading.Thread(target=TESTES.laco, daemon=True, name="sentinela").start()
     if "--sem-base" not in ARGS:

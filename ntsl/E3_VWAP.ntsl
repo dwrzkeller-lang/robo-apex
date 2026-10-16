@@ -1,5 +1,5 @@
 // =====================================================================
-//  ROBO APEX - E3 - Pullback na VWAP (Mario Pisani + Oliver Velez) - so intraday
+//  ROBO APEX - E3 - Pullback na VWAP - so intraday
 //  Tipo no Profit: Indicador (no grafico de preco). NAO envia ordens.
 //  Linhas: BRANCA = entrada | VERMELHA = stop | VERDE = alvo
 //  (aparecem enquanto a ordem esta armada ou a operacao esta aberta).

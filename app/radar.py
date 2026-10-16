@@ -11,7 +11,10 @@ ela pode ganhar/perder daqui para frente.
     operacoes por dia que ela teve: proximo mes (21 pregoes) e ate 31/12.
 """
 import random
+import time
 from datetime import date, timedelta
+
+import dados_fonte as df
 
 from estrategias import ESTRATEGIAS
 from simulador import estatisticas, preparar, simular
@@ -51,6 +54,23 @@ def projecao(valores, ops_por_dia, dias, caminhos=3000, semente=7):
                 chancePerda=100.0 * sum(1 for v in finais if v < 0) / len(finais), quedaP90=q(piores, 0.90))
 
 
+def _formando(B, cfg, chave):
+    """True se o ultimo candle ainda nao fechou (mesma conta de `formando` do robo_apex.py, repetida aqui porque o
+    robo_apex importa este arquivo)."""
+    if chave.startswith("CSV:") or not B["t"]:
+        return False
+    agora = time.time()
+    local = agora + 3600 * df.offset_horas(cfg.get("fuso", "BRT"), agora)
+    tf = B.get("tf", 5)
+    if tf >= 1440 and cfg.get("cripto"):
+        return True
+    if tf >= 1440:
+        g = time.gmtime(local)
+        fim = (cfg.get("sessao") or (0, 2359))[1]
+        return B["d"][-1] == g.tm_year * 10000 + g.tm_mon * 100 + g.tm_mday and g.tm_hour * 100 + g.tm_min <= fim
+    return local < B["t"][-1] + tf * 60
+
+
 def _medir(trades, d, capital):
     dias_todos = sorted(set(d))
     corte = dias_todos[-DIAS_RECENTES] if len(dias_todos) >= DIAS_RECENTES else dias_todos[0]
@@ -69,8 +89,9 @@ def _medir(trades, d, capital):
                 opsDia=ops_dia, encaixe=media_mista * ops_dia, valores=[t["dinheiro"] for t in trades])
 
 
-def rodar(carregar, cfg_de, chave, gestao, contratos, capital, max_stops, plano=None):
-    """carregar(chave, tf) -> (B, fonte, cfg). Devolve o ranking e a projecao. plano = regras do plano de trade."""
+def rodar(carregar, cfg_de, chave, gestao, contratos, capital, max_stops, plano=None, formando=None):
+    """carregar(chave, tf) -> (B, fonte, cfg). Devolve o ranking e a projecao. plano = regras do plano de trade.
+    formando(B, cfg, chave) -> True se o ultimo candle ainda esta se formando (sem ele, usa a conta daqui)."""
     linhas, fontes = [], {}
     nome, moeda = chave, "R$"
     hoje = date.today()
@@ -88,13 +109,15 @@ def rodar(carregar, cfg_de, chave, gestao, contratos, capital, max_stops, plano=
         else:
             contratos_tf = contratos
         Gs = preparar(B, sc)
+        # candle que ainda nao fechou: vale para executar ordem/stop/alvo, mas nao gera sinal nem saida por fechamento
+        i_form = len(B["c"]) - 1 if (formando or _formando)(B, cfg, chave) else None
         todo_dia = bool(cfg.get("fim_de_semana"))
         for cod in list(ESTRATEGIAS) + ["TODAS"]:
             cods = list(ESTRATEGIAS) if cod == "TODAS" else [cod]
             if cod != "TODAS" and ESTRATEGIAS[cod]["intraday"] and tf >= 1440:
                 continue
             r = simular(Gs, sc, cods, gestao=gestao, contratos=contratos_tf, max_stops=max_stops, juntas=cod == "TODAS",
-                        plano=plano)
+                        plano=plano, i_formando=i_form)
             m = _medir(r["trades"], B["d"], capital)
             m.update(est=cod, tf=tf, pregoesAno=_pregoes_ate_fim_do_ano(hoje, todo_dia), pregoesMes=30 if todo_dia else 21)
             linhas.append(m)

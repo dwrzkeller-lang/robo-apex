@@ -18,6 +18,7 @@ Tudo fica registrado (aceite do termo com data e IP, cada mudanca de configuraca
 import hashlib
 import json
 import os
+import re
 import secrets
 import threading
 import time
@@ -45,7 +46,14 @@ TERMO = (
     "8. Você pode desligar a conexão a qualquer momento nesta aba ou removendo o EA do gráfico no MetaTrader."
 )
 MAX_LOG = 300
-FRESCO = 90.0                 # segundos: resultado do teste mais velho que isso nao vira ordem (o EA espera)
+FRESCO = 90.0                 # segundos: candle do EA (ou resultado do teste) mais velho que isso nao vira ordem (o EA espera)
+MAX_SIMBOLOS = 8              # simbolos do MetaTrader guardados por usuario
+SIMBOLO_OK = re.compile(r"^[A-Z0-9$_\-][A-Z0-9$._\-]{0,23}$")
+
+
+def simbolo_ok(sim):
+    """Simbolo do MetaTrader aceito pelo robo (vira nome de arquivo: so letras, numeros e $ . _ -)."""
+    return isinstance(sim, str) and bool(SIMBOLO_OK.match(sim))
 
 
 def _agora():
@@ -58,7 +66,7 @@ class Conexao:
         self.pasta_de, self.ler_json, self.gravar_json = pasta_de, ler_json, gravar_json
         self.trava = threading.RLock()
         self.mem = {}                                   # uid -> estado
-        self.velas = {}                                 # simbolo -> dict(minutos=[...], offset, quando, uid)
+        self.velas = {}                                 # (uid, simbolo) -> dict(minutos=[...], offset, quando): cada usuario tem os seus
         self._tokens = None
 
     # ------------------------------------------------------------------------------------------ estado por usuario
@@ -106,7 +114,7 @@ class Conexao:
             online = bool(st) and _agora() - st.get("quando", 0) < 20
             return dict(termo=TERMO, termoVersao=TERMO_VERSAO, aceite=e.get("aceite"), temToken=bool(e.get("token_fim")),
                         tokenFim=e.get("token_fim"), cfg=e["cfg"], ea=st, eaOnline=online, log=e["log"][-60:][::-1],
-                        simbolos=sorted(k for k, v in self.velas.items() if v.get("uid") == uid), porta=porta,
+                        simbolos=sorted(k[1] for k in self.velas if k[0] == uid), porta=porta,
                         piloto=e.get("piloto") or {})
 
     def acao(self, uid, p, ip=""):
@@ -134,7 +142,7 @@ class Conexao:
             elif acao == "config":
                 c = e["cfg"]
                 sim = str(p.get("simbolo", c["simbolo"]) or "").strip().upper()[:24]
-                if sim and not all(ch.isalnum() or ch in "$._-" for ch in sim):
+                if sim and not simbolo_ok(sim):
                     raise ValueError("Símbolo inválido.")
                 c.update(simbolo=sim, ativo=str(p.get("ativo", c["ativo"]))[:20],
                          teste=p.get("teste", c.get("teste")),
@@ -195,7 +203,7 @@ class Conexao:
     def receber_candles(self, uid, d):
         """Candles de 1 minuto da corretora: [[t (hora do servidor da corretora), o, h, l, c, v], ...] e o fuso do servidor."""
         sim = str(d.get("simbolo", "")).strip().upper()[:24]
-        if not sim or not all(ch.isalnum() or ch in "$._-" for ch in sim):
+        if not simbolo_ok(sim):
             raise ValueError("símbolo inválido")
         off = int(d.get("offset", 0))
         novas = []
@@ -207,52 +215,81 @@ class Conexao:
             if h >= max(o, c) and l <= min(o, c) and l > 0:
                 novas.append((t - t % 60, o, h, l, c, v))
         with self.trava:
-            x = self.velas.get(sim)
+            x = self._velas(uid, sim)
             if x is None:
-                arq = os.path.join(self.base, "mt5", sim + ".json")
-                antigas = self.ler_json(arq, []) or []
-                x = self.velas[sim] = dict(minutos={int(m[0]): tuple(m) for m in antigas if isinstance(m, list) and len(m) == 6}, uid=uid, gravado=0)
+                if len(self._simbolos_guardados(uid)) >= MAX_SIMBOLOS:
+                    raise ValueError("limite de %d símbolos do MetaTrader por usuário" % MAX_SIMBOLOS)
+                x = self.velas[(uid, sim)] = dict(minutos={}, gravado=0)
             for m in novas:
                 x["minutos"][m[0]] = m
             if len(x["minutos"]) > 60000:                        # ~2 meses de pregao de 1 minuto
                 for k in sorted(x["minutos"])[:-60000]:
                     del x["minutos"][k]
-            x.update(uid=uid, quando=_agora(), offset=off, versao=x.get("versao", 0) + 1, ativo=self._est(uid)["cfg"].get("ativo") or "WIN")
+            x.update(quando=_agora(), offset=off, versao=x.get("versao", 0) + 1, ativo=self._est(uid)["cfg"].get("ativo") or "WIN")
             if _agora() - x["gravado"] > 120:
-                os.makedirs(os.path.join(self.base, "mt5"), exist_ok=True)
-                self.gravar_json(os.path.join(self.base, "mt5", sim + ".json"), [list(m) for _, m in sorted(x["minutos"].items())])
+                os.makedirs(self._pasta_mt5(uid), exist_ok=True)
+                self.gravar_json(self._arq_mt5(uid, sim), [list(m) for _, m in sorted(x["minutos"].items())])
                 x["gravado"] = _agora()
             return len(novas)
+
+    # os candles de cada usuario ficam na pasta DELE: <pasta do usuario>/mt5/<simbolo>.json (um usuario nunca ve os do outro)
+    def _pasta_mt5(self, uid):
+        return os.path.join(self.pasta_de(uid), "mt5")
+
+    def _arq_mt5(self, uid, sim):
+        return os.path.join(self._pasta_mt5(uid), sim + ".json")
+
+    def _simbolos_guardados(self, uid):
+        sims = {k[1] for k in self.velas if k[0] == uid}
+        try:
+            sims |= {a[:-5] for a in os.listdir(self._pasta_mt5(uid)) if a.endswith(".json") and simbolo_ok(a[:-5])}
+        except OSError:
+            pass
+        return sims
+
+    def _velas(self, uid, sim):
+        """Candles guardados do simbolo deste usuario (le o arquivo na primeira vez) ou None."""
+        if not uid or not simbolo_ok(sim):
+            return None
+        x = self.velas.get((uid, sim))
+        if x is None:
+            antigas = self.ler_json(self._arq_mt5(uid, sim), None)
+            if not antigas or not isinstance(antigas, list):
+                return None
+            x = self.velas[(uid, sim)] = dict(minutos={int(m[0]): tuple(m) for m in antigas if isinstance(m, list) and len(m) == 6},
+                                              gravado=_agora())
+        return x
+
+    def chegada(self, uid, sim):
+        """Quando o EA deste usuario mandou candles deste simbolo pela ultima vez (0 = nunca, desde que o robo abriu)."""
+        with self.trava:
+            return (self.velas.get((uid, sim)) or {}).get("quando", 0)
 
     def simbolos_de(self, uid):
         with self.trava:
             e = self._est(uid)
-            sims = {k for k, v in self.velas.items() if v.get("uid") == uid}
+            sims = {k[1] for k in self.velas if k[0] == uid}
             if e["cfg"].get("simbolo"):
                 sims.add(e["cfg"]["simbolo"])
-            return sorted(s for s in sims if self.minutos(s)[0])
+            return sorted(s for s in sims if self.minutos(uid, s)[0])
 
-    def ativo_de(self, sim):
-        """Ativo do robo (custos, horario, valor do ponto) escolhido para o simbolo na aba Conectar."""
+    def ativo_de(self, uid, sim):
+        """Ativo do robo (custos, horario, valor do ponto) escolhido para o simbolo na aba Conectar deste usuario."""
         with self.trava:
-            x = self.velas.get(sim) or {}
+            x = self.velas.get((uid, sim)) or {}
             if x.get("ativo"):
                 return x["ativo"]
-            for e in self.mem.values():
-                if e["cfg"].get("simbolo") == sim:
-                    return e["cfg"].get("ativo") or "WIN"
+            e = self._est(uid)
+            if e["cfg"].get("simbolo") == sim:
+                return e["cfg"].get("ativo") or "WIN"
             return "WIN"
 
-    def minutos(self, sim):
-        """[(t_utc, o, h, l, c, v)] do simbolo, em ordem, e a versao (muda a cada lote novo)."""
+    def minutos(self, uid, sim):
+        """[(t_utc, o, h, l, c, v)] do simbolo deste usuario, em ordem, e a versao (muda a cada lote novo)."""
         with self.trava:
-            x = self.velas.get(sim)
+            x = self._velas(uid, sim)
             if x is None:
-                arq = os.path.join(self.base, "mt5", sim + ".json")
-                antigas = self.ler_json(arq, None)
-                if not antigas:
-                    return None, 0
-                x = self.velas[sim] = dict(minutos={int(m[0]): tuple(m) for m in antigas if isinstance(m, list) and len(m) == 6}, uid=None, gravado=_agora())
+                return None, 0
             return [m for _, m in sorted(x["minutos"].items())], x.get("versao", 0)
 
     def _piloto(self, uid, estado, motivo, **extra):
@@ -263,8 +300,10 @@ class Conexao:
             if antes != estado and estado in ("pausado", "operando"):
                 self._log(e, "piloto", motivo)
 
-    def _travas(self, uid, c, r):
-        """Travas do servidor (alem das do EA). Devolve o motivo da pausa ou "" se pode mandar ordens novas."""
+    def _travas(self, uid, c, r, ea=None):
+        """Travas do servidor (alem das do EA). Devolve o motivo da pausa ou "" se pode mandar ordens novas.
+        Perda do dia: vale o resultado REAL que o EA informou (fechado + aberto, na moeda da conta) e, alem dele, o
+        resultado simulado do teste."""
         agora = datetime.now(BRT)
         hoje = agora.strftime("%Y%m%d")
         # os horarios do teste sao o relogio da bolsa "vestido" de UTC: para o dia, basta a data em UTC
@@ -273,6 +312,10 @@ class Conexao:
         abertas = [a for a in (r.get("abertas") or []) if dia_c(a.get("t_ent", 0)) == hoje]
         ops = len(trades) + len(abertas)
         res = round(sum(t.get("dinheiro", 0.0) for t in trades), 2)
+        real = None
+        if ea and _agora() - ea.get("quando", 0) < 60 and isinstance(ea.get("resultadoDia"), (int, float)):
+            aberto = sum(float(p.get("lucro") or 0) for p in ea.get("posicoes") or [] if isinstance(p, dict) and isinstance(p.get("lucro"), (int, float)))
+            real = round(float(ea["resultadoDia"]) + aberto, 2)
         hm = agora.hour * 100 + agora.minute
         motivo = ""
         ini, fim = c.get("hora_ini") or 0, c.get("hora_fim") or 0
@@ -281,9 +324,12 @@ class Conexao:
             motivo = "fora do horário de operação (%02d:%02d às %02d:%02d)" % (c["hora_ini"] // 100, c["hora_ini"] % 100, c["hora_fim"] // 100, c["hora_fim"] % 100)
         elif c.get("max_ops") and ops >= c["max_ops"]:
             motivo = "limite de %d operações no dia atingido" % c["max_ops"]
+        elif c.get("perda_dia") and real is not None and real <= -c["perda_dia"]:
+            motivo = "perda máxima do dia atingida na sua conta (%s %s, contando a posição aberta)" % (real, ea.get("moeda") or "")
         elif c.get("perda_dia") and res <= -c["perda_dia"]:
             motivo = "perda máxima do dia atingida (%s)" % res
-        self._piloto(uid, "pausado" if motivo else "operando", motivo or "operando: seguindo a estratégia", opsHoje=ops, resultadoHoje=res)
+        self._piloto(uid, "pausado" if motivo else "operando", motivo or "operando: seguindo a estratégia", opsHoje=ops, resultadoHoje=res,
+                     resultadoConta=real)
         return motivo
 
     def sinal(self, uid, resultado_do_teste):
@@ -291,7 +337,8 @@ class Conexao:
         with self.trava:
             e = self._est(uid)
             c = dict(e["cfg"])
-        linhas = ["LIGADO=%d" % (1 if c.get("ligado") else 0), "REAL=%d" % (1 if c.get("real") else 0), "SIMBOLO=%s" % c["simbolo"],
+            ea = dict(e.get("ea") or {})
+        linhas =["LIGADO=%d" % (1 if c.get("ligado") else 0), "REAL=%d" % (1 if c.get("real") else 0), "SIMBOLO=%s" % c["simbolo"],
                   "MULT=%g" % c["mult"], "MAXLOTE=%g" % c["max_lote"], "PERDADIA=%g" % c["perda_dia"]]
         if c.get("zerar"):
             linhas.append("ZERAR=1")
@@ -306,19 +353,27 @@ class Conexao:
         x, r, quando = rt
         if x.get("ate"):
             return "OK=0\nMOTIVO=o teste escolhido foi encerrado\n"
-        if _agora() - quando > FRESCO:
-            return "OK=0\nMOTIVO=o teste está sem dados novos há mais de %d s\n" % FRESCO
         if not str(x.get("ativo", "")).upper() == "MT5:" + c["simbolo"]:
             return "OK=0\nMOTIVO=o teste precisa ser no ativo MT5:%s (dados da sua corretora)\n" % c["simbolo"]
-        pausa = self._travas(uid, c, r)
+        # dados velhos nao viram ordem: vale a hora em que o EA mandou o ultimo candle (o calculo pode ser refeito com
+        # os mesmos candles parados) e tambem a hora em que o teste foi conferido
+        chegou = self.chegada(uid, c["simbolo"])
+        if _agora() - chegou > FRESCO or _agora() - quando > FRESCO:
+            return "OK=0\nMOTIVO=o teste está sem dados novos do MetaTrader há mais de %d s\n" % FRESCO
+        pausa = self._travas(uid, c, r, ea)
         q0 = float(x.get("contratos") or 1)
         qtd = lambda q: min(c["max_lote"], round((q or q0) * c["mult"], 2))        # noqa: E731
-        for a in r.get("abertas") or []:
+        # Uma posicao e uma ordem por vez, no maximo o lote maximo no total (no modo TODAS varias estrategias podem
+        # querer entrar ao mesmo tempo: duas ordens stop armadas poderiam executar as duas).
+        abertas = sorted(r.get("abertas") or [], key=lambda a: (a["t_ent"], a["est"]))
+        for a in abertas[:1]:
             linhas.append("POS=P|%s|%d;%d;%g;%s;%s" % (a["est"], int(a["t_ent"]), a["dir"], qtd(a.get("q")),
                                                        _num(a.get("stop")), _num(a.get("alvo"))))
         if pausa:
             linhas.append("PAUSA=%s" % pausa)                # nenhuma ordem NOVA; a posicao aberta segue com o stop e o alvo dela
-        for o in [] if pausa else (r.get("pend") or []):
+        posicionado = bool(abertas) or any(isinstance(p, dict) for p in ea.get("posicoes") or [])
+        pend = sorted(r.get("pend") or [], key=lambda o: (o["t_sinal"], o["est"], o["dir"]))
+        for o in [] if (pausa or posicionado) else pend[:1]:
             tipo = "mercado" if o.get("tipo") == "abertura" else ("limite" if o.get("tipo") == "limite" else "stop")
             linhas.append("ORD=O|%s|%d|%d;%d;%s;%s;%g;%s;%s" % (o["est"], int(o["t_sinal"]), o["dir"], o["dir"], tipo, _num(o.get("gatilho")),
                                                                 qtd(o.get("q")), _num(o.get("stop")), _num(o.get("alvo"))))
@@ -326,13 +381,15 @@ class Conexao:
 
 
 def _hhmm(v):
-    """'9:05', '0905' ou 905 -> 905 (0 = sem limite)."""
+    """'9:05', '0905' ou 905 -> 905 (vazio ou 0 = sem limite). Horario invalido e erro (nao vira "sem limite")."""
+    t = str(v if v is not None else "").replace(":", "").strip()
     try:
-        t = str(v or "0").replace(":", "").strip()
         n = int(t) if t else 0
     except ValueError:
-        return 0
-    return n if 0 <= n <= 2359 and n % 100 < 60 else 0
+        raise ValueError("Horário inválido: %s (use HH:MM, por exemplo 09:05)." % str(v)[:10])
+    if not (0 <= n <= 2359 and n % 100 < 60):
+        raise ValueError("Horário inválido: %s (use HH:MM, por exemplo 09:05)." % str(v)[:10])
+    return n
 
 
 def _num(v):

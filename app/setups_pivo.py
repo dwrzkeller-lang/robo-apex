@@ -1,19 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-ROBO APEX - os setups da apostila do Mario Pisani, um por um (E26 a E46), para o backtest.
+ROBO APEX - setups de pivo, virada em V e rompimento (E26 a E46), um por um, para o backtest.
 
 Mesma regra de ouro de estrategias.py: cada setup olha SO candles ja fechados (ate o candle i) e a regra de compra e
 escrita uma vez; a venda e o espelho (o grafico invertido roda a mesma regra).
 
-Fontes: os slides da apostila (desenho de cada setup) e a aba REGRAS da planilha de estatisticas dele. Regras gerais
-aplicadas em todos os setups de pivo:
+Regras gerais aplicadas em todos os setups de pivo:
   - JAMAIS entrar depois de tres barras seguidas da mesma cor a favor (regra universal)
   - impulso de 3 a 5 barras com pelo menos um par de barras de maxima e minima maiores; mais de 5 descaracteriza
   - correcao de 2 a 3 barras, ate 50% do impulso (61,8% so quando o impulso e pequeno)
   - impulso muito grande com correcao pequena tende a falhar
   - MM20 inclinada a favor (ja virada um candle antes) e o pivo nao pode estar cruzando a MM20
   - a MM200 nao pode estar na cara da entrada (entre a entrada e o primeiro alvo)
-Gestao padrao = o "manejo parcial" da apostila: metade no 1:1, stop no 0x0 e o resto conduzido pela MM9.
+Gestao padrao = manejo parcial: metade no 1:1, stop no 0x0 e o resto conduzido pela MM9.
 Nao entram aqui (precisam do operador): limite de 3 trades por dia e parar depois de 2 stops (isso fica no plano de
 trade), noticias, volatilidade historica para o tamanho da mao.
 """
@@ -63,7 +62,7 @@ def _pausa(G, i, max_barras=3, desde=None):
 
 
 def _pivo_classico(G, i, ret_max=0.5, ret_max_pequeno=0.618):
-    """Pivo classico no candle i, com as regras da planilha: impulso A->B de 3 a 5 barras (com um par de barras de
+    """Pivo classico no candle i: impulso A->B de 3 a 5 barras (com um par de barras de
     maxima e minima maiores), correcao de 2 a 3 barras depois de B (com uma barra de maxima e minima menores) sem romper
     B, fundo C acima de A, correcao de 15% ate 50% (ate 61,8% so com impulso pequeno, de ate 2 ATR).
     Devolve (a, b, c, ab, ret) ou None."""
@@ -117,7 +116,7 @@ def e26_pivo_classico(G, i):
     if not r:
         return None
     a, b, c, ab, ret, ent, stop = r
-    return _ordem(G, i, ent, stop, "pivô clássico: impulso de %d barras, correção de %s%%" % (b - a + 1, _br(100 * ret, 0)),
+    return _ordem(G, i, ent, stop, "pivô: impulso de %d barras, correção de %s%%" % (b - a + 1, _br(100 * ret, 0)),
                   _alvos_do_topo(G, b, ab))
 
 
@@ -162,7 +161,7 @@ def e27_classico_metade(G, i):
     ent, stop = G.acima(G.h[j] + G.tick), G.abaixo(m - G.tick)
     if G.h[b] - ent < ent - stop:
         return None                                                      # o topo B precisa ficar a 1:1 ou mais
-    return _ordem(G, i, ent, stop, "clássico metade: pullback de %s%% do primeiro movimento" % _br(100 * ret, 0),
+    return _ordem(G, i, ent, stop, "pivô na metade: pullback de %s%% do primeiro movimento" % _br(100 * ret, 0),
                   (G.abaixo(G.h[b]), G.abaixo(G.h[b] + 0.618 * ab), G.abaixo(G.h[b] + ab)), 0.25, 2.0)
 
 
@@ -201,7 +200,7 @@ def e28_classico_afastado(G, i):
         return None
     ent, stop = G.acima(G.h[j] + G.tick), G.abaixo(m - G.tick)
     onde = "pré" if G.h[j] < G.h[b] - 0.1 * ab else ("no" if G.h[j] <= G.h[b] + 0.1 * ab else "pós")
-    return _ordem(G, i, ent, stop, "clássico afastado: correção de %s%%, pausa %s rompimento" % (_br(100 * ret, 0), onde),
+    return _ordem(G, i, ent, stop, "pivô na volta ao topo: correção de %s%%, pausa %s rompimento" % (_br(100 * ret, 0), onde),
                   _alvos_do_topo(G, j, volta))
 
 
@@ -214,8 +213,8 @@ def e28_atencao(G, i):
     return b < i - 2 and ab > 0 and (G.h[b] - min(G.l[b:i + 1])) / ab > 0.5 and e28_classico_afastado(G, i) is None
 
 
-# ------------------------------------------------------------------------------------------ E29 trick entry
-def e29_trick_entry(G, i):
+# ------------------------------------------------------------------------------------------ E29 pivo antecipado
+def e29_pivo_antecipado(G, i):
     """Pivo dentro do pivo numa tendencia definida: depois do impulso A->B e da correcao ate C, o preco faz um pivo
     menor por dentro (topo j abaixo de B e pausa); a entrada e antecipada na maxima de j, sem esperar romper B."""
     if not _tendencia_ok(G, i) or not _mm20_virada(G, i) or _tres_cores(G, i):
@@ -236,16 +235,16 @@ def e29_trick_entry(G, i):
     if not 0.2 <= ret <= 0.618 or G.h[b] - G.h[j] < 0.3 * (G.h[b] - G.l[c]):
         return None                                                      # gatilho colado em B: melhor o pivo maior
     ent, stop = G.acima(G.h[j] + G.tick), G.abaixo(m - G.tick)
-    return _ordem(G, i, ent, stop, "trick entry: pivô por dentro da correção de %s%%" % _br(100 * ret, 0),
+    return _ordem(G, i, ent, stop, "pivô antecipado por dentro da correção de %s%%" % _br(100 * ret, 0),
                   (G.abaixo(G.h[b]),) + _alvos_do_topo(G, b, ab)[:2], 0.2, 2.0)
 
 
 def e29_atencao(G, i):
-    return _tendencia_ok(G, i) and _pivo_classico(G, i, 0.618) is not None and e29_trick_entry(G, i) is None
+    return _tendencia_ok(G, i) and _pivo_classico(G, i, 0.618) is not None and e29_pivo_antecipado(G, i) is None
 
 
-# ------------------------------------------------------------------------------------------ E30 FAB4 (abertura)
-def e30_fab4(G, i):
+# ------------------------------------------------------------------------------------------ E30 abertura acima das 4 referencias
+def e30_abertura_4ref(G, i):
     """Abertura acima do fechamento anterior, da MM20 e da MM200 (as quatro referencias a favor), gap de ate 3%; o
     primeiro pivo da abertura (impulso + correcao que nao fecha o gap) e comprado no rompimento. Trade curto."""
     if not G.intraday or not getattr(G, "abertura_real", G.gap_real):
@@ -268,7 +267,7 @@ def e30_fab4(G, i):
     if G.l[c] <= pc or ab < 0.8 * G.atr[i] or (G.h[b] - G.l[c]) / ab > 0.618:
         return None                                                      # o gap nao pode fechar no pullback
     ent, stop = G.acima(G.h[b] + G.tick), G.abaixo(G.l[c] - G.tick)
-    return _ordem(G, i, ent, stop, "FAB4: abertura com gap de %s%% acima das 4 referências" % _br(100 * gap * G.sinal, 2, True),
+    return _ordem(G, i, ent, stop, "abertura com gap de %s%% acima das 4 referências" % _br(100 * gap * G.sinal, 2, True),
                   _alvos_do_topo(G, b, ab), 0.25, 2.0)
 
 
@@ -358,7 +357,7 @@ def _volta_v(G, i, contra):
         return None                                                      # na cara da MM20 ou sem espaco ate o topo
     a1 = max(ent + risco, G.l[L] + 0.618 * queda)
     a2 = max(a1 + 0.5 * risco, G.h[p])
-    return _ordem(G, i, ent, stop, "volta em V %s: queda de %s ATR" % ("contra a MM200" if contra else "a favor", _br(queda / G.atr[i], 1)),
+    return _ordem(G, i, ent, stop, "virada em V %s: queda de %s ATR" % ("contra a MM200" if contra else "a favor", _br(queda / G.atr[i], 1)),
                   (G.abaixo(a1), G.abaixo(a2), G.abaixo(a2 + 0.5 * queda)), 0.3, 3.0)
 
 
@@ -406,7 +405,7 @@ def e34_volta_v_bb(G, i):
     risco = ent - stop
     if mid[i] - ent < risco:
         return None
-    return _ordem(G, i, ent, stop, "volta em V nas Bandas de Bollinger: fechou fora, fechou dentro",
+    return _ordem(G, i, ent, stop, "virada em V nas Bandas de Bollinger: fechou fora, fechou dentro",
                   (G.abaixo(ent + risco), G.abaixo(mid[i]), G.abaixo(mid[i] + risco)), 0.3, 3.0)
 
 
@@ -415,8 +414,8 @@ def e34_atencao(G, i):
     return lo[i] is not None and G.c[i] < lo[i] and mid[i] - G.l[i] >= 2.5 * G.atr[i]
 
 
-# ------------------------------------------------------------------------------------------ E35 1-2-3 (Mark Crisp)
-def e35_123_crisp(G, i):
+# ------------------------------------------------------------------------------------------ E35 1-2-3
+def e35_123(G, i):
     """Depois de uma queda violenta: fundo 1, repique ate 2, fundo 3 mais alto que 1; compra no rompimento de 2.
     Nao depende das medias."""
     if i < 25:
@@ -439,7 +438,7 @@ def e35_atencao(G, i):
     return i >= 25 and bool(_queda_violenta(G, i, i - 4, i))
 
 
-# ------------------------------------------------------------------------------------------ E36 DiNapoli (3x3)
+# ------------------------------------------------------------------------------------------ E36 media 3x3 deslocada
 def _dma3x3(G):
     def calc():
         m3 = sma(G.c, 3)
@@ -447,8 +446,8 @@ def _dma3x3(G):
     return _serie(G, "dma3x3", calc)
 
 
-def e36_dinapoli(G, i):
-    """Volta em V pela media de 3 deslocada em 3 (DiNapoli): depois de uma queda violenta o preco fecha acima da 3x3
+def e36_media_3x3(G, i):
+    """Virada pela media de 3 deslocada em 3: depois de uma queda violenta o preco fecha acima da 3x3
     (estava abaixo havia 5 candles), faz um pivo curto e a compra e no rompimento do topo desse pivo."""
     d = _dma3x3(G)
     q = _queda_violenta(G, i, i - 10, i - 2)
@@ -465,7 +464,7 @@ def e36_dinapoli(G, i):
     if m <= G.l[L] or G.c[i] < d[i]:
         return None
     ent, stop = G.acima(G.h[j] + G.tick), G.abaixo(m - G.tick)
-    return _ordem(G, i, ent, stop, "DiNapoli: fechou acima da 3x3 depois da queda, pivô curto",
+    return _ordem(G, i, ent, stop, "fechou acima da média 3x3 depois da queda, pivô curto",
                   _alvos_do_topo(G, j, G.h[j] - G.l[L]))
 
 
@@ -553,7 +552,7 @@ def e39_zona_armadilha(G, i):
     risco = ent - stop
     if m200 - ent < risco:
         return None
-    return _ordem(G, i, ent, stop, "zona de armadilha larga: pivô entre a MM20 e a MM200",
+    return _ordem(G, i, ent, stop, "pivô entre a MM20 e a MM200 (zona larga)",
                   (G.abaixo(ent + risco), G.abaixo(max(ent + 1.5 * risco, m200)), G.abaixo(max(ent + 2 * risco, m200 + risco))))
 
 
@@ -562,7 +561,7 @@ def e39_atencao(G, i):
     return m200 is not None and m20 < G.c[i] < m200 and m200 - m20 >= 2.5 * G.atr[i] and e39_zona_armadilha(G, i) is None
 
 
-# ------------------------------------------------------------------------------------------ E40/E41 power-breakout
+# ------------------------------------------------------------------------------------------ E40/E41 lateral apoiada na MM20
 def _power(G, i, n=6):
     """Lateralizacao horizontal de 6 candles (ate 1,2 ATR) depois de uma tendencia media, com a MM20 subindo por baixo
     sem entrar nos precos (serve de toque). Devolve (topo, fundo) ou None."""
@@ -577,12 +576,12 @@ def _power(G, i, n=6):
         return None
     subida = G.h[ini - 1] - min(G.l[i - 20:ini])
     if not 1.5 * at <= subida <= 5.0 * at:
-        return None                                                      # power depois de tendencia boa tende a falhar
+        return None                                                      # depois de tendencia boa tende a falhar
     return rh, rl
 
 
 def e40_power_breakout(G, i):
-    """Power-breakout (Pisani): lateral horizontal apoiada na MM20 depois de uma tendencia media; compra 1 tick acima do
+    """Lateral apoiada na MM20: lateral horizontal apoiada na MM20 depois de uma tendencia media; compra 1 tick acima do
     topo da lateral, stop 1 tick abaixo do fundo."""
     r = _power(G, i)
     if not r or _tres_cores(G, i):
@@ -592,7 +591,7 @@ def e40_power_breakout(G, i):
     if _mm200_no_caminho(G, i, ent, ent - stop):
         return None
     w = rh - rl
-    return _ordem(G, i, ent, stop, "power-breakout: lateral de 6 candles apoiada na MM20",
+    return _ordem(G, i, ent, stop, "lateral de 6 candles apoiada na MM20",
                   tuple(G.abaixo(rh + r * max(w, G.atr[i])) for r in (1.0, 1.618, 2.618)), 0.3, 2.0)
 
 
@@ -601,7 +600,7 @@ def e40_atencao(G, i):
 
 
 def e41_power_pullback(G, i):
-    """Power-breakout com pullback: a lateral ja rompeu (fechamento acima do topo nos ultimos 4 candles), o preco faz
+    """Lateral com pullback: a lateral ja rompeu (fechamento acima do topo nos ultimos 4 candles), o preco faz
     um pullback que segura o topo da lateral e a compra e no rompimento da maxima depois do rompimento."""
     for q in range(i - 4, i):
         r = _power(G, q - 1)
@@ -615,7 +614,7 @@ def e41_power_pullback(G, i):
         if m < rh - 0.3 * (rh - rl) or _tres_cores(G, i):
             return None
         ent, stop = G.acima(G.h[j] + G.tick), G.abaixo(m - G.tick)
-        return _ordem(G, i, ent, stop, "power-breakout com pullback segurando o topo da lateral",
+        return _ordem(G, i, ent, stop, "lateral rompida com pullback segurando o topo",
                       _alvos_do_topo(G, j, G.h[j] - rl), 0.25, 2.0)
     return None
 
@@ -624,7 +623,7 @@ def e41_atencao(G, i):
     return any(_power(G, q - 1) and G.c[q] > _power(G, q - 1)[0] for q in range(i - 2, i + 1)) and e41_power_pullback(G, i) is None
 
 
-# ------------------------------------------------------------------------------------------ E42 breakout (trade da tarde)
+# ------------------------------------------------------------------------------------------ E42 breakout (rompimento da tarde)
 def _alternancias(G, ini, fim):
     """Quantas vezes o fechamento trocou de lado da MM20 entre ini e fim."""
     n, lado = 0, None
@@ -637,7 +636,7 @@ def _alternancias(G, ini, fim):
 
 
 def e42_breakout_tarde(G, i):
-    """Trade da tarde: lateral em que os precos alternaram com a MM20 (4 alternancias ou mais); o primeiro pivo
+    """Rompimento da tarde: lateral em que os precos alternaram com a MM20 (4 alternancias ou mais); o primeiro pivo
     alinhado com a MM20 perto do topo da lateral (pullback pre, no ou pos rompimento) e comprado no rompimento."""
     if not G.intraday or (i - G.ini_dia[i]) * G.tf < TARDE_MIN:
         return None
@@ -654,7 +653,7 @@ def e42_breakout_tarde(G, i):
     if G.h[b] < topo - 0.3 * at:
         return None                                                      # o pivo precisa estar no topo da lateral
     onde = "pré" if G.h[b] < topo else ("no" if G.l[c] < topo else "pós")
-    return _ordem(G, i, ent, stop, "breakout da tarde (%d alternâncias na MM20): pivô %s rompimento" % (alt, onde),
+    return _ordem(G, i, ent, stop, "rompimento da tarde (%d alternâncias na MM20): pivô %s rompimento" % (alt, onde),
                   _alvos_do_topo(G, b, max(ab, G.h[b] - min(G.l[ini:a + 1]))))
 
 
@@ -662,10 +661,10 @@ def e42_atencao(G, i):
     return G.intraday and (i - G.ini_dia[i]) * G.tf >= TARDE_MIN and _alternancias(G, i - 30, i) >= 4 and e42_breakout_tarde(G, i) is None
 
 
-# ------------------------------------------------------------------------------------------ E43 mergulhada dupla
-def e43_mergulhada_dupla(G, i):
+# ------------------------------------------------------------------------------------------ E43 fundo duplo
+def e43_fundo_duplo(G, i):
     """A favor da tendencia: uma correcao grande faz um fundo, repica e volta para fazer um segundo fundo parecido
-    (mergulhada dupla); compra quando um candle de alta fecha acima da maxima anterior, stop abaixo dos dois fundos."""
+    (fundo duplo); compra quando um candle de alta fecha acima da maxima anterior, stop abaixo dos dois fundos."""
     if not _tendencia_ok(G, i) or G.c[i] < G.mm20[i] or not (G.c[i] > G.o[i] and G.c[i] > G.h[i - 1]):
         return None
     d2 = min(range(i - 3, i + 1), key=lambda k: (G.l[k], -k))
@@ -678,12 +677,12 @@ def e43_mergulhada_dupla(G, i):
     if topo - G.l[d1] < 1.5 * at:
         return None                                                      # impulso grande pede correcao proporcional
     ent, stop = G.acima(G.h[i] + G.tick), G.abaixo(min(G.l[d1], G.l[d2]) - G.tick)
-    return _ordem(G, i, ent, stop, "mergulhada dupla a favor da tendência",
+    return _ordem(G, i, ent, stop, "fundo duplo a favor da tendência",
                   (G.abaixo(G.h[rep]), G.abaixo(topo), G.abaixo(topo + (topo - G.l[d1]) * 0.618)), 0.3, 2.5)
 
 
 def e43_atencao(G, i):
-    return _tendencia_ok(G, i) and G.l[i] <= min(G.l[i - 10:i]) + 0.35 * G.atr[i] and e43_mergulhada_dupla(G, i) is None
+    return _tendencia_ok(G, i) and G.l[i] <= min(G.l[i - 10:i]) + 0.35 * G.atr[i] and e43_fundo_duplo(G, i) is None
 
 
 # ------------------------------------------------------------------------------------------ E44 MM200 pos-rompimento
@@ -713,7 +712,7 @@ def e44_atencao(G, i):
 
 # ------------------------------------------------------------------------------------------ E45 afastamento da MM200
 def e45_afastamento(G, i):
-    """Afastamento inferior (a venda e o superior): o preco esta longe da MM200 (3 ATR ou mais), a MM20 virou a favor e
+    """Longe da MM200 por baixo (a venda e por cima): o preco esta longe da MM200 (3 ATR ou mais), a MM20 virou a favor e
     o pivo classico de tamanho medio esta alinhado com ela; o primeiro alvo fica antes da MM200."""
     m200 = G.mm200[i]
     if m200 is None or not _mm20_virada(G, i) or _tres_cores(G, i):
@@ -729,7 +728,7 @@ def e45_afastamento(G, i):
     risco = ent - stop
     if m200 - ent < max(3 * at, 1.5 * risco):
         return None
-    return _ordem(G, i, ent, stop, "afastamento da MM200 (%s ATR): pivô alinhado com a MM20" % _br((m200 - ent) / at, 1),
+    return _ordem(G, i, ent, stop, "longe da MM200 (%s ATR): pivô alinhado com a MM20" % _br((m200 - ent) / at, 1),
                   (G.abaixo(ent + risco), G.abaixo(ent + 0.5 * (m200 - ent)), G.abaixo(m200)))
 
 
@@ -738,10 +737,9 @@ def e45_atencao(G, i):
     return m200 is not None and m200 - G.c[i] >= 3 * G.atr[i] and _mm20_virada(G, i) and e45_afastamento(G, i) is None
 
 
-# ------------------------------------------------------------------------------------------ E46 armadilha na MM200
+# ------------------------------------------------------------------------------------------ E46 pausa na MM200
 def e46_armadilha_mm200(G, i):
-    """O preco vem de baixo e chega na MM200 com um candle de alta; o candle seguinte faz uma pausa de 1 barra (RBI /
-    Gift) sem perder a metade do anterior; compra no rompimento das duas maximas, por cima da MM200."""
+    """O preco vem de baixo e chega na MM200 com um candle de alta; o candle seguinte faz uma pausa de 1 barra  sem perder a metade do anterior; compra no rompimento das duas maximas, por cima da MM200."""
     m200 = G.mm200
     if m200[i - 12] is None or not _mm20_virada(G, i):
         return None
@@ -754,7 +752,7 @@ def e46_armadilha_mm200(G, i):
         return None
     ent, stop = G.acima(max(G.h[k], G.h[i]) + G.tick), G.abaixo(G.l[i] - G.tick)
     risco = ent - stop
-    return _ordem(G, i, ent, stop, "armadilha na MM200: pausa de 1 barra encostada nela",
+    return _ordem(G, i, ent, stop, "pausa de 1 barra encostada na MM200",
                   (G.abaixo(ent + risco), G.abaixo(ent + 2 * risco), G.abaixo(ent + 3 * risco)), 0.25, 2.0)
 
 
@@ -764,18 +762,18 @@ def e46_atencao(G, i):
 
 
 # ------------------------------------------------------------------------------------------ registro
-_AUTOR = "Mario Pisani (apostila)"
+_AUTOR = "Price action: pivô, virada e rompimento"
 _GERAIS = "Regra universal: não entra depois de 3 barras seguidas da mesma cor a favor"
-_GESTAO = "Gestão padrão (manejo parcial da apostila): metade no 1:1, stop no 0x0 e o resto conduzido pela MM9"
+_GESTAO = "Gestão padrão (manejo parcial): metade no 1:1, stop no 0x0 e o resto conduzido pela MM9"
 
 
 def _e(nome, fn, aten, aguardando, regras, intraday=False, gestao="conducao"):
     return dict(nome=nome, autor=_AUTOR, fn=fn, aten=aten, gestao=gestao, saida=None, intraday=intraday, sem_ntsl=True,
-                aguardando=aguardando, ideal="Resultado com custos: ver o teste na aba Resultado", regras=regras, pisani=True)
+                aguardando=aguardando, ideal="Resultado com custos: ver o teste na aba Resultado", regras=regras, familia="pivo")
 
 
 SETUPS = {
-    "E26": _e("Pivô clássico (regras da apostila)", e26_pivo_classico, e26_atencao, "impulso feito, esperando a correção de 2 a 3 barras", [
+    "E26": _e("Pivô de 3 a 5 barras", e26_pivo_classico, e26_atencao, "impulso feito, esperando a correção de 2 a 3 barras", [
         "Impulso de 3 a 5 barras com pelo menos um par de barras de máxima e mínima maiores (mais de 5 descaracteriza o pivô)",
         "Correção de 2 a 3 barras, sem romper o topo, de 15% até 50% do impulso (61,8% só com impulso pequeno, até 2 ATR)",
         "Impulso enorme (mais de 4 ATR) com correção menor que 23,6% tende a falhar: não entra",
@@ -783,66 +781,66 @@ SETUPS = {
         "A MM200 não pode estar na cara da entrada (entre a entrada e o 1:1)",
         "Compra 1 tick acima do topo do impulso, valendo 1 candle; stop 1 tick abaixo do fundo da correção",
         _GERAIS, _GESTAO]),
-    "E27": _e("Primeiro movimento: clássico metade", e27_classico_metade, e27_atencao, "primeiro movimento do dia feito, pullback indo para a metade", [
+    "E27": _e("Abertura: pivô na metade do movimento", e27_classico_metade, e27_atencao, "primeiro movimento do dia feito, pullback indo para a metade", [
         "Só intraday, nas 3 primeiras horas: o primeiro movimento do dia vai do fundo A ao topo B (pelo menos 1,5 ATR)",
         "O pullback vai de 30% a 50% do movimento (não pode perder mais do que 50%)",
         "No meio do movimento forma um pivô curto (topo e 1 a 3 barras de pausa acima do fundo do pullback)",
         "Só entra se a entrada estiver abaixo de 80% do primeiro movimento e o topo B ficar a 1:1 ou mais",
         "Compra 1 tick acima do pivô curto; stop 1 tick abaixo da pausa; primeiro alvo no topo B",
         _GERAIS, _GESTAO], intraday=True),
-    "E28": _e("Primeiro movimento: clássico afastado", e28_classico_afastado, e28_atencao, "pullback fundo do primeiro movimento, esperando voltar à região do topo", [
+    "E28": _e("Abertura: pivô na volta ao topo", e28_classico_afastado, e28_atencao, "pullback fundo do primeiro movimento, esperando voltar à região do topo", [
         "Só intraday, nas 3 primeiras horas: primeiro movimento A→B de pelo menos 1,5 ATR",
         "Pullback fundo, de mais de 50% até 79%: o pivô afastado pode sugerir exaustão",
         "Espera o preço voltar para a região do rompimento de B (até 25% abaixo dele) e fazer 1 a 3 barras de pausa (pré, no ou pós rompimento)",
         "A pausa não pode devolver mais do que metade da volta; MM20 subindo",
         "Compra 1 tick acima da pausa; stop 1 tick abaixo dela",
         _GERAIS, _GESTAO], intraday=True),
-    "E29": _e("Trick entry (pivô dentro do pivô)", e29_trick_entry, e29_atencao, "correção do pivô maior formando um pivô menor por dentro", [
+    "E29": _e("Pivô antecipado (por dentro da correção)", e29_pivo_antecipado, e29_atencao, "correção do pivô maior formando um pivô menor por dentro", [
         "Tendência definida: preço e MM20 acima da MM200, MM20 subindo",
         "Impulso A→B e correção até C de 20% a 61,8%",
         "Dentro da correção o preço faz um pivô menor: topo abaixo de B e 1 a 2 barras de pausa acima de C",
-        "Entrada antecipada 1 tick acima desse pivô menor (\"trick entry: sempre antecipar\"); se o gatilho ficar colado em B, vale o pivô maior",
+        "Entrada antecipada 1 tick acima desse pivô menor (sempre antecipar); se o gatilho ficar colado em B, vale o pivô maior",
         "Stop 1 tick abaixo da pausa; primeiro alvo no topo B",
         _GERAIS, _GESTAO]),
-    "E30": _e("Abertura: FAB4", e30_fab4, e30_atencao, "abertura acima das 4 referências, esperando o primeiro pivô", [
+    "E30": _e("Abertura acima das 4 referências", e30_abertura_4ref, e30_atencao, "abertura acima das 4 referências, esperando o primeiro pivô", [
         "Só intraday e em ativos com gap de abertura de verdade (ações da B3, futuros do Profit, USTEC/JP225): nos primeiros 30 minutos",
         "Abertura acima do fechamento anterior, da MM20 e da MM200 (as quatro referências a favor); gap de até 3%",
         "Primeiro pivô da abertura: impulso e correção de até 61,8% que não fecha o gap",
         "Compra 1 tick acima do topo; stop 1 tick abaixo da correção",
         "Trade curto e rápido: gestão padrão Parcial (metade no 1:1, resto no 2:1)", _GERAIS], intraday=True, gestao="parcial"),
-    "E31": _e("Primeiro movimento: range", e31_range_primeiro, e31_atencao, "range da abertura montado, esperando o rompimento", [
+    "E31": _e("Rompimento do range da abertura", e31_range_primeiro, e31_atencao, "range da abertura montado, esperando o rompimento", [
         "Só intraday (5 e 15 min), nas 3 primeiras horas",
         "Os primeiros 30 minutos (barras de dúvida, sem viés) marcam o range, de 0,3 a 1,5 ATR",
         "Primeiro fechamento acima do topo do range, sem ter fechado abaixo do fundo",
         "Pausa de 1 a 3 barras segurando perto do topo do range (a pausa pré-rompimento aumenta a confiança)",
         "Compra 1 tick acima da pausa; stop 1 tick abaixo dela",
         "Gestão padrão Parcial; depois do parcial, um dos manejos de stop", _GERAIS], intraday=True, gestao="parcial"),
-    "E32": _e("Volta em V a favor", e32_volta_v_favor, e32_atencao, "queda violenta acima da MM200, esperando a virada", [
+    "E32": _e("Virada em V a favor", e32_volta_v_favor, e32_atencao, "queda violenta acima da MM200, esperando a virada", [
         "Queda violenta: 2 a 6 barras, pelo menos 2,5 ATR, a maioria de baixa, acima da MM200",
         "A virada: candle de alta forte que fecha acima da máxima anterior e na metade de cima dele",
         "Simetria: a volta tem barras do tamanho das da queda e já recuperou 30% dela",
         "Não entra na cara da MM20 nem com a volta atravessando a MM200; precisa de espaço (1:1) até o topo da queda",
         "Compra 1 tick acima do candle de virada; stop 1 tick abaixo do fundo do V",
         _GESTAO]),
-    "E33": _e("Volta em V contra", e33_volta_v_contra, e33_atencao, "queda violenta abaixo da MM200, esperando a virada", [
-        "Mesmas regras da volta em V a favor, mas abaixo da MM200 (contra a tendência maior)",
+    "E33": _e("Virada em V contra", e33_volta_v_contra, e33_atencao, "queda violenta abaixo da MM200, esperando a virada", [
+        "Mesmas regras da virada em V a favor, mas abaixo da MM200 (contra a tendência maior)",
         "É trade de retorno: o alvo é o topo de onde a queda começou",
         "A volta não pode atravessar a MM200",
         "Compra 1 tick acima do candle de virada; stop 1 tick abaixo do fundo do V",
         _GESTAO]),
-    "E34": _e("Volta em V nas Bandas de Bollinger", e34_volta_v_bb, e34_atencao, "preço fechando fora da banda de baixo", [
+    "E34": _e("Virada em V nas Bandas de Bollinger", e34_volta_v_bb, e34_atencao, "preço fechando fora da banda de baixo", [
         "Bandas de Bollinger de 20 períodos e 2 desvios",
         "Fechou fora: um candle fecha abaixo da banda de baixo, a 2,5 ATR ou mais da MM20 (violência que se afasta da média)",
         "Fechou dentro: o candle seguinte fecha de alta, de volta para dentro da banda",
         "Compra 1 tick acima dele; stop 1 tick abaixo dos dois candles; o alvo é o retorno à MM20 (pelo menos 1:1)",
         _GESTAO]),
-    "E35": _e("1-2-3 (Mark Crisp)", e35_123_crisp, e35_atencao, "queda violenta feita, esperando o fundo 3", [
+    "E35": _e("1-2-3: fundo mais alto", e35_123, e35_atencao, "queda violenta feita, esperando o fundo 3", [
         "Depois de uma queda violenta (2,5 ATR ou mais), o fundo 1",
         "O repique até o topo 2 e a nova queda até o fundo 3, mais alto que o 1 (30% a 90% do repique)",
         "Compra 1 tick acima do topo 2; stop 1 tick abaixo do fundo 3",
         "Não depende das médias", _GESTAO]),
-    "E36": _e("Volta em V pela 3x3 (DiNapoli)", e36_dinapoli, e36_atencao, "queda violenta, preço voltando para a média 3x3", [
-        "Média móvel de 3 deslocada 3 candles para a frente (3x3 do Joe DiNapoli)",
+    "E36": _e("Virada pela média 3x3 deslocada", e36_media_3x3, e36_atencao, "queda violenta, preço voltando para a média 3x3", [
+        "Média móvel de 3 deslocada 3 candles para a frente (3x3)",
         "Depois de uma queda violenta, o preço fecha acima da 3x3 (estava abaixo havia 5 candles)",
         "Faz um pivô curto (1 a 3 barras de pausa) sem perder o fundo da queda",
         "Compra 1 tick acima do pivô; stop 1 tick abaixo da pausa", _GESTAO]),
@@ -851,79 +849,79 @@ SETUPS = {
         "Não opera a divergência sozinha: precisa do setup de reversão, um candle de alta fechando acima da máxima anterior",
         "Compra 1 tick acima desse candle; stop 1 tick abaixo da mínima nova",
         "Pode operar contra a tendência", _GESTAO]),
-    "E38": _e("Range: rompimento com cor invertida", e38_range_cor_invertida, e38_atencao, "range com a MM20 subindo, esperando a barra de cor invertida no topo", [
+    "E38": _e("Range: barra contrária no topo", e38_range_cor_invertida, e38_atencao, "range com a MM20 subindo, esperando a barra de cor invertida no topo", [
         "Range horizontal de 9 candles, de 0,6 a 2 ATR, com a MM20 subindo e o preço acima dela",
         "Barra de cor invertida (de baixa) colada no topo do range: é ela que arma o rompimento",
         "Mais de 3 toques no topo = tentativa demais, rompimento falso: não entra",
         "Compra 1 tick acima do topo do range (vale 2 candles); stop 1 tick abaixo das duas últimas barras", _GESTAO]),
-    "E39": _e("Zona de armadilha larga", e39_zona_armadilha, e39_atencao, "preço preso entre a MM20 e a MM200", [
+    "E39": _e("Preço entre as médias 20 e 200", e39_zona_armadilha, e39_atencao, "preço preso entre a MM20 e a MM200", [
         "Preço entre a MM20 (embaixo) e a MM200 (em cima)",
         "Só na zona larga, de 2,5 ATR ou mais; zona estreita: não operar",
         "Pivô com as regras do pivô clássico e a MM20 subindo",
         "Precisa de 1:1 de espaço antes da MM200 (o primeiro alvo não pode passar dela)",
         _GERAIS, _GESTAO]),
-    "E40": _e("Power-breakout (MM20)", e40_power_breakout, e40_atencao, "lateral apoiada na MM20 se formando", [
+    "E40": _e("Lateral apoiada na MM20", e40_power_breakout, e40_atencao, "lateral apoiada na MM20 se formando", [
         "Lateral horizontal de 6 candles, de até 1,2 ATR",
-        "Antes dela, uma tendência média (1,5 a 5 ATR): power depois de tendência muito boa tende a falhar",
+        "Antes dela, uma tendência média (1,5 a 5 ATR): depois de tendência muito boa tende a falhar",
         "A MM20 sobe por baixo, sem entrar nos preços, a até 1 ATR do fundo da lateral (serve de toque)",
         "Compra 1 tick acima do topo da lateral; stop 1 tick abaixo do fundo; a MM200 não pode estar na cara",
         _GERAIS, _GESTAO]),
-    "E41": _e("Power-breakout com pullback", e41_power_pullback, e41_atencao, "lateral rompida, esperando o pullback", [
-        "A lateral do power-breakout já rompeu (fechamento acima do topo nos últimos 4 candles)",
+    "E41": _e("Lateral apoiada na MM20 + pullback", e41_power_pullback, e41_atencao, "lateral rompida, esperando o pullback", [
+        "A lateral apoiada na MM20 já rompeu (fechamento acima do topo nos últimos 4 candles)",
         "Pullback de 1 a 3 barras que segura o topo da lateral",
         "Compra 1 tick acima da máxima depois do rompimento; stop 1 tick abaixo do pullback",
         _GERAIS, _GESTAO]),
-    "E42": _e("Breakout da tarde (4 alternâncias)", e42_breakout_tarde, e42_atencao, "lateral alternando com a MM20, esperando o pivô no topo", [
-        "Só intraday, depois das primeiras 2 h 30 (trade da tarde)",
+    "E42": _e("Rompimento da tarde (lateral na MM20)", e42_breakout_tarde, e42_atencao, "lateral alternando com a MM20, esperando o pivô no topo", [
+        "Só intraday, depois das primeiras 2 h 30 (rompimento da tarde)",
         "Nos 30 candles antes do pivô os fechamentos alternaram de lado da MM20 pelo menos 4 vezes",
         "O primeiro pivô alinhado com a MM20 no topo da lateral: pullback pré, no ou pós rompimento",
         "Regras do pivô clássico (correção até 61,8%); compra 1 tick acima do topo do pivô",
         _GERAIS, _GESTAO], intraday=True),
-    "E43": _e("Mergulhada dupla", e43_mergulhada_dupla, e43_atencao, "correção grande fazendo o segundo fundo", [
+    "E43": _e("Fundo duplo a favor", e43_fundo_duplo, e43_atencao, "correção grande fazendo o segundo fundo", [
         "A favor da tendência: preço e MM20 acima da MM200, preço acima da MM20",
         "Depois de um impulso grande, a correção faz um fundo, repica (pelo menos 1 ATR) e volta para um segundo fundo parecido (até 0,35 ATR de diferença)",
         "Compra quando um candle de alta fecha acima da máxima anterior; stop 1 tick abaixo dos dois fundos",
         "Primeiro alvo no topo do repique", _GESTAO]),
-    "E44": _e("MM200: pós-rompimento", e44_mm200_pos, e44_atencao, "preço acabou de passar a MM200, esperando o pullback", [
+    "E44": _e("Passou a MM200: pullback", e44_mm200_pos, e44_atencao, "preço acabou de passar a MM200, esperando o pullback", [
         "O preço vinha abaixo da MM200 (12 dos 20 candles) e fechou acima dela há 3 a 15 candles",
         "O pullback segura perto da MM200 (sem fechar 0,2 ATR abaixo dela)",
         "Pivô com as regras do pivô clássico (correção até 61,8%) e a MM20 já virada",
         "Compra 1 tick acima do topo do pivô; stop 1 tick abaixo da correção",
-        "Pré-rompimento e no rompimento não entram (a apostila manda esperar o pós)", _GESTAO]),
-    "E45": _e("Afastamento da MM200", e45_afastamento, e45_atencao, "preço longe da MM200 com a MM20 virando", [
-        "Afastamento inferior (compra) ou superior (venda): preço a 3 ATR ou mais da MM200",
+        "Pré-rompimento e no rompimento não entram (espera o pós)", _GESTAO]),
+    "E45": _e("Longe da MM200: retorno", e45_afastamento, e45_atencao, "preço longe da MM200 com a MM20 virando", [
+        "Abaixo (compra) ou acima (venda) da MM200: preço a 3 ATR ou mais da MM200",
         "A MM20 já virou a favor do trade e o pivô (de tamanho médio, até 4 ATR) está alinhado com ela",
         "Regras do pivô clássico; compra 1 tick acima do topo do pivô",
         "O primeiro alvo fica antes da MM200; o último, na própria MM200", _GERAIS, _GESTAO]),
-    "E46": _e("Armadilha na MM200 (RBI/Gift)", e46_armadilha_mm200, e46_atencao, "preço chegando na MM200 por baixo", [
+    "E46": _e("Pausa de 1 barra na MM200", e46_armadilha_mm200, e46_atencao, "preço chegando na MM200 por baixo", [
         "O preço vinha abaixo da MM200 e chega nela com um candle de alta",
-        "O candle seguinte é uma pausa de 1 barra (RBI / Gift): de baixa, sem perder a metade do anterior",
+        "O candle seguinte é uma pausa de 1 barra: de baixa, sem perder a metade do anterior",
         "MM20 subindo",
         "Compra 1 tick acima das duas máximas (por cima da MM200); stop 1 tick abaixo da pausa", _GESTAO]),
 }
 
 # o que o teste com custos mostrou (bt36, 12 ativos, 5/15/60 min, gestao padrao) - aparece em "Onde costuma se encaixar"
 RESULTADO = {
-    "E26": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 725 operações, média de −0,32R por operação; o 1º alvo (1:1) foi atingido em 39%. No diário do Pisani (operação manual, com alvo parcial menor) o acerto do 1º alvo foi de 75%, em 111 operações (pivô alinhado com a MM20).",
+    "E26": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 725 operações, média de −0,32R por operação; o 1º alvo (1:1) foi atingido em 39%. Em diários de operação manual (com alvo parcial menor) o acerto do 1º alvo foi de 75%, em 111 operações (pivô alinhado com a MM20).",
     "E27": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 24 operações, média de −0,42R por operação; o 1º alvo (1:1) foi atingido em 29%. Poucas operações: ainda não dá para concluir.",
     "E28": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 27 operações, média de −0,16R por operação; o 1º alvo (1:1) foi atingido em 33%. Poucas operações: ainda não dá para concluir.",
     "E29": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 204 operações, média de −0,39R por operação; o 1º alvo (1:1) foi atingido em 39%.",
     "E30": "Poucos dados: com 60 dias de candles de 5 min das ações da B3 saíram só 6 operações no teste. Precisa de mais histórico (CSV do Profit) para concluir.",
     "E31": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 71 operações, média de −0,24R por operação; o 1º alvo (1:1) foi atingido em 46%. Poucas operações: ainda não dá para concluir.",
-    "E32": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 643 operações, média de −0,18R por operação; o 1º alvo (1:1) foi atingido em 43%. No diário do Pisani (operação manual, com alvo parcial menor) o acerto do 1º alvo foi de 76%, em 101 operações (volta em V a favor).",
-    "E33": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 670 operações, média de −0,15R por operação; o 1º alvo (1:1) foi atingido em 46%. No diário do Pisani (operação manual, com alvo parcial menor) o acerto do 1º alvo foi de 84%, em 185 operações (volta em V contra).",
+    "E32": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 643 operações, média de −0,18R por operação; o 1º alvo (1:1) foi atingido em 43%. Em diários de operação manual (com alvo parcial menor) o acerto do 1º alvo foi de 76%, em 101 operações (virada em V a favor).",
+    "E33": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 670 operações, média de −0,15R por operação; o 1º alvo (1:1) foi atingido em 46%. Em diários de operação manual (com alvo parcial menor) o acerto do 1º alvo foi de 84%, em 185 operações (virada em V contra).",
     "E34": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 3.554 operações, média de −0,20R por operação; o 1º alvo (1:1) foi atingido em 44%.",
     "E35": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 4.357 operações, média de −0,28R por operação; o 1º alvo (1:1) foi atingido em 41%.",
     "E36": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 2.582 operações, média de −0,35R por operação; o 1º alvo (1:1) foi atingido em 38%.",
     "E37": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 969 operações, média de −0,17R por operação; o 1º alvo (1:1) foi atingido em 45%.",
     "E38": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 867 operações, média de −0,37R por operação; o 1º alvo (1:1) foi atingido em 36%.",
     "E39": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 170 operações, média de −0,31R por operação; o 1º alvo (1:1) foi atingido em 41%.",
-    "E40": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 432 operações, média de −0,31R por operação; o 1º alvo (1:1) foi atingido em 38%. No diário do Pisani (operação manual, com alvo parcial menor) o acerto do 1º alvo foi de 74%, em 180 operações (power-breakout na MM20).",
+    "E40": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 432 operações, média de −0,31R por operação; o 1º alvo (1:1) foi atingido em 38%. Em diários de operação manual (com alvo parcial menor) o acerto do 1º alvo foi de 74%, em 180 operações (lateral na MM20).",
     "E41": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 51 operações, média de −0,24R por operação; o 1º alvo (1:1) foi atingido em 43%. Poucas operações: ainda não dá para concluir.",
-    "E42": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 229 operações, média de −0,25R por operação; o 1º alvo (1:1) foi atingido em 41%. No diário do Pisani (operação manual, com alvo parcial menor) o acerto do 1º alvo foi de 74%, em 204 operações (breakout PB pré).",
+    "E42": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 229 operações, média de −0,25R por operação; o 1º alvo (1:1) foi atingido em 41%. Em diários de operação manual (com alvo parcial menor) o acerto do 1º alvo foi de 74%, em 204 operações (rompimento com pullback antes).",
     "E43": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 1.467 operações, média de −0,12R por operação; o 1º alvo (1:1) foi atingido em 45%.",
-    "E44": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 10 operações, média de −0,33R por operação; o 1º alvo (1:1) foi atingido em 40%. Poucas operações: ainda não dá para concluir. No diário do Pisani (operação manual, com alvo parcial menor) o acerto do 1º alvo foi de 69%, em 135 operações (saída da MM200 pós).",
-    "E45": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 95 operações, média de −0,35R por operação; o 1º alvo (1:1) foi atingido em 42%. Poucas operações: ainda não dá para concluir. No diário do Pisani (operação manual, com alvo parcial menor) o acerto do 1º alvo foi de 72%, em 459 operações (afastamento da MM200).",
+    "E44": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 10 operações, média de −0,33R por operação; o 1º alvo (1:1) foi atingido em 40%. Poucas operações: ainda não dá para concluir. Em diários de operação manual (com alvo parcial menor) o acerto do 1º alvo foi de 69%, em 135 operações (pullback depois de passar a MM200).",
+    "E45": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 95 operações, média de −0,35R por operação; o 1º alvo (1:1) foi atingido em 42%. Poucas operações: ainda não dá para concluir. Em diários de operação manual (com alvo parcial menor) o acerto do 1º alvo foi de 72%, em 459 operações (longe da MM200).",
     "E46": "No nosso teste com custos (12 ativos, 5, 15 e 60 min): 74 operações, média de −0,65R por operação; o 1º alvo (1:1) foi atingido em 23%. Poucas operações: ainda não dá para concluir.",
 }
 for _k, _t in RESULTADO.items():

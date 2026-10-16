@@ -38,7 +38,7 @@
       passos: [
         ["Tendência a favor", "A média de 20 (MM20) está {subindo|caindo} com força: andou pelo menos 0,2 ATR nos últimos 5 candles. E o preço fecha {acima|abaixo} da média de 200 (MM200)."],
         ["Correção que encosta na MM20 (o halt)", "Depois de um {topo|fundo} afastado da média (0,5 ATR ou mais), o preço corrige de 1 a 8 candles, encosta na MM20 e nenhum candle fecha {abaixo|acima} dela."],
-        ["Candle de confirmação", "Um candle de {alta|baixa} que fecha na metade {de cima|de baixo} dele e {acima|abaixo} da MM20. Se a correção teve só 1 candle, ele precisa fechar {acima da máxima|abaixo da mínima} desse candle (o Gift)."],
+        ["Candle de confirmação", "Um candle de {alta|baixa} que fecha na metade {de cima|de baixo} dele e {acima|abaixo} da MM20. Se a correção teve só 1 candle, ele precisa fechar {acima da máxima|abaixo da mínima} desse candle (o candle de força)."],
         ["Entrada", "Ordem de {compra|venda} stop 1 tick {acima da máxima|abaixo da mínima} do candle de confirmação." + VALE2],
         ["Stop", "1 tick {abaixo do fundo|acima do topo} da correção." + RISCO],
         ALVO2,
@@ -119,13 +119,13 @@
       },
     },
     E5: {
-      nome: "Combinação perfeita + Gift na MM9",
+      nome: "Médias alinhadas + correção curta na MM9",
       frase: "Tendência tão forte que a correção mal chega à média de 9: {comprar|vender} quando um candle apaga o anterior inteiro.",
       passos: [
         ["Combinação perfeita das médias", "MM9 {acima|abaixo} da MM20 e MM20 {acima|abaixo} da MM200, com a MM9 e a MM20 {subindo|caindo} (a MM20 andou pelo menos 0,3 ATR em 5 candles)."],
         ["Correção rasa até a MM9", "Depois do {topo|fundo} mais recente, o preço corrige só de 1 a 3 candles, encosta na MM9 e nenhum candle fecha {abaixo|acima} da MM20."],
-        ["Candle Gift", "Um candle de {alta|baixa} que fecha {acima da máxima|abaixo da mínima} do candle anterior: ele apaga o candle anterior inteiro."],
-        ["Entrada", "Ordem de {compra|venda} stop 1 tick {acima da máxima|abaixo da mínima} do Gift." + VALE2],
+        ["Candle de força", "Um candle de {alta|baixa} que fecha {acima da máxima|abaixo da mínima} do candle anterior: ele apaga o candle anterior inteiro."],
+        ["Entrada", "Ordem de {compra|venda} stop 1 tick {acima da máxima|abaixo da mínima} do candle de força." + VALE2],
         ["Stop", "1 tick {abaixo do fundo|acima do topo} da correção." + RISCO],
         ALVO2,
       ],
@@ -201,7 +201,7 @@
       },
     },
     E9: {
-      nome: "OGRO: pivô + Fibonacci",
+      nome: "Pivô + Fibonacci com médias alinhadas",
       frase: "Tendência com correção rasa: {comprar|vender} o rompimento do {topo|fundo} anterior (o pivô) e mirar as projeções de Fibonacci da pernada.",
       passos: [
         ["Pernada A→B com médias alinhadas", "MM9 {acima|abaixo} da MM20, MM20 {acima|abaixo} da MM200 e MM20 {subindo|caindo}. A pernada de A até B tem pelo menos 2 ATR; B é o pivô."],
@@ -222,7 +222,7 @@
       },
     },
     E10: {
-      nome: "XTRADERS: Keltner lateral",
+      nome: "Keltner no dia lateral",
       frase: "Em dia sem direção, {comprar|vender} o exagero na banda de Keltner e sair no meio do canal, na média de 20.",
       passos: [
         ["Só em dia lateral", "Intraday, a partir do 7º candle do dia. A VWAP está plana (andou no máximo 0,3 ATR em 6 candles), as médias longas (MME200 e MME500) estão misturadas com os preços do dia e o preço está dentro da faixa de ontem."],

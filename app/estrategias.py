@@ -9,18 +9,18 @@ mercado na abertura seguinte). Quem executa, aplica stop, alvo, custos e escorre
 As regras de compra sao escritas uma unica vez. A venda e o espelho exato: o robo inverte o grafico
 (preco -> -preco) e roda a mesma regra de compra. Assim compra e venda nunca ficam diferentes por erro.
 
-  E1  Halt na MM20 ............ Mario Pisani (halt) + Oliver Velez (MM20 inclinada, pullback 3-5-8)
-  E2  Gatilho de Fibonacci .... Mario Pisani (correcao de 38,2% a 61,8% do impulso + candle de confirmacao)
-  E3  Pullback na VWAP ........ Mario Pisani / Oliver Velez (dia de tendencia acima/abaixo da VWAP)
-  E4  Rompimento de base ...... Oliver Velez (power breakout: base estreita no topo, apoiada na MM20)
-  E5  Combinacao perfeita + Gift na MM9 ... Velez/Pisani (MM9 > MM20 > MM200, correcao rasa de 1 a 3 candles)
+  E1  Halt na MM20 ............ correcao que encosta na MM20 inclinada (pullback 3-5-8)
+  E2  Gatilho de Fibonacci .... price action (correcao de 38,2% a 61,8% do impulso + candle de confirmacao)
+  E3  Pullback na VWAP ........ price action (dia de tendencia acima/abaixo da VWAP)
+  E4  Rompimento de base ...... power breakout ( base estreita no topo, apoiada na MM20)
+  E5  Medias alinhadas + correcao curta na MM9 ... (MM9 > MM20 > MM200, correcao rasa de 1 a 3 candles)
   E6  RSI(2) de Larry Connors . a estrategia de alta taxa de acerto mais testada nos foruns
                                 (compra a queda curta acima da MM200, sai quando fecha acima da MM5)
   E7  Rompimento do 1o candle (ORB) ... Zarattini & Aziz (2023), "Can Day Trading Really Be Profitable?"
   E8  Fechamento de gap ....... gaps pequenos dentro da faixa do dia anterior fecham na maioria das vezes
-  E9  OGRO: pivo + Fibonacci .. rompimento do pivo com retracao de no maximo 50% e alvos na projecao de
-                                Fibonacci, medias simples alinhadas (estilo Andre Machado, "Ogro de Wall Street")
-  E10 XTRADERS: Keltner lateral  setup do Adriano Mendes (XTraders) para dias sem direcao: canais de Keltner
+  E9  Pivo + Fibonacci ....... rompimento do pivo com retracao de no maximo 50% e alvos na projecao de
+                                Fibonacci, medias simples alinhadas
+  E10 Keltner no dia lateral ... setup para dias sem direcao: canais de Keltner
                                 2,0/2,5 na MME20, IFR(9), alvo na media de 20
   E11 Momentum do dia (faixa de ruido) ... Zarattini, Aziz & Barbon (2024), "Beat the Market": o preco sai da faixa
                                 de movimento normal desde a abertura -> segue a direcao, com a VWAP de stop movel
@@ -295,13 +295,13 @@ def e1_halt_mm20(G, i):
     if not any(G.l[k] <= G.mm20[k] + 0.15 * a for k in pb):
         return None                                            # a correcao precisa encostar na MM20 (halt)
     if any(G.c[k] < G.mm20[k] - 0.05 * a for k in pb):
-        return None                                            # fechou alem da MM20: halt invalido (Pisani)
+        return None                                            # fechou alem da MM20: halt invalido
     if any(G.c[k] < G.o[k] and G.h[k] - G.l[k] >= 2.0 * G.atr[k] for k in range(j + 1, i)):
         return None                                            # regressao aguda (barra elefante contra)
     if not (G.c[i] > G.o[i] and G.c[i] >= (G.h[i] + G.l[i]) / 2 and G.c[i] > G.mm20[i]):
         return None                                            # candle de confirmacao
     if npb == 1 and G.c[i] <= G.h[i - 1]:
-        return None                                            # pullback de 1 candle: so o Gift (apaga 100%)
+        return None                                            # pullback de 1 candle: so o candle de forca (apaga 100%)
     return _ordem_stop(G, i, min(G.l[k] for k in pb), info="%d candles de correção" % npb)
 
 
@@ -436,7 +436,7 @@ def e4_atencao(G, i):
 
 
 # ------------------------------------------------------------------------------------------ E5
-def e5_mm9_gift(G, i):
+def e5_mm9_forca(G, i):
     a = G.atr[i]
     if not (G.mm9[i] > G.mm20[i] > G.mm200[i]):
         return None                                            # combinacao perfeita das medias
@@ -452,7 +452,7 @@ def e5_mm9_gift(G, i):
     if any(G.c[k] < G.mm20[k] for k in pb):
         return None                                            # sem fechar abaixo da MM20
     if not (G.c[i] > G.o[i] and G.c[i] > G.h[i - 1]):
-        return None                                            # Gift: apaga 100% do candle anterior
+        return None                                            # candle de forca: apaga 100% do candle anterior
     return _ordem_stop(G, i, min(G.l[k] for k in pb), info="correção de %d candle(s)" % npb)
 
 
@@ -556,7 +556,7 @@ def e8_atencao(G, i):
 
 
 # ------------------------------------------------------------------------------------------ E9
-def _ogro(G, i):
+def _pivo_alinhado(G, i):
     """Pernada A->B, correcao ate C (23,6% a 50% de AB) com medias simples alinhadas. Devolve (B, C, AB) ou None."""
     a = G.atr[i]
     if not (G.mm9[i] > G.mm20[i] > G.mm200[i]) or G.mm20[i] <= G.mm20[i - 5]:
@@ -583,8 +583,8 @@ def _ogro(G, i):
     return j, m, ab, ret
 
 
-def e9_ogro(G, i):
-    r = _ogro(G, i)
+def e9_pivo_fibo(G, i):
+    r = _pivo_alinhado(G, i)
     if not r:
         return None
     j, m, ab, ret = r
@@ -598,7 +598,7 @@ def e9_ogro(G, i):
 
 
 def e9_atencao(G, i):
-    return _ogro(G, i) is not None and e9_ogro(G, i) is None
+    return _pivo_alinhado(G, i) is not None and e9_pivo_fibo(G, i) is None
 
 
 # ------------------------------------------------------------------------------------------ E10
@@ -606,7 +606,7 @@ KELT_DENTRO, KELT_FORA, KELT_STOP_ATR, KELT_IFR = 2.0, 2.5, 0.25, 35.0
 
 
 def _lateral(G, i):
-    """Dia lateral (Adriano Mendes): MME200 e MME500 cortando os precos do dia, VWAP plana e preco dentro do
+    """Dia lateral: MME200 e MME500 cortando os precos do dia, VWAP plana e preco dentro do
     range do dia anterior. Em dia de medias alinhadas o Keltner nao vale."""
     if not G.intraday:
         return False
@@ -864,10 +864,10 @@ def e14_atencao(G, i):
 
 
 def e15_pivo_curto(G, i):
-    """Pivo + Fibonacci com stop curto (a E9 aperfeicoada): a mesma pernada e correcao de ate 50% do OGRO, a mesma compra
+    """Pivo + Fibonacci com stop curto (a E9 aperfeicoada): a mesma pernada e correcao de ate 50% da E9, a mesma compra
     no rompimento do topo, mas com o stop na minima dos 2 ultimos candles antes do rompimento (acima do fundo C) e tres
     alvos na projecao a partir de C: 61,8%, 100% e 161,8%. Perde menos quando o rompimento falha; e stopada mais vezes."""
-    r = _ogro(G, i)
+    r = _pivo_alinhado(G, i)
     if not r:
         return None
     j, m, ab, ret = r
@@ -886,7 +886,7 @@ def e15_pivo_curto(G, i):
 
 
 def e15_atencao(G, i):
-    return _ogro(G, i) is not None and e15_pivo_curto(G, i) is None
+    return _pivo_alinhado(G, i) is not None and e15_pivo_curto(G, i) is None
 
 
 # ------------------------------------------------------------------------------------------ E16, E17 e E18
@@ -1274,7 +1274,7 @@ def e23_atencao(G, i):
 
 
 # ------------------------------------------------------------------------------------------ catalogo
-# ------------------------------------------------------------------------------------------ E24 e E25: pivos do Mario Pisani
+# ------------------------------------------------------------------------------------------ E24 e E25: pivos de rompimento
 # Leitura dos slides "Abertura - Onda 1" e "Primeiro movimento - Classico Perto": o primeiro impulso forma a perna A->B,
 # a correcao forma o pivo C e a entrada e no rompimento da maxima B (gatilho na superacao da maxima). Os alvos sao a
 # projecao de Fibonacci da perna colocada em cima de B (B + 61,8%, 100% e 161,8% da perna), como no grafico do WDO.
@@ -1372,16 +1372,16 @@ def e25_atencao(G, i):
 
 
 ESTRATEGIAS = {
-    "E1": dict(nome="Halt na MM20", autor="Mario Pisani + Oliver Velez", fn=e1_halt_mm20, aten=e1_atencao,
+    "E1": dict(nome="Halt na MM20", autor="Price action: correção na média de 20", fn=e1_halt_mm20, aten=e1_atencao,
                gestao="alvo2", saida=None, intraday=False,
                aguardando="correção encostando na MM20 inclinada",
                ideal="5 e 15 min, qualquer ativo em tendência (melhor no WIN e no ouro)",
-               regras=["MM20 inclinada a favor (retrato da força - Velez) e preço do lado certo da MM200",
-                       "Correção de 1 a 8 candles (3-5-8) que encosta na MM20 sem fechar além dela (halt - Pisani)",
+               regras=["MM20 inclinada a favor (retrato da força) e preço do lado certo da MM200",
+                       "Correção de 1 a 8 candles (3-5-8) que encosta na MM20 sem fechar além dela (halt)",
                        "Sem barra elefante contra na correção (regressão aguda = não operar)",
-                       "Candle de confirmação a favor; correção de 1 candle só vale se ele apagar 100% (Gift)",
+                       "Candle de confirmação a favor; correção de 1 candle só vale se ele apagar 100% (candle de força)",
                        "Entrada 1 tick além da máxima/mínima do candle de sinal; stop 1 tick além do fundo/topo da correção"]),
-    "E2": dict(nome="Gatilho de Fibonacci", autor="Mario Pisani", fn=e2_fibonacci, aten=e2_atencao,
+    "E2": dict(nome="Gatilho de Fibonacci", autor="Price action: retração de Fibonacci", fn=e2_fibonacci, aten=e2_atencao,
                gestao="alvo2", saida=None, intraday=False,
                aguardando="correção entrando na zona 38,2%-61,8% do impulso",
                ideal="5 e 15 min no WIN; no diário em ouro e prata",
@@ -1389,7 +1389,7 @@ ESTRATEGIAS = {
                        "Correção que chega entre 38,2% e 61,8% do impulso (sem passar de ~66%)",
                        "Candle de confirmação que fecha a favor, acima do anterior e de volta acima de 61,8%",
                        "Entrada 1 tick além do candle de sinal; stop 1 tick além do fundo/topo da correção"]),
-    "E3": dict(nome="Pullback na VWAP", autor="Mario Pisani + Oliver Velez", fn=e3_vwap, aten=e3_atencao,
+    "E3": dict(nome="Pullback na VWAP", autor="Price action: VWAP do dia", fn=e3_vwap, aten=e3_atencao,
                gestao="alvo2", saida=None, intraday=True,
                aguardando="dia de tendência voltando para testar a VWAP",
                ideal="15 min, índices e forex no dia de tendência",
@@ -1397,21 +1397,21 @@ ESTRATEGIAS = {
                        "Dia de tendência: 70% dos fechamentos do dia do mesmo lado da VWAP e VWAP inclinada",
                        "Preço já se afastou 1 ATR da VWAP e voltou para testá-la sem fechar do outro lado",
                        "Candle de confirmação a favor; entrada 1 tick além dele; stop além do teste"]),
-    "E4": dict(nome="Rompimento de base", autor="Oliver Velez (power breakout)", fn=e4_rompimento, aten=e4_atencao,
+    "E4": dict(nome="Rompimento de base", autor="Price action: rompimento de base (power breakout)", fn=e4_rompimento, aten=e4_atencao,
                gestao="alvo2", saida=None, intraday=False,
                aguardando="base estreita se formando no extremo do movimento",
                ideal="5 min e diário, ativos em tendência forte",
                regras=["MM20 inclinada a favor e preço do lado certo da MM200",
                        "Base de 4 candles com amplitude até 1,2 ATR, no extremo do movimento e apoiada na MM20",
                        "Ordem stop 1 tick além da base (vale 2 candles); stop 1 tick além do outro lado da base"]),
-    "E5": dict(nome="Combinação perfeita + Gift na MM9", autor="Oliver Velez + Mario Pisani", fn=e5_mm9_gift, aten=e5_atencao,
+    "E5": dict(nome="Médias alinhadas + correção curta na MM9", autor="Price action: médias 9, 20 e 200", fn=e5_mm9_forca, aten=e5_atencao,
                gestao="alvo2", saida=None, intraday=False,
                aguardando="tendência forte fazendo correção rasa até a MM9",
                ideal="5 e 60 min, tendências fortes (ouro, prata)",
                regras=["MM9 > MM20 > MM200 (combinação perfeita) com MM9 e MM20 inclinadas",
                        "Correção rasa de 1 a 3 candles que encosta na MM9 sem fechar além da MM20",
-                       "Candle Gift: fecha além da máxima/mínima do candle anterior (apaga 100%)",
-                       "Entrada 1 tick além do Gift; stop 1 tick além do fundo/topo da correção"]),
+                       "Candle de força: fecha além da máxima/mínima do candle anterior (apaga 100%)",
+                       "Entrada 1 tick além do candle de força; stop 1 tick além do fundo/topo da correção"]),
     "E6": dict(nome="RSI(2) de Connors", autor="Larry Connors - a mais testada nos fóruns", fn=e6_rsi2, aten=e6_atencao,
                gestao="propria", saida=e6_saida, intraday=False,
                aguardando="recuo curto contra a tendência (RSI(2) esticado), do lado certo da MM200",
@@ -1441,7 +1441,7 @@ ESTRATEGIAS = {
                        "Entra a mercado no candle seguinte; stop largo: além da mínima/máxima dos 15 min e a 2 gaps da abertura",
                        "Alvo: o fechamento do dia anterior (o gap fechado); só entra se o alvo valer 0,2R ou mais. Ganha pouco e acerta muito",
                        "Estudos no Nasdaq (2015-2025): gap pequeno aberto dentro da faixa de ontem fecha 78% das vezes"]),
-    "E9": dict(nome="OGRO: pivô + Fibonacci", autor="Estilo André Machado (Ogro de Wall Street)", fn=e9_ogro, aten=e9_atencao,
+    "E9": dict(nome="Pivô + Fibonacci com médias alinhadas", autor="Pivô de rompimento + projeção de Fibonacci", fn=e9_pivo_fibo, aten=e9_atencao,
                gestao="fibo", saida=None, intraday=False,
                aguardando="pivô formado (correção até 50%), esperando o rompimento do pivô",
                ideal="5 e 15 min, índices e ouro em tendência, com MM9 > MM20 > MM200",
@@ -1449,7 +1449,7 @@ ESTRATEGIAS = {
                        "Pernada A→B de pelo menos 2 ATR; correção até C que retrai de 23,6% a no máximo 50%",
                        "Compra 1 tick acima do topo B (rompimento do pivô); stop 1 tick abaixo do fundo C",
                        "Alvos na projeção de Fibonacci da pernada a partir de C: 100% (metade + stop no 0x0) e 161,8% (resto)"]),
-    "E10": dict(nome="XTRADERS: Keltner lateral", autor="Adriano Mendes (XTraders)", fn=e10_keltner, aten=e10_atencao,
+    "E10": dict(nome="Keltner no dia lateral", autor="Canal de Keltner + IFR", fn=e10_keltner, aten=e10_atencao,
                 gestao="fixo", saida=None, intraday=True,
                 aguardando="dia lateral com o preço chegando na banda de Keltner",
                 ideal="2 e 5 min, índices em dia lateral (médias emboladas, VWAP plana). Alvo curto, acerto alto",
@@ -1496,7 +1496,7 @@ ESTRATEGIAS = {
                         "Três alvos ancorados na pernada: o topo B, 127,2% e 161,8% da pernada",
                         "Um terço em cada alvo; no alvo 1 o stop vai para a entrada, no alvo 2 vai para o alvo 1",
                         "As versões publicadas usam 61,8% (Golden Pocket) ou 70,5% (OTE); aqui o nível é 50%"]),
-    "E14": dict(nome="Fibo raso: stop curto na correção", autor="Gatilho de Fibonacci (Pisani) aperfeiçoado: continuação rasa com médias alinhadas",
+    "E14": dict(nome="Fibo raso: stop curto na correção", autor="Gatilho de Fibonacci (E2) aperfeiçoado: continuação rasa com médias alinhadas",
                 fn=e14_fibo_raso, aten=e14_atencao, gestao="fibo3", saida=None, intraday=False, sem_ntsl=True,
                 aguardando="correção rasa (até 50%) acima da MM20, esperando o candle que fecha acima da máxima anterior",
                 ideal="60 min em tendência limpa. No nosso teste (135 operações em 11 ativos, com custos) NÃO superou a E2: perdeu em média "
@@ -1508,12 +1508,12 @@ ESTRATEGIAS = {
                         "Três alvos: o topo do impulso, 127,2% e 161,8% da pernada. Só arma se o alvo 2 pagar pelo menos 2 vezes o risco",
                         "Um terço em cada alvo; no alvo 1 o stop vai para a entrada, no alvo 2 vai para o alvo 1",
                         "Perde pouco por operação, mas é stopada mais vezes: o stop fica perto do preço"]),
-    "E15": dict(nome="Pivô com stop curto", autor="OGRO (pivô + Fibonacci) aperfeiçoado: mesmo rompimento, stop mais perto",
+    "E15": dict(nome="Pivô com stop curto", autor="Pivô + Fibonacci (E9) aperfeiçoado: mesmo rompimento, stop mais perto",
                 fn=e15_pivo_curto, aten=e15_atencao, gestao="fibo3", saida=None, intraday=False, sem_ntsl=True,
                 aguardando="correção de até 50% formada, esperando o rompimento do topo da pernada",
                 ideal="60 min e WIN. No nosso teste (159 operações em 11 ativos, com custos) perdeu em média 0,26R por operação, contra "
                       "0,17R da E9; no WIN e WDO ficou perto do zero, mas com só 13 operações (amostra pequena demais)",
-                regras=["Mesma leitura do OGRO: MM9 > MM20 > MM200, pernada de pelo menos 2 ATR e correção de 23,6% a 50%",
+                regras=["Mesma leitura da E9: MM9 > MM20 > MM200, pernada de pelo menos 2 ATR e correção de 23,6% a 50%",
                         "Compra no rompimento do pivô (1 tick acima do topo da pernada), valendo 1 candle",
                         "Stop CURTO: 0,1 ATR abaixo da mínima dos 2 últimos candles antes do rompimento (nunca abaixo do fundo da correção). Risco de 0,3 a 1,2 ATR",
                         "Três alvos na projeção de Fibonacci a partir do fundo da correção: 61,8%, 100% e 161,8% (se o de 61,8% ficar abaixo da entrada, o alvo 1 vira 1 vez o risco)",
@@ -1595,7 +1595,7 @@ ESTRATEGIAS = {
                         "Sinal: o candle faz mínima nova abaixo dela, mas fecha de volta acima e em alta (quem vendeu o rompimento ficou preso)",
                         "Compra 1 tick acima desse candle (vale 2 candles); stop 1 tick abaixo da mínima nova (risco curto)",
                         "Alvo em 2 vezes o risco. Venda: o espelho, na máxima de 20 candles"]),
-    "E24": dict(nome="Pivô da abertura (Onda 1)", autor="Mario Pisani (Os 10%): pivô de rompimento da onda 1 + projeção de Fibonacci",
+    "E24": dict(nome="Pivô da abertura (onda 1)", autor="Price action: pivô de rompimento + projeção de Fibonacci",
                 fn=e24_onda1, aten=e24_atencao, gestao="fibo3", saida=None, intraday=True, sem_ntsl=True,
                 aguardando="primeiro impulso do dia feito, esperando a correção formar o pivô",
                 ideal="Intraday, 5 e 15 min. No nosso teste com custos: 425 operações, média de −0,21R; no WIN e no WDO, +0,006R em 68 operações (poucas para concluir).",
@@ -1605,10 +1605,10 @@ ESTRATEGIAS = {
                         "Alvos: projeção de Fibonacci da perna A→B em cima de B: B + 61,8%, B + 100% e B + 161,8% da perna",
                         "Um terço em cada alvo; no alvo 1 o stop vai para a entrada, no alvo 2 vai para o alvo 1",
                         "Venda: o espelho (onda 1 de baixa, pivô de alta, gatilho na perda da mínima)"]),
-    "E25": dict(nome="Pivô clássico perto", autor="Mario Pisani (Os 10%): primeiro movimento, clássico perto + projeção de Fibonacci",
+    "E25": dict(nome="Pivô curto perto do topo", autor="Price action: pivô de rompimento + projeção de Fibonacci",
                 fn=e25_classico_perto, aten=e25_atencao, gestao="fibo3", saida=None, intraday=False, sem_ntsl=True,
                 aguardando="perna a favor da tendência com topo confirmado, esperando o pullback curto",
-                ideal="5, 15 e 60 min. No nosso teste com custos: 2.817 operações, média de −0,18R. No diário do Pisani (operação manual, com alvo parcial menor) o acerto do 1º alvo foi de 77%, em 178 operações.",
+                ideal="5, 15 e 60 min. No nosso teste com custos: 2.817 operações, média de −0,18R. Em diários de operação manual (com alvo parcial menor) o acerto do 1º alvo foi de 77%, em 178 operações.",
                 regras=["Tendência a favor: preço e MM20 acima da MM200 (venda: o inverso)",
                         "Perna A→B de pelo menos 1,5 ATR com o topo B confirmado (3 candles de cada lado) e ainda não superado",
                         "Pullback curto, perto da extremidade da perna: de 8% a 38,2% (não precisa de um movimento grande para romper a máxima)",
@@ -1617,11 +1617,11 @@ ESTRATEGIAS = {
                         "Venda: o espelho"]),
 }
 
-# E26 a E46: os setups da apostila do Mario Pisani, um por um (pisani_setups.py importa as ferramentas deste arquivo)
-import pisani_setups  # noqa: E402
+# E26 a E46: setups de pivo, virada e rompimento (setups_pivo.py importa as ferramentas deste arquivo)
+import setups_pivo  # noqa: E402
 
-ESTRATEGIAS.update(pisani_setups.SETUPS)
-SELETIVO_TENDENCIA = SELETIVO_TENDENCIA + pisani_setups.SELETIVO_TENDENCIA
+ESTRATEGIAS.update(setups_pivo.SETUPS)
+SELETIVO_TENDENCIA = SELETIVO_TENDENCIA + setups_pivo.SELETIVO_TENDENCIA
 
 GESTOES = {
     "padrao": "Padrão de cada estratégia (a gestão que cada uma usa - ver regras)",

@@ -5,7 +5,7 @@
   "use strict";
   const AX = window.AX, $ = AX.$, COR = AX.COR;
   const B = { e: null, tipo: "mercado", relogio: null, buscando: false, nHist: null, recolhido: false, drag: null, valor: null };
-  try { B.recolhido = localStorage.getItem("apex_boleta_rec") === "1"; } catch (e) { /* ok */ }
+  B.recolhido = !!(AX.pref.ui && AX.pref.ui.boletaRec);                       // salvo na conta do usuário
   const el = () => $("cardBoleta");
   const meta = () => (AX.vivo.D && AX.vivo.D.meta.ativo === AX.pref.ativo ? AX.vivo.D.meta : null);
   const precoAgora = () => { const D = AX.vivo.D; return D && D.meta.ativo === AX.pref.ativo ? D.c[D.meta.iFim] : null; };
@@ -45,10 +45,10 @@
     h += `<div class="bol-topo"><div><small>${AX.esc(AX.rotAtivo(m.ativo))}</small><b id="bolAgora">${agora != null ? f(agora) : "-"}</b>${atraso ? '<em class="alerta">preço com ~15 min de atraso</em>' : ""}</div>
         <div class="seg mini" id="bolTipo">${[["mercado", "A mercado"], ["limite", "Limitada"], ["stop", "Stop"]].map(([k, t]) => `<button data-t="${k}" class="${B.tipo === k ? "on" : ""}">${t}</button>`).join("")}</div></div>
       <div class="bol-grade">
-        <label class="campo"><span>${m.fracionado ? "Lotes" : "Contratos"}</span><div class="bol-qtd"><button data-q="-1" type="button">−</button><input id="bolQtd" inputmode="decimal" value="${mem.q || (m.cripto || !m.fracionado ? 1 : 0.01)}"><button data-q="1" type="button">+</button></div></label>
+        <label class="campo"><span>${m.fracionado ? "Lotes" : "Contratos"}</span><div class="bol-qtd"><button data-q="-1" type="button">−</button><input id="bolQtd" inputmode="decimal" value="${AX.esc(mem.q || (m.cripto || !m.fracionado ? 1 : 0.01))}"><button data-q="1" type="button">+</button></div></label>
         <label class="campo ${B.tipo === "mercado" ? "oculto" : ""}" id="bolPrecoBox"><span>Preço da ordem</span><input id="bolPreco" inputmode="decimal" value="${agora != null ? String(agora).replace(".", ",") : ""}"></label>
-        <label class="campo"><span>Stop (distância)</span><input id="bolStop" inputmode="decimal" placeholder="sem stop" value="${casas(mem.s ?? sug.stop)}"></label>
-        <label class="campo"><span>Alvo (distância)</span><input id="bolAlvo" inputmode="decimal" placeholder="sem alvo" value="${casas(mem.a ?? sug.alvo)}"></label>
+        <label class="campo"><span>Stop (distância)</span><input id="bolStop" inputmode="decimal" placeholder="sem stop" value="${AX.esc(casas(mem.s ?? sug.stop))}"></label>
+        <label class="campo"><span>Alvo (distância)</span><input id="bolAlvo" inputmode="decimal" placeholder="sem alvo" value="${AX.esc(casas(mem.a ?? sug.alvo))}"></label>
       </div>
       <div class="bol-risco" id="bolRisco"></div>
       <div class="bol-bts"><button class="bol-compra" id="bolCompra">COMPRAR</button><button class="bol-venda" id="bolVenda">VENDER</button></div>
@@ -107,7 +107,7 @@
   function ligar() {
     const c = el(), m = meta();
     const bt = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
-    bt("bolRec", () => { B.recolhido = !B.recolhido; try { localStorage.setItem("apex_boleta_rec", B.recolhido ? "1" : "0"); } catch (e) { /* ok */ } render(); });
+    bt("bolRec", () => { B.recolhido = !B.recolhido; AX.pref.ui = Object.assign({}, AX.pref.ui, { boletaRec: B.recolhido }); AX.salvarPref(); render(); });
     c.querySelectorAll("#bolTipo button").forEach((b) => (b.onclick = () => { B.tipo = b.dataset.t; render(); }));
     c.querySelectorAll(".bol-qtd button").forEach((b) => (b.onclick = () => {
       const passo = m && m.fracionado ? 0.01 : 1, v = Math.max(passo, (lerNum($("bolQtd").value) || passo) + passo * +b.dataset.q);

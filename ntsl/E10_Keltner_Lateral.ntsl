@@ -1,5 +1,5 @@
 // =====================================================================
-//  ROBO APEX - E5 - Combinacao perfeita + Gift na MM9 (Oliver Velez + Mario Pisani)
+//  ROBO APEX - E10 - Keltner no dia lateral - so intraday
 //  Tipo no Profit: Indicador (no grafico de preco). NAO envia ordens.
 //  Linhas: BRANCA = entrada | VERMELHA = stop | VERDE = alvo
 //  (aparecem enquanto a ordem esta armada ou a operacao esta aberta).
@@ -11,7 +11,7 @@ input
   Tick(5.0);
   Slip(5.0);
   CustoPts(3.0);
-  AlvoR(2.0);
+  AlvoR(0.0);
   MaxStopsDia(2);
   Intraday(1);
   HoraInicio(1005);
@@ -19,11 +19,17 @@ input
   HoraZeragem(1650);
 var
   vA : Float;
+  vA1 : Float;
+  vA2 : Float;
   vATR : Float;
   vAlvo : Float;
   vB : Integer;
   vBarEnt : Integer;
   vBarSinal : Integer;
+  vBd : Float;
+  vBf : Float;
+  vCA1 : Float;
+  vCA2 : Float;
   vCC : Float;
   vCE20 : Float;
   vCE200 : Float;
@@ -51,47 +57,53 @@ var
   vEnt : Float;
   vEst : Integer;
   vFimDia : Boolean;
-  vFora : Boolean;
   vFrac : Float;
   vGanho : Float;
   vGat : Float;
+  vHi : Float;
+  vIfr : Float;
   vIniE : Integer;
-  vJ : Integer;
   vK : Integer;
   vLo : Float;
-  vM : Integer;
+  vM1 : Float;
   vM20 : Float;
   vM200 : Float;
+  vM2b : Float;
   vM5 : Float;
   vM9 : Float;
   vMG : Float;
   vMG9 : Float;
   vMP : Float;
   vMP9 : Float;
+  vMe : Float;
   vMinB : Integer;
   vNb : Integer;
-  vNpb : Integer;
   vOk : Boolean;
+  vPH : Float;
+  vPL : Float;
   vParcial : Integer;
   vPerda : Float;
   vPode : Boolean;
   vPreco : Float;
+  vPremio : Float;
   vPts : Float;
   vRSI : Float;
   vRSI9 : Float;
   vRes : Float;
   vRisco : Float;
+  vRisco2 : Float;
   vSair : Integer;
   vSeguir : Boolean;
-  vSinal : Boolean;
+  vSeguir2 : Boolean;
   vStops : Integer;
   vStp : Float;
   vTR : Float;
   vTemA1 : Integer;
   vTemAlvo : Integer;
   vTipo : Integer;
-  vToque : Boolean;
   vUlt : Integer;
+  vVA1 : Float;
+  vVA2 : Float;
   vVC : Float;
   vVE20 : Float;
   vVE200 : Float;
@@ -286,13 +298,10 @@ begin
             vPts := 0;
             vFrac := 1;
             vParcial := 0;
-            vTemAlvo := 0;
+            vAlvo := vA2;
+            vTemAlvo := 1;
             vTemA1 := 0;
-            if AlvoR > 0 then
-            begin
-              vAlvo := vEnt + vDir * AlvoR * vRisco;
-              vTemAlvo := 1;
-            end;
+            if vDir * (vAlvo - vEnt) <= Tick then vEst := 0;
           end;
         end;
       end;
@@ -371,76 +380,126 @@ begin
     begin
       // --- compra
       vCOk := false;
-      if (vCM9[1] > vCM20[1]) and (vCM20[1] > vCM200[1]) and (vCM9[1] > vCM9[4]) and (vCM20[1] - vCM20[6] >= 0.3 * vA) then
+      if (Intraday = 1) and (vNb >= 7) then
       begin
-        vJ := 1 + 6;
-        for vK := 0 to 5 do
+        vHi := vCH[1];
+        vLo := vCL[1];
+        for vK := 1 to vNb do
         begin
-          vM := 7 - vK;
-          if vCH[vM] >= vCH[vJ] then vJ := vM;
+          if vCH[vK] > vHi then vHi := vCH[vK];
+          if vCL[vK] < vLo then vLo := vCL[vK];
         end;
-        vNpb := vJ - 2;
-        if (vNpb >= 1) and (vNpb <= 3) then
+        vM1 := vCE200[1];
+        vM2b := vCE500[1];
+        if vM2b < vM1 then
         begin
-          vToque := false;
-          vFora := false;
-          for vK := 1 to vJ - 1 do
-          begin
-            if vCL[vK] <= vCM9[vK] + 0.1 * vA then vToque := true;
-            if vCC[vK] < vCM20[vK] then vFora := true;
-          end;
-          vSinal := (vCC[1] > vCO[1]) and (vCC[1] > vCH[2]);
-          if vToque and (not vFora) and vSinal then
-          begin
-            vLo := vCL[1];
-            for vK := 1 to vJ - 1 do
-              if vCL[vK] < vLo then vLo := vCL[vK];
-            vCGat := -Floor(-((vCH[1] + Tick) / Tick - 0.0000001)) * Tick;
-            vCStp := Floor((vLo - Tick) / Tick + 0.0000001) * Tick;
-            vX := vCGat - vCStp;
-            if (vX > 0) and (vX >= 0.3 * vA) and (vX <= 2.5 * vA) then
+          vX := vM1;
+          vM1 := vM2b;
+          vM2b := vX;
+        end;
+        vX := vCVW[1] - vCVW[7];
+        if vX < 0 then vX := -vX;
+        if (vLo <= vM2b) and (vHi >= vM1) and (vX <= 0.3 * vA) then
+        begin
+          vPH := vCH[vNb + 1];
+          vPL := vCL[vNb + 1];
+          vSeguir2 := true;
+          for vK := vNb + 1 to vNb + 220 do
+            if vSeguir2 then
             begin
-              vCOk := true;
-              vCTipo := 0;
-              vCVal := 2;
+              if Date[vK] = Date[vNb + 1] then
+              begin
+                if vCH[vK] > vPH then vPH := vCH[vK];
+                if vCL[vK] < vPL then vPL := vCL[vK];
+              end
+              else vSeguir2 := false;
+            end;
+          if (vCC[1] >= vPL) and (vCC[1] <= vPH) then
+          begin
+            vMe := vCE20[1];
+            vBd := vMe - 2.0 * vA;
+            vBf := vMe - 2.5 * vA;
+            vIfr := vCR9[1];
+            if vCR9[2] < vIfr then vIfr := vCR9[2];
+            if (vCL[1] <= vBd) and (vCC[1] > vBd) and (vIfr <= 35) then
+            begin
+              vX := vCL[1];
+              if vBf < vX then vX := vBf;
+              vCStp := Floor((vX - 0.25 * vA - Tick) / Tick + 0.0000001) * Tick;
+              vRisco2 := vCC[1] - vCStp;
+              vPremio := vMe - vCC[1];
+              if (vRisco2 > 0) and (vRisco2 <= 2.5 * vA) and (vPremio >= 0.6 * vRisco2) then
+              begin
+                vCGat := vCC[1];
+                vCA1 := vMe;
+                vCA2 := vMe;
+                vCOk := true;
+                vCTipo := 1;
+                vCVal := 1;
+              end;
             end;
           end;
         end;
       end;
       // --- venda (mesma regra no grafico invertido)
       vVOk := false;
-      if (vVM9[1] > vVM20[1]) and (vVM20[1] > vVM200[1]) and (vVM9[1] > vVM9[4]) and (vVM20[1] - vVM20[6] >= 0.3 * vA) then
+      if (Intraday = 1) and (vNb >= 7) then
       begin
-        vJ := 1 + 6;
-        for vK := 0 to 5 do
+        vHi := vVH[1];
+        vLo := vVL[1];
+        for vK := 1 to vNb do
         begin
-          vM := 7 - vK;
-          if vVH[vM] >= vVH[vJ] then vJ := vM;
+          if vVH[vK] > vHi then vHi := vVH[vK];
+          if vVL[vK] < vLo then vLo := vVL[vK];
         end;
-        vNpb := vJ - 2;
-        if (vNpb >= 1) and (vNpb <= 3) then
+        vM1 := vVE200[1];
+        vM2b := vVE500[1];
+        if vM2b < vM1 then
         begin
-          vToque := false;
-          vFora := false;
-          for vK := 1 to vJ - 1 do
-          begin
-            if vVL[vK] <= vVM9[vK] + 0.1 * vA then vToque := true;
-            if vVC[vK] < vVM20[vK] then vFora := true;
-          end;
-          vSinal := (vVC[1] > vVO[1]) and (vVC[1] > vVH[2]);
-          if vToque and (not vFora) and vSinal then
-          begin
-            vLo := vVL[1];
-            for vK := 1 to vJ - 1 do
-              if vVL[vK] < vLo then vLo := vVL[vK];
-            vVGat := -Floor(-((vVH[1] + Tick) / Tick - 0.0000001)) * Tick;
-            vVStp := Floor((vLo - Tick) / Tick + 0.0000001) * Tick;
-            vX := vVGat - vVStp;
-            if (vX > 0) and (vX >= 0.3 * vA) and (vX <= 2.5 * vA) then
+          vX := vM1;
+          vM1 := vM2b;
+          vM2b := vX;
+        end;
+        vX := vVVW[1] - vVVW[7];
+        if vX < 0 then vX := -vX;
+        if (vLo <= vM2b) and (vHi >= vM1) and (vX <= 0.3 * vA) then
+        begin
+          vPH := vVH[vNb + 1];
+          vPL := vVL[vNb + 1];
+          vSeguir2 := true;
+          for vK := vNb + 1 to vNb + 220 do
+            if vSeguir2 then
             begin
-              vVOk := true;
-              vVTipo := 0;
-              vVVal := 2;
+              if Date[vK] = Date[vNb + 1] then
+              begin
+                if vVH[vK] > vPH then vPH := vVH[vK];
+                if vVL[vK] < vPL then vPL := vVL[vK];
+              end
+              else vSeguir2 := false;
+            end;
+          if (vVC[1] >= vPL) and (vVC[1] <= vPH) then
+          begin
+            vMe := vVE20[1];
+            vBd := vMe - 2.0 * vA;
+            vBf := vMe - 2.5 * vA;
+            vIfr := vVR9[1];
+            if vVR9[2] < vIfr then vIfr := vVR9[2];
+            if (vVL[1] <= vBd) and (vVC[1] > vBd) and (vIfr <= 35) then
+            begin
+              vX := vVL[1];
+              if vBf < vX then vX := vBf;
+              vVStp := Floor((vX - 0.25 * vA - Tick) / Tick + 0.0000001) * Tick;
+              vRisco2 := vVC[1] - vVStp;
+              vPremio := vMe - vVC[1];
+              if (vRisco2 > 0) and (vRisco2 <= 2.5 * vA) and (vPremio >= 0.6 * vRisco2) then
+              begin
+                vVGat := vVC[1];
+                vVA1 := vMe;
+                vVA2 := vMe;
+                vVOk := true;
+                vVTipo := 1;
+                vVVal := 1;
+              end;
             end;
           end;
         end;
@@ -454,7 +513,9 @@ begin
         vTipo := vCTipo;
         vVal := vCVal;
         vBarSinal := vB;
-        PlotText("COMPRA E5 COMBINACAO+GIFT", clAqua, 0, 9);
+        vA1 := vCA1;
+        vA2 := vCA2;
+        PlotText("COMPRA E10 KELTNER", clAqua, 0, 9);
         Alert(clAqua);
       end
       else if vVOk and (not vCOk) then
@@ -466,7 +527,9 @@ begin
         vTipo := vVTipo;
         vVal := vVVal;
         vBarSinal := vB;
-        PlotText("VENDA E5 COMBINACAO+GIFT", clFuchsia, 1, 9);
+        vA1 := -vVA1;
+        vA2 := -vVA2;
+        PlotText("VENDA E10 KELTNER", clFuchsia, 1, 9);
         Alert(clFuchsia);
       end;
     end;
@@ -477,8 +540,7 @@ begin
   begin
     Plot(vGat);
     Plot2(vStp);
-    if AlvoR > 0 then Plot3(vGat + AlvoR * (vGat - vStp))
-    else NoPlot(3);
+    Plot3(vA2);
   end
   else if vEst = 2 then
   begin

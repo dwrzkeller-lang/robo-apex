@@ -10,10 +10,14 @@ Configuracao (dados/site.json, editada pelo administrador na tela):
   hottok               codigo de seguranca que a Hotmart manda no cabecalho X-HOTMART-HOTTOK de cada aviso (postback)
   preco                preco mostrado (so texto)
   dias_extra           dias de folga depois do vencimento antes de bloquear (atraso de cobranca)
+  produto_id           (opcional) codigo do produto na Hotmart: aviso de outro produto fica so no registro
 
-Avisos da Hotmart (webhook 2.0): PURCHASE_APPROVED / PURCHASE_COMPLETE liberam 31 dias (+ folga); PURCHASE_CANCELED,
-PURCHASE_REFUNDED, PURCHASE_CHARGEBACK, PURCHASE_PROTEST e SUBSCRIPTION_CANCELLATION tiram o acesso; os outros so ficam
-no registro. Compra feita antes do cadastro fica guardada pelo e-mail e e aplicada quando a pessoa se cadastra."""
+Avisos da Hotmart (webhook 2.0): PURCHASE_APPROVED / PURCHASE_COMPLETE de uma transacao NOVA liberam 31 dias (+ folga);
+o mesmo aviso repetido (ou o COMPLETE que chega semanas depois) nao estende de novo, e nunca reativa uma transacao ja
+cancelada. SUBSCRIPTION_CANCELLATION e PURCHASE_CANCELED encerram a assinatura, mas o acesso ja pago vale ate o fim
+(`ate`); PURCHASE_REFUNDED, PURCHASE_CHARGEBACK e PURCHASE_PROTEST tiram o acesso na hora; os outros so ficam no
+registro. A conta e achada pelo e-mail de entrada ou pelo e-mail da compra (guardado na conta no primeiro aviso). Compra
+feita antes do cadastro fica guardada pelo e-mail e e aplicada quando a pessoa se cadastra."""
 import hashlib
 import hmac
 import json
@@ -56,10 +60,28 @@ O uso é permitido apenas para maiores de 18 anos.
 Ao criar a conta você declara que leu, entendeu e aceita estes termos e o aviso de risco."""
 
 PADRAO = dict(publico=False, cadastro_aberto=False, exigir_assinatura=False, checkout_url="", hottok="", preco="R$ 49,99/mês",
-              dias_extra=3, nome_produto="Robô Apex")
+              dias_extra=3, nome_produto="Robô Apex", produto_id="")
 LIBERA = ("PURCHASE_APPROVED", "PURCHASE_COMPLETE")
 BLOQUEIA = ("PURCHASE_CANCELED", "PURCHASE_REFUNDED", "PURCHASE_CHARGEBACK", "PURCHASE_PROTEST", "SUBSCRIPTION_CANCELLATION")
+ENCERRA = ("PURCHASE_CANCELED", "SUBSCRIPTION_CANCELLATION")     # parou de pagar: vale ate o fim do periodo ja pago
 DIAS = 31
+
+
+def _decidir(ev, atual, transacao, agora):
+    """(status, ate, encerradas) para a assinatura depois deste aviso, ou None se o aviso nao muda nada.
+    atual = assinatura que a conta (ou a compra guardada) ja tem."""
+    st, ate0, tr0 = atual.get("status"), float(atual.get("ate") or 0), atual.get("transacao") or ""
+    encerradas = [str(x) for x in (atual.get("encerradas") or [])][-20:]
+    if ev in LIBERA:
+        if transacao and (transacao == tr0 or transacao in encerradas):
+            return None                                        # aviso repetido ou atrasado da mesma compra: nao estende de novo
+        return "ativa", max(agora, ate0 if st == "ativa" else 0.0) + DIAS * 86400, encerradas
+    if ev in BLOQUEIA:
+        fim = [x for x in (transacao, tr0) if x and x not in encerradas]
+        if ev in ENCERRA:
+            return "cancelada", (ate0 if st in ("ativa", "cancelada") else agora), encerradas + fim
+        return "inativa", agora, encerradas + fim
+    return None
 
 
 class Site:
@@ -77,10 +99,11 @@ class Site:
                 self.cfg.update({k: v[k] for k in PADRAO if k in v})
         except (OSError, ValueError):
             pass
-        self.pendentes = {}                                     # e-mail -> (status, ate): compra feita antes do cadastro
+        self.pendentes = {}                                     # e-mail -> assinatura: compra feita antes do cadastro
         for c in self.compras(5000):
-            if c.get("email") and c.get("aplicada") is False:
-                self.pendentes[c["email"]] = (c.get("status"), c.get("ate"))
+            if c.get("email") and c.get("aplicada") is False and c.get("status"):
+                self.pendentes[c["email"]] = dict(status=c.get("status"), ate=c.get("ate"), transacao=c.get("transacao") or "",
+                                                  encerradas=c.get("encerradas") or [])
 
     # ------------------------------------------------------------------------------------------ configuracao
     def publico_cfg(self):
@@ -111,6 +134,8 @@ class Site:
                     self.cfg[k] = str(novo[k] or "").strip()[:60]
             if "dias_extra" in novo:
                 self.cfg["dias_extra"] = max(0, min(30, int(novo["dias_extra"] or 0)))
+            if "produto_id" in novo:
+                self.cfg["produto_id"] = str(novo["produto_id"] or "").strip()[:40]
             tmp = self.arq_cfg + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(self.cfg, f, ensure_ascii=False, indent=1)
@@ -130,6 +155,8 @@ class Site:
         if not self.cfg["exigir_assinatura"] or (u or {}).get("papel") == "admin":
             return True
         a = (u or {}).get("assinatura") or {}
+        if a.get("status") == "cancelada":                      # cancelou: usa ate o fim do que ja pagou (sem folga)
+            return float(a.get("ate") or 0) > time.time()
         return a.get("status") == "ativa" and float(a.get("ate") or 0) + 86400 * self.cfg["dias_extra"] > time.time()
 
     def hotmart(self, cabecalhos, corpo, acessos):
@@ -137,34 +164,56 @@ class Site:
         tok = cabecalhos.get("X-HOTMART-HOTTOK") or cabecalhos.get("X-Hotmart-Hottok") or ""
         if not self.cfg["hottok"] or not hmac.compare_digest(tok.encode(), self.cfg["hottok"].encode()):
             raise PermissionError("hottok inválido")
+        if not isinstance(corpo, dict):
+            raise ValueError("aviso inválido")
+        _d = lambda v: v if isinstance(v, dict) else {}       # noqa: E731
         ev = str(corpo.get("event") or "").upper()
-        d = corpo.get("data") or {}
-        comprador = d.get("buyer") or {}
-        email = str(comprador.get("email") or "").strip().lower()
+        d = _d(corpo.get("data"))
+        comprador = _d(d.get("buyer"))
+        email = str(comprador.get("email") or "").strip().lower()[:200]
         nome = str(comprador.get("name") or "").strip()[:60]
-        compra = d.get("purchase") or {}
+        compra = _d(d.get("purchase"))
+        preco = _d(compra.get("price"))
         transacao = str(compra.get("transaction") or "")[:60]
+        produto = str(_d(d.get("product")).get("id") or "")[:40]
         agora = time.time()
-        status, ate = None, None
-        if ev in LIBERA:
-            status, ate = "ativa", agora + DIAS * 86400
-        elif ev in BLOQUEIA:
-            status, ate = "inativa", agora
-        aplicada = None
-        if status and email:
-            aplicada = acessos.definir_assinatura(email, status, ate, "hotmart", transacao)
-            if not aplicada:
-                self.pendentes[email] = (status, ate)
-        reg = dict(quando=agora, evento=ev, email=email, nome=nome, transacao=transacao, valor=(compra.get("price") or {}).get("value"),
-                   moeda=(compra.get("price") or {}).get("currency_value") or (compra.get("price") or {}).get("currency_code"),
-                   status=status, ate=ate, aplicada=aplicada if status else None)
+        status, ate, aplicada, encerradas = None, None, None, []
+        outro = bool(self.cfg.get("produto_id")) and produto != str(self.cfg["produto_id"])
+        if email and not outro and (ev in LIBERA or ev in BLOQUEIA):
+            with self.trava:                                    # um aviso por vez: dois avisos juntos nao se atropelam
+                atual = acessos.assinatura_de(email)
+                tem_conta = atual is not None
+                if not tem_conta:
+                    atual = dict(self.pendentes.get(email) or {})
+                dec = _decidir(ev, atual, transacao, agora)
+                if dec:
+                    status, ate, encerradas = dec
+                    tr = transacao or atual.get("transacao") or ""
+                    aplicada = tem_conta and acessos.definir_assinatura(email, status, ate, "hotmart", tr, compra=True,
+                                                                         encerradas=encerradas)
+                    if not aplicada:
+                        self.pendentes[email] = dict(status=status, ate=ate, transacao=tr, encerradas=encerradas)
+        reg = dict(quando=agora, evento=ev, email=email, nome=nome, transacao=transacao, valor=preco.get("value"),
+                   moeda=preco.get("currency_value") or preco.get("currency_code"), produto=produto,
+                   status=status, ate=ate, aplicada=aplicada if status else None, encerradas=encerradas if status else None,
+                   ignorado="outro produto" if outro else None)
         with self.trava:
             with open(self.arq_compras, "a", encoding="utf-8") as f:
                 f.write(json.dumps(reg, ensure_ascii=False) + "\n")
         return reg
 
     def pendente(self, email):
-        return self.pendentes.pop((email or "").strip().lower(), None)
+        """Compra guardada para este e-mail (sem tirar da lista: so sai depois que o cadastro deu certo)."""
+        e = (email if isinstance(email, str) else "").strip().lower()
+        with self.trava:
+            p = self.pendentes.get(e)
+            return dict(p) if p else None
+
+    def pendente_usada(self, email):
+        """O cadastro deu certo: a compra guardada ja esta na conta."""
+        e = (email if isinstance(email, str) else "").strip().lower()
+        with self.trava:
+            self.pendentes.pop(e, None)
 
     def compras(self, n=200):
         try:

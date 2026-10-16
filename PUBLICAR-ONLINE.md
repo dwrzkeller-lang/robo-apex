@@ -29,7 +29,7 @@ After=network-online.target
 [Service]
 User=apex
 WorkingDirectory=/home/apex/robo-apex
-ExecStart=/usr/bin/python3 app/robo_apex.py --publico --dominio roboapex.com.br --sem-janela --porta 8765 --base /home/apex/dados
+ExecStart=/usr/bin/python3 app/robo_apex.py --publico --proxy --dominio roboapex.com.br --sem-janela --porta 8765 --base /home/apex/dados
 Restart=always
 
 [Install]
@@ -48,8 +48,20 @@ roboapex.com.br, www.roboapex.com.br {
 sudo systemctl daemon-reload && sudo systemctl enable --now roboapex && sudo systemctl restart caddy
 ```
 
-Abra `https://roboapex.com.br/app`: na primeira vez o robô pede para criar a senha do administrador
-(`admin@roboapex.local`). Faça isso na mesma hora.
+`--proxy` diz ao robô que o Caddy está na frente (é dele que vem o IP de cada visitante, usado no limite de tentativas
+e no registro). Sem proxy na frente, não use `--proxy`.
+
+Abra `https://roboapex.com.br/app`: na primeira vez o robô pede para criar a senha do administrador. Online, essa tela
+pede também o **código do primeiro acesso**, para ninguém da internet virar administrador antes de você. O código aparece
+no registro do serviço e fica no arquivo `codigo_primeiro_acesso.txt` da pasta de dados (com o e-mail do administrador):
+
+```bash
+sudo journalctl -u roboapex | grep "PRIMEIRO ACESSO"
+sudo cat /home/apex/dados/codigo_primeiro_acesso.txt
+```
+
+Faça isso na mesma hora. O código vale uma vez e muda a cada vez que o robô abre; o arquivo some depois do primeiro
+acesso. A sessão do administrador principal vale 15 minutos depois de entrar (depois disso a tela pede a senha de novo).
 
 ## Ligar a venda
 
@@ -63,8 +75,13 @@ Abra `https://roboapex.com.br/app`: na primeira vez o robô pede para criar a se
 3. Na Hotmart, página de obrigado (pós-compra): `https://roboapex.com.br/entrar?cadastro=1`.
 
 Quem compra antes de se cadastrar fica guardado pelo e-mail: quando a pessoa cria a conta com o mesmo e-mail, a
-assinatura já entra ativa. Reembolso, chargeback e cancelamento tiram o acesso. Você também libera ou tira o acesso na
-mão, na lista de usuários.
+assinatura já entra ativa. O e-mail da compra fica guardado na conta: renovações e cancelamentos continuam valendo mesmo
+se a pessoa trocar o e-mail de entrada. Reembolso, chargeback e protesto tiram o acesso na hora; cancelamento da
+assinatura mantém o acesso até o fim do mês já pago. Aviso repetido ou atrasado da mesma compra não estende o prazo.
+Você também libera ou tira o acesso na mão, na lista de usuários.
+
+Opcional: se você vender outros produtos na mesma conta da Hotmart, ponha o código do produto em `produto_id` no arquivo
+`site.json` da pasta de dados (com o robô fechado): avisos de outros produtos ficam só no registro.
 
 ## O que o administrador vê
 

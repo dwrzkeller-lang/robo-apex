@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Robô Apex · Início</title>
+<link rel="icon" type="image/png" href="icone-64.png">
+<style>
+:root { --bg: #0b0e14; --bg2: #11151f; --bg3: #161b26; --linha: #232a38; --linha2: #2e3747; --txt: #e6e9ef; --txt2: #9aa3b5;
+  --verde: #089981; --verde2: #22c39b; --azul: #2962ff; --azul2: #4f7dff; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--txt); font: 16px/1.5 Inter, "Segoe UI", system-ui, sans-serif; min-height: 100vh; }
+a { color: inherit; }
+img { max-width: 100%; height: auto; display: block; }
+.env { width: min(1120px, calc(100% - 32px)); margin: 0 auto; }
+header { border-bottom: 1px solid var(--linha); }
+header .env { display: flex; align-items: center; justify-content: space-between; height: 60px; gap: 12px; }
+.marca { display: flex; align-items: center; gap: 9px; font-weight: 800; letter-spacing: .08em; text-decoration: none; font-size: 15px; }
+.marca img { width: 28px; height: 28px; border-radius: 6px; }
+.quem { display: flex; align-items: center; gap: 12px; font-size: 14px; color: var(--txt2); }
+.bt { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 18px; border-radius: 6px; font-weight: 700;
+  text-decoration: none; border: 1px solid transparent; cursor: pointer; font: 700 15px Inter, "Segoe UI", sans-serif; }
+.bt-pri { background: var(--azul); color: #fff; }
+.bt-pri:hover { background: var(--azul2); }
+.bt-verde { background: var(--verde); color: #fff; }
+.bt-sec { background: transparent; color: var(--txt); border-color: var(--linha2); }
+.bt-peq { padding: 7px 12px; font-size: 13.5px; }
+h1 { font-size: clamp(26px, 3.2vw, 38px); margin: 36px 0 6px; letter-spacing: -.02em; }
+.sub { color: var(--txt2); margin: 0 0 28px; }
+.robo { position: relative; display: grid; grid-template-columns: 1.4fr 1fr; gap: 0; border: 1px solid var(--linha2); border-radius: 10px; overflow: hidden; background: var(--bg2);
+  transition: border-color .25s, transform .25s, box-shadow .25s; }
+.robo .img { position: relative; background: #000; aspect-ratio: 16 / 9; overflow: hidden; }
+.robo .img img { width: 100%; height: 100%; object-fit: cover; object-position: left top; transition: transform .6s cubic-bezier(.2,.7,.2,1); }
+.robo .txt { padding: 26px; display: flex; flex-direction: column; justify-content: center; gap: 12px; }
+.robo h2 { margin: 0; font-size: 24px; }
+.robo p { margin: 0; color: var(--txt2); font-size: 14.5px; }
+.robo .bts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+@media (max-width: 820px) { .robo { grid-template-columns: 1fr; } }
+h3.sec { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--azul2); margin: 40px 0 16px; }
+.livros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; padding-bottom: 50px; align-items: stretch; }
+.livro { position: relative; background: var(--bg2); border: 1px solid var(--linha); border-radius: 10px; padding: 20px; display: grid; grid-template-columns: 116px 1fr; gap: 18px;
+  align-items: stretch; transition: border-color .25s, transform .25s, box-shadow .25s; }
+.livro > div:last-child { display: flex; flex-direction: column; min-height: 100%; }
+.livro .bts { margin-top: auto; }
+.capa { position: relative; width: 116px; align-self: start; transition: transform .35s cubic-bezier(.2,.7,.2,1), box-shadow .35s; aspect-ratio: 210 / 297; border-radius: 3px 7px 7px 3px; overflow: hidden; box-shadow: 0 12px 26px rgba(0, 0, 0, .5); border-left: 4px solid rgba(255, 255, 255, .14);
+  background: linear-gradient(160deg, #1b2440, #0d1222); display: flex; flex-direction: column; justify-content: flex-end; padding: 10px; }
+.capa img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.capa img + b { display: none; }
+.capa b { font-size: 11px; letter-spacing: .08em; }
+.livro small { color: var(--azul2); font-weight: 800; letter-spacing: .1em; font-size: 12px; }
+.livro h4 { margin: 4px 0 6px; font-size: 17px; }
+.livro p { margin: 0 0 12px; color: var(--txt2); font-size: 13.5px; }
+.livro .bts { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 900px) { .livros { grid-template-columns: 1fr; } }
+.leitor { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, .85); display: grid; grid-template-rows: auto 1fr; }
+.leitor[hidden] { display: none; }
+.leitor .barra { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 16px; background: var(--bg2); border-bottom: 1px solid var(--linha); }
+.leitor iframe { width: 100%; height: 100%; border: 0; background: #2a2f3a; }
+.aviso { border: 1px solid var(--linha2); border-radius: 8px; padding: 16px; margin: 0 0 28px; color: #c4cada; }
+.aviso[hidden] { display: none; }
+
+/* movimento: entrada suave e reacao ao mouse (so com mouse de verdade; desligado para quem pede menos movimento) */
+.anima { opacity: 0; transform: translateY(14px); animation: entra .55s cubic-bezier(.2,.7,.2,1) forwards; }
+@keyframes entra { to { opacity: 1; transform: none; } }
+.robo::before, .robo::after, .livro::before, .livro::after { content: ""; position: absolute; width: 16px; height: 16px; border: 2px solid var(--azul2);
+  opacity: 0; transition: opacity .25s, transform .25s; pointer-events: none; z-index: 2; }
+.robo::before, .livro::before { top: 8px; left: 8px; border-right: 0; border-bottom: 0; transform: translate(4px, 4px); }
+.robo::after, .livro::after { bottom: 8px; right: 8px; border-left: 0; border-top: 0; transform: translate(-4px, -4px); }
+.bt { position: relative; overflow: hidden; transition: transform .15s, background .2s, border-color .2s; }
+.bt::after { content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 40%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.22), transparent);
+  transform: skewX(-20deg); pointer-events: none; }
+.bt:active { transform: scale(.97); }
+.varre { position: absolute; left: 0; right: 0; height: 2px; top: 0; background: rgba(34,195,155,.6); opacity: 0; pointer-events: none; z-index: 1; }
+@media (hover: hover) and (pointer: fine) {
+  .robo:hover, .livro:hover { border-color: var(--azul); transform: translateY(-3px); box-shadow: 0 16px 40px rgba(0,0,0,.45); }
+  .robo:hover::before, .robo:hover::after, .livro:hover::before, .livro:hover::after { opacity: 1; transform: none; }
+  .robo:hover .img img { transform: scale(1.03); }
+  .robo:hover .varre { animation: varrer 1.4s linear infinite; }
+  .livro:hover .capa { transform: perspective(600px) rotateY(-12deg) translateY(-3px); box-shadow: 12px 18px 30px rgba(0,0,0,.6); }
+  .bt:hover::after { animation: brilho .7s ease; }
+  .bt-sec:hover { border-color: var(--azul2); }
+}
+@keyframes varrer { 0% { top: 0; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
+@keyframes brilho { to { left: 130%; } }
+@media (prefers-reduced-motion: reduce) { .anima { animation: none; opacity: 1; transform: none; } *, *::before, *::after { transition: none !important; animation: none !important; } }
+footer { color: var(--txt2); font-size: 12.5px; border-top: 1px solid var(--linha); padding: 18px 0 30px; }
+</style>
+</head>
+<body>
+<header><div class="env">
+  <a class="marca" href="/"><img src="icone-64.png" alt="">ROBÔ APEX</a>
+  <div class="quem"><span id="nome"></span><button class="bt bt-sec bt-peq" id="sair">Sair</button></div>
+</div></header>
+<main class="env">
+  <h1 id="ola">Olá!</h1>
+  <p class="sub">Escolha por onde começar. Tudo isso está incluso na sua assinatura.</p>
+  <div class="aviso" id="semAssinatura" hidden>A sua assinatura não está ativa. <a href="/assinar.html">Ver a assinatura</a> para liberar o robô e os volumes.</div>
+  <section class="robo anima">
+    <div class="img"><span class="varre"></span><img src="site/img/m_wdo.webp" alt="Tela do Robô Apex"></div>
+    <div class="txt">
+      <h2>Robô ao vivo</h2>
+      <p>O robô completo no navegador: gráfico, as 46 estratégias, testes, replay, boleta simulada e o piloto no MetaTrader. Os seus desenhos, edições e ajustes ficam salvos na sua conta.</p>
+      <div class="bts"><a class="bt bt-verde" href="/app" id="abrirRobo">Abrir o robô</a><a class="bt bt-sec" href="/baixar" id="baixar" hidden>Baixar para Windows</a></div>
+    </div>
+  </section>
+  <h3 class="sec">Treinamento · 3 volumes</h3>
+  <div class="livros" id="livros"></div>
+</main>
+<footer><div class="env">Ferramenta de estudo e análise. Não é recomendação de investimento. Resultado passado não garante resultado futuro.</div></footer>
+<div class="leitor" id="leitor" hidden><div class="barra"><b id="leitorTit"></b><span><a class="bt bt-sec bt-peq" id="leitorBaixar" download>Baixar PDF</a> <button class="bt bt-pri bt-peq" id="leitorFechar">Fechar</button></span></div><iframe id="leitorPdf" title="Volume do treinamento"></iframe></div>
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const VOL = [
+    [1, "Conhecendo o robô", "Cada tela, cada botão e cada número, explicado para quem nunca usou."],
+    [2, "Backtest, replay e gestão", "Ativar estratégias, regular o replay, editar trades para ensinar o robô e escolher a gestão."],
+    [3, "As estratégias por dentro", "Como cada família de estratégia entra e sai, e as funções avançadas."],
+  ];
+  $("livros").innerHTML = VOL.map(([n, t, d]) => `<div class="livro anima" style="animation-delay:${120 + n * 90}ms">
+      <div class="capa"><img src="site/curso/capa${n}.webp" alt="" onerror="this.remove()"><b>VOLUME ${n}</b></div>
+      <div><small>VOLUME ${n}</small><h4>${esc(t)}</h4><p>${esc(d)}</p>
+        <div class="bts"><button class="bt bt-pri bt-peq" data-ler="${n}">Ler agora</button><a class="bt bt-sec bt-peq" href="/curso/volume${n}.pdf" download>Baixar PDF</a></div></div></div>`).join("");
+  const L = $("leitor"), pdf = $("leitorPdf");
+  $("livros").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-ler]"); if (!b) return;
+    const n = b.dataset.ler, arq = `/curso/volume${n}.pdf`;
+    if (innerWidth < 700) { location.href = arq; return; }          // no celular abre no leitor do aparelho
+    pdf.src = arq; $("leitorBaixar").href = arq; $("leitorTit").textContent = `Volume ${n} · ${VOL[n - 1][1]}`;
+    L.hidden = false; document.body.style.overflow = "hidden";
+  });
+  const fechar = () => { L.hidden = true; pdf.src = "about:blank"; document.body.style.overflow = ""; };
+  $("leitorFechar").onclick = fechar;
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !L.hidden) fechar(); });
+  $("sair").onclick = async () => {
+    try { await fetch("/api/acesso/sair", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}", credentials: "same-origin" }); } catch (e) { /* segue */ }
+    location.replace("/");
+  };
+  fetch("/api/site/minha", { credentials: "same-origin" }).then((r) => (r.status === 401 ? location.replace("/entrar") : r.json())).then((j) => {
+    if (!j || !j.usuario) return;
+    const u = j.usuario, primeiro = (u.nome || u.email || "").split(/[ @]/)[0];
+    $("ola").textContent = primeiro ? `Olá, ${primeiro}!` : "Olá!";
+    $("nome").textContent = u.email || "";
+    if (!j.ativa) { $("semAssinatura").hidden = false; }
+    if (j.baixar) $("baixar").hidden = false;
+  }).catch(() => {});
+})();
+</script>
+</body>
+</html>

@@ -86,7 +86,7 @@
   function irParaRobo() {
     limpar();
     try { sessionStorage.setItem(MARCA, String(Date.now())); } catch (e) { /* sem armazenamento: segue sem a trava */ }
-    location.replace("/");
+    location.replace("/inicio");                              // menu: os 3 volumes ou o robô ao vivo
   }
   function acabouDeIr() {
     try {
@@ -120,6 +120,9 @@
     if (!est.primeiroAcesso && /[?&]cadastro=1/.test(location.search) && site.cadastroAberto) return abrirCadastro();
     if (!est.primeiroAcesso) return mostrar("entrar", msg);
     $("enAdmEmail").value = est.adminEmail || "";
+    $("enAdmEmailCampo").classList.toggle("oculto", !est.adminEmail);        // online o e-mail não aparece aqui (está no arquivo do código)
+    $("enPriCodigoCampo").classList.toggle("oculto", !est.pedeCodigo);
+    $("enPriCodigoNota").classList.toggle("oculto", !est.pedeCodigo);
     mostrar("primeiro", msg);
   }
 
@@ -158,8 +161,10 @@
     ev.preventDefault();
     const f = ev.currentTarget, falta = conferir(f);
     if (falta) return erro(f, falta);
+    const pedeCodigo = !$("enPriCodigoCampo").classList.contains("oculto"), codigo = f.elements.codigo.value.trim();
+    if (pedeCodigo && !codigo) return erro(f, "Digite o código do primeiro acesso (aparece na janela do servidor).");
     enviar(f, async () => {
-      try { await pedir("/api/acesso/primeiro", { senha: f.elements.nova.value }); }
+      try { await pedir("/api/acesso/primeiro", { senha: f.elements.nova.value, codigo }); }
       catch (e) {
         // Se alguém criou a senha do administrador enquanto esta tela estava aberta, o primeiro acesso acabou:
         // daqui em diante vale a tela de entrar (com a mensagem do servidor).

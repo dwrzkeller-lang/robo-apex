@@ -7,9 +7,8 @@ vivo** com aviso no celular; tem uma **boleta simulada** para comprar e vender n
 quiser, se liga à **conta dele no MetaTrader 5** para enviar as ordens, sempre por decisão dele. É uma ferramenta de
 **estudo e análise**: não é recomendação de investimento e não garante resultado.
 
-Núcleo: setups do **Mario Pisani** com os ideais do **Oliver Velez**, o modelo **OGRO** (pivô + Fibonacci, no estilo
-de André Machado), a leitura de **fundos ascendentes com projeção de Fibonacci**, os clássicos **Supertrend, Squeeze,
-Tartarugas, NR7 e Turtle Soup**, o **Keltner em dia lateral do Adriano Mendes (XTraders)** e estratégias tiradas de
+Núcleo: **price action** (pivôs, médias 9/20/200, VWAP, viradas em V), **pivô + Fibonacci com médias alinhadas**, a leitura de **fundos ascendentes com projeção de Fibonacci**, os clássicos **Supertrend, Squeeze,
+Tartarugas, NR7 e Turtle Soup**, o **Keltner em dia lateral** e estratégias tiradas de
 estudos (RSI-2 de Connors, ORB de Zarattini & Aziz, fechamento de gap e o momentum da "faixa de ruído").
 
 ![Robô Apex em ação](prints/00_ROBO_APEX_em_acao.gif)
@@ -18,18 +17,17 @@ estudos (RSI-2 de Connors, ORB de Zarattini & Aziz, fechamento de gap e o moment
 
 ## Novidades da versão 3.4
 
-- **21 setups da apostila do Mario Pisani, um por um (E26 a E46), para backtest:** pivô clássico com as regras da
-  planilha dele, clássico metade, clássico afastado, trick entry, FAB4, range da abertura, volta em V (a favor, contra
-  e nas Bandas de Bollinger), 1-2-3 do Mark Crisp, 3x3 do DiNapoli, divergência no MACD, range com cor invertida, zona
-  de armadilha, power-breakout (e com pullback), breakout da tarde com 4 alternâncias, mergulhada dupla, MM200
-  pós-rompimento, afastamento da MM200 e armadilha na MM200. Regras gerais da planilha em todos (nunca depois de 3
-  barras da mesma cor, impulso de 3 a 5 barras, correção até 50%, MM20 virada, MM200 fora do caminho). Gestão padrão =
-  o manejo parcial da apostila. Conferido que nenhum olha o futuro (1.281 sinais, 0 diferenças). **Resultado com
-  custos: todos negativos** (de −0,12R a −0,65R por operação); o 1º alvo 1:1 sai em 23% a 46%, contra 69% a 84% no
-  diário manual dele (que usa alvo parcial menor e escolhe as entradas). Servem para estudar e testar, não para ligar
-  no automático.
-- **Pivô da abertura (E24) e pivô clássico perto (E25):** dos vídeos de pivô do Pisani, com alvos na projeção de
-  Fibonacci em cima do topo. Com custos: −0,21R e −0,18R.
+- **21 setups novos de pivô, virada em V e rompimento (E26 a E46), um por um, para backtest:** pivô de 3 a 5 barras,
+  pivô na metade e na volta ao topo da abertura, pivô antecipado, abertura acima das 4 referências, range da abertura,
+  virada em V (a favor, contra e nas Bandas de Bollinger), 1-2-3, média 3x3 deslocada, divergência no MACD, range com
+  barra contrária, preço entre as médias 20 e 200, lateral apoiada na MM20 (e com pullback), rompimento da tarde,
+  fundo duplo, pullback depois da MM200, longe da MM200 e pausa de 1 barra na MM200. Regras gerais em todos (nunca
+  depois de 3 barras da mesma cor, impulso de 3 a 5 barras, correção até 50%, MM20 virada, MM200 fora do caminho).
+  Gestão padrão = manejo parcial. Conferido que nenhum olha o futuro (1.281 sinais, 0 diferenças). **Resultado com
+  custos: todos negativos no teste grande** (de −0,12R a −0,65R por operação); o 1º alvo 1:1 sai em 23% a 46%.
+  Servem para estudar e testar, não para ligar no automático.
+- **Pivô da abertura (E24) e pivô curto perto do topo (E25):** com alvos na projeção de Fibonacci em cima do topo.
+  Com custos: −0,21R e −0,18R.
 - **Editar (antigo "E se…") que ensina o robô:** ao salvar uma edição, o robô junta as suas edições da estratégia,
   calcula o ajuste típico (ex.: sair em 3:1 em vez de 4:1) e testa em todas as operações do período e nas duas
   metades. Só muda a estratégia se melhorar o conjunto; dá para desligar.
@@ -507,21 +505,21 @@ exporte o gráfico do Profit em CSV: nenhuma fonte gratuita entrega o mini-índi
 
 | | Estratégia | Autor / fonte | Regras (compra; a venda é o espelho exato) | Onde se encaixa |
 |---|---|---|---|---|
-| E1 | Halt na MM20 | Pisani + Velez | MM20 inclinada, acima da MM200; correção de 1 a 8 candles (3-5-8) que encosta na MM20 sem fechar abaixo; sem barra elefante contra; candle de confirmação (1 candle só com Gift) | 5 e 15 min, ativos em tendência |
-| E2 | Gatilho de Fibonacci | Pisani | Impulso ≥ 2 ATR; correção entre 38,2% e 61,8%; candle de confirmação acima de 61,8% | 5 e 15 min; diário em ouro e prata |
-| E3 | Pullback na VWAP | Pisani + Velez | Dia de tendência (70% dos fechamentos acima da VWAP), afastou 1 ATR e voltou a testar a VWAP sem fechar abaixo | 15 min, índices e forex |
-| E4 | Rompimento de base | Velez (power breakout) | Base de 4 candles com até 1,2 ATR no topo do movimento, apoiada na MM20 | 5 min e diário |
-| E5 | Combinação perfeita + Gift na MM9 | Velez + Pisani | MM9 > MM20 > MM200 inclinadas; correção de 1 a 3 candles na MM9; candle Gift | 5 e 60 min, tendência forte |
+| E1 | Halt na MM20 | Price action | MM20 inclinada, acima da MM200; correção de 1 a 8 candles (3-5-8) que encosta na MM20 sem fechar abaixo; sem barra elefante contra; candle de confirmação (1 candle só com candle de força) | 5 e 15 min, ativos em tendência |
+| E2 | Gatilho de Fibonacci | Price action | Impulso ≥ 2 ATR; correção entre 38,2% e 61,8%; candle de confirmação acima de 61,8% | 5 e 15 min; diário em ouro e prata |
+| E3 | Pullback na VWAP | Price action | Dia de tendência (70% dos fechamentos acima da VWAP), afastou 1 ATR e voltou a testar a VWAP sem fechar abaixo | 15 min, índices e forex |
+| E4 | Rompimento de base | Power breakout | Base de 4 candles com até 1,2 ATR no topo do movimento, apoiada na MM20 | 5 min e diário |
+| E5 | Médias alinhadas + correção curta na MM9 | Price action | MM9 > MM20 > MM200 inclinadas; correção de 1 a 3 candles na MM9; candle de força | 5 e 60 min, tendência forte |
 | E6 | RSI(2) de Connors | Larry Connors (fóruns) | Acima da MM200 e RSI(2) < 10: compra na abertura; sai quando fecha acima da MM5 ou em 10 candles; stop de proteção a 3 ATR | Diário, índices |
 | E7 | Rompimento do 1º candle (ORB) | Zarattini & Aziz (2023) | 1º candle do pregão de alta: compra na abertura do 2º; stop na mínima do 1º; alvo 10R ou zeragem. **Acerta pouco (~20%) e ganha grande** | 5 min, índices na abertura |
 | E8 | Fechamento de gap | Estatística de gaps (Nasdaq 2015–2025) | Gap de 0,05% a 0,40% dentro da faixa de ontem, ainda aberto após 15 min: entra para fechar o gap; alvo no fechamento de ontem; stop largo. Só em dado com gap real (USTEC/JP225 da Dukascopy, CSV do Profit) | 5 min, índices futuros |
-| E9 | **OGRO: pivô + Fibonacci** | Estilo André Machado (Ogro de Wall Street) | MM9 > MM20 > MM200 alinhadas; pernada ≥ 2 ATR; correção até **no máximo 50%**; compra no **rompimento do pivô**, stop abaixo do fundo; alvos na projeção de Fibonacci: 100% (metade + stop no 0x0) e 161,8% | 5 e 15 min, índices, ouro e BTC em tendência |
-| E10 | **XTRADERS: Keltner lateral** | Adriano Mendes (XTraders) | Só em dia lateral: MME200 e MME500 cortando os preços do dia, VWAP plana e preço dentro do range de ontem. Compra quando o candle toca a banda de baixo (2,0 ATR) e fecha para dentro com IFR(9) abaixo de 35; stop atrás da banda de 2,5; alvo na média de 20 | 2 e 5 min, índices em dia lateral |
+| E9 | **Pivô + Fibonacci com médias alinhadas** | Pivô de rompimento + Fibonacci | MM9 > MM20 > MM200 alinhadas; pernada ≥ 2 ATR; correção até **no máximo 50%**; compra no **rompimento do pivô**, stop abaixo do fundo; alvos na projeção de Fibonacci: 100% (metade + stop no 0x0) e 161,8% | 5 e 15 min, índices, ouro e BTC em tendência |
+| E10 | **Keltner no dia lateral** | Canal de Keltner + IFR | Só em dia lateral: MME200 e MME500 cortando os preços do dia, VWAP plana e preço dentro do range de ontem. Compra quando o candle toca a banda de baixo (2,0 ATR) e fecha para dentro com IFR(9) abaixo de 35; stop atrás da banda de 2,5; alvo na média de 20 | 2 e 5 min, índices em dia lateral |
 | E11 | **Momentum do dia (faixa de ruído)** | Zarattini, Aziz & Barbon (2024) | Compra quando o candle fecha acima de max(abertura de hoje, fechamento de ontem) + a faixa de ruído **e** acima da VWAP; decide nas horas cheias e meias horas; sai quando fecha de volta abaixo do maior entre a faixa e a VWAP, ou na zeragem. Stop de proteção a 1 ATR | 60 min, WIN e Nasdaq |
 | E12 | **Fibo ABC: 3 alvos projetados** | Projeção de Fibonacci A-B-C (a ferramenta *Trend-Based Fib Extension* do TradingView) | MM9 > MM20 > MM200 e MM20 subindo; pernada A→B ≥ 2 ATR com o topo B confirmado; correção até C que busca 38,2% e **não passa de 50%**; candle de reversão colado em C: compra 1 tick acima dele; **stop 1 tick abaixo de A**; **três alvos** projetados a partir de C: 61,8%, 100% e 161,8% (um terço em cada; no alvo 1 o stop vai para a entrada, no 2 vai para o alvo 1) | 60 min, ativos em tendência |
 | E13 | **Fibo 50: ordem limitada na pernada** | Entrada na zona de retração (família *Golden Pocket* / OTE, com o nível nos 50%) | MM20 e preço acima da MM200, médias alinhadas no topo; pernada A→B ≥ 2,5 ATR; **compra limitada nos 50%** da pernada, parada esperando o preço recuar (vale até 20 candles, enquanto não houver topo novo); **stop 1 tick abaixo de A**; alvos: o topo B, 127,2% e 161,8% da pernada | 60 min, ativos de custo baixo |
-| E14 | **Fibo raso: stop curto na correção** | Gatilho de Fibonacci (Pisani) com stop curto | Médias alinhadas; correção rasa de 23,6% a 50%; candle que fecha acima da máxima anterior; stop logo abaixo do fundo da correção; alvos no topo, 127,2% e 161,8% | 60 min; no teste não superou a E2 |
-| E15 | **Pivô com stop curto** | OGRO com o stop mais perto | Mesma leitura da E9; compra no rompimento do topo; stop na mínima dos 2 últimos candles; alvos 61,8%, 100% e 161,8% a partir do fundo | 60 min e WIN; no teste não superou a E9 |
+| E14 | **Fibo raso: stop curto na correção** | Gatilho de Fibonacci (E2) com stop curto | Médias alinhadas; correção rasa de 23,6% a 50%; candle que fecha acima da máxima anterior; stop logo abaixo do fundo da correção; alvos no topo, 127,2% e 161,8% | 60 min; no teste não superou a E2 |
+| E15 | **Pivô com stop curto** | E9 com o stop mais perto | Mesma leitura da E9; compra no rompimento do topo; stop na mínima dos 2 últimos candles; alvos 61,8%, 100% e 161,8% a partir do fundo | 60 min e WIN; no teste não superou a E9 |
 | E16 | **Pivô de fundos ascendentes** | Estrutura (fundos e topos ascendentes) + projeção de Fibonacci em cima do topo | Preço e MM20 acima da MM200; fundo A mais alto que o anterior e perna A→B que superou o topo anterior; correção de 23,6% a 61,8%; compra 1 tick acima de B; stop abaixo do fundo da correção; alvos B + 61,8%, B + 100% e B + 161,8% da perna | 60 min; no teste empatou com a E9 (−0,15R; 60 min no zero) |
 | E17 | **Gatilho no fundo ascendente** | Mesma estrutura, entrada antecipada | Correção de 38,2% a 61,8% da perna; candle de alta que fecha acima da máxima anterior, colado no fundo; stop curto abaixo do fundo; mesmos alvos em cima de B; só arma se o alvo 1 pagar 1,5 vez o risco | 60 min; no teste −0,18R (acerta 34%, ganha +1,4R quando acerta) |
 | E18 | **Rompimento e reteste do pivô** | Rompimento e reteste, com os alvos da projeção | Topo B rompido por fechamento; em até 15 candles o preço volta a encostar em B sem fechar abaixo; candle de alta acima de B; stop abaixo do reteste; mesmos alvos | 15 e 60 min; no teste foi a mais fraca (−0,27R) |
@@ -530,34 +528,34 @@ exporte o gráfico do Profit em CSV: nenhuma fonte gratuita entrega o mini-índi
 | E21 | **Tartarugas: rompimento de 20** | Canal de Donchian e as Tartarugas (Richard Dennis) | A favor da MM200 e da MM20; compra stop acima da máxima de 20 candles; stop no mais perto entre a mínima de 10 e 1,5 ATR; sai abaixo da mínima de 10 | 15 e 60 min; a melhor das novas (−0,04R) |
 | E22 | **NR7: menor candle dos últimos 7** | Toby Crabel (1990) | Tendência de alta; candle mais estreito dos últimos 7; compra acima dele; stop abaixo (mín. 0,5 ATR); alvo 3R | para estudo (−0,27R) |
 | E23 | **Turtle Soup: falso rompimento** | Linda Raschke e Larry Connors (1995) | Mínima nova de 20 candles que fecha de volta acima; compra acima do candle; stop abaixo da mínima nova; alvo 2R | 15 e 60 min (−0,1R) |
-| E24 | **Pivô da abertura (Onda 1)** | Pisani (vídeo) | Primeiras 2h30; onda 1 A→B ≥ 1 ATR; correção de 23,6% a 61,8%; compra acima de B; stop abaixo do pivô C; alvos B + 61,8/100/161,8% da perna | intraday (−0,21R) |
-| E25 | **Pivô clássico perto** | Pisani (vídeo) | A favor da MM200; perna ≥ 1,5 ATR com topo confirmado; pullback curto de 8% a 38,2%; compra acima de B; mesmos alvos | 5, 15 e 60 min (−0,18R) |
-| E26 | **Pivô clássico (regras da apostila)** | Pisani (apostila) | Impulso de 3 a 5 barras; correção de 2 a 3 barras até 50% (61,8% com impulso pequeno); MM20 virada sem cruzar o pivô; MM200 fora do caminho; compra acima do topo | para estudo (−0,32R) |
-| E27 | **Clássico metade** | Pisani (apostila) | Primeiro movimento do dia; pullback de 30% a 50%; pivô curto no meio; entrada abaixo de 80% do movimento; alvo 1 no topo | intraday, poucos dados (−0,42R) |
-| E28 | **Clássico afastado** | Pisani (apostila) | Pullback de 50% a 79% do primeiro movimento; volta à região do topo e pausa de 1 a 3 barras (pré, no ou pós rompimento); compra acima da pausa | intraday, poucos dados (−0,16R) |
-| E29 | **Trick entry** | Pisani (apostila) | Tendência definida; pivô menor dentro da correção do pivô maior; entrada antecipada acima dele; alvo 1 no topo do pivô maior | para estudo (−0,39R) |
-| E30 | **FAB4 (abertura)** | Pisani / Velez | Abertura acima do fechamento anterior, da MM20 e da MM200, gap até 3%; primeiro pivô dos 30 min iniciais sem fechar o gap; só com gap real (ações, futuros) | poucos dados |
-| E31 | **Range da abertura** | Pisani (apostila) | 30 min iniciais formam o range; 1º rompimento; pausa segurando o topo; compra acima da pausa | 5 e 15 min (−0,24R) |
-| E32 | **Volta em V a favor** | Pisani (apostila) | Queda violenta (≥ 2,5 ATR em 2 a 6 barras) acima da MM200; candle de virada forte e simétrico; fora da cara da MM20; stop abaixo do V | para estudo (−0,18R) |
-| E33 | **Volta em V contra** | Pisani (apostila) | A mesma, abaixo da MM200; alvo no topo de onde a queda começou | para estudo (−0,15R) |
-| E34 | **Volta em V nas Bollinger** | Pisani (apostila) | Fecha fora da banda de baixo a ≥ 2,5 ATR da MM20 e o seguinte fecha dentro, de alta; alvo na MM20 | WIN/WDO −0,11R; geral −0,20R |
-| E35 | **1-2-3 (Mark Crisp)** | Mark Crisp, na apostila | Depois de queda violenta: fundo 1, topo 2, fundo 3 mais alto; compra acima de 2; stop abaixo de 3 | para estudo (−0,28R) |
-| E36 | **3x3 (DiNapoli)** | Joe DiNapoli, na apostila | Depois de queda violenta, fecha acima da média de 3 deslocada em 3; pivô curto; compra acima dele | WIN/WDO −0,09R; geral −0,35R |
-| E37 | **Divergência no MACD** | Pisani (apostila) | Mínima nova com o histograma do MACD mais alto + candle de alta acima da máxima anterior | WIN/WDO −0,03R; geral −0,17R |
-| E38 | **Range com cor invertida** | Pisani (apostila) | Range de 9 candles na MM20 subindo; barra de baixa colada no topo; compra acima do topo; mais de 3 toques = não entra | para estudo (−0,37R) |
-| E39 | **Zona de armadilha larga** | Pisani (apostila) | Preço entre a MM20 e a MM200 com ≥ 2,5 ATR entre elas; pivô clássico; 1:1 antes da MM200 | para estudo (−0,31R) |
-| E40 | **Power-breakout (MM20)** | Pisani (apostila) | Lateral de 6 candles ≤ 1,2 ATR depois de tendência média; MM20 subindo por baixo sem entrar nos preços; compra acima da lateral | para estudo (−0,31R) |
-| E41 | **Power-breakout com pullback** | Pisani (apostila) | A lateral rompeu; pullback que segura o topo; compra acima da máxima do rompimento | poucos dados (−0,24R) |
-| E42 | **Breakout da tarde** | Pisani (apostila) | Depois de 2h30; 4+ alternâncias dos fechamentos com a MM20; pivô no topo da lateral (pré, no ou pós rompimento) | para estudo (−0,25R) |
-| E43 | **Mergulhada dupla** | Pisani (apostila) | A favor da tendência; dois fundos parecidos depois de impulso grande; candle de alta acima da máxima anterior; stop abaixo dos fundos | a menos ruim das novas (−0,12R; WIN/WDO −0,01R) |
-| E44 | **MM200 pós-rompimento** | Pisani (apostila) | Vinha abaixo da MM200, fechou acima há 3 a 15 candles; pullback segura perto dela; pivô clássico | poucos dados (−0,33R) |
-| E45 | **Afastamento da MM200** | Pisani (apostila) | Preço a ≥ 3 ATR da MM200; MM20 virada; pivô médio alinhado com ela; alvos até a MM200 | poucos dados (−0,35R) |
-| E46 | **Armadilha na MM200 (RBI/Gift)** | Pisani / Velez | Chega na MM200 por baixo com candle de alta; pausa de 1 barra; compra acima das duas máximas | o pior resultado (−0,65R) |
+| E24 | **Pivô da abertura (onda 1)** | Price action | Primeiras 2h30; onda 1 A→B ≥ 1 ATR; correção de 23,6% a 61,8%; compra acima de B; stop abaixo do pivô C; alvos B + 61,8/100/161,8% da perna | intraday (−0,21R) |
+| E25 | **Pivô curto perto do topo** | Price action | A favor da MM200; perna ≥ 1,5 ATR com topo confirmado; pullback curto de 8% a 38,2%; compra acima de B; mesmos alvos | 5, 15 e 60 min (−0,18R) |
+| E26 | **Pivô de 3 a 5 barras** | Price action | Impulso de 3 a 5 barras; correção de 2 a 3 barras até 50% (61,8% com impulso pequeno); MM20 virada sem cruzar o pivô; MM200 fora do caminho; compra acima do topo | para estudo (−0,32R) |
+| E27 | **Abertura: pivô na metade do movimento** | Price action | Primeiro movimento do dia; pullback de 30% a 50%; pivô curto no meio; entrada abaixo de 80% do movimento; alvo 1 no topo | intraday, poucos dados (−0,42R) |
+| E28 | **Abertura: pivô na volta ao topo** | Price action | Pullback de 50% a 79% do primeiro movimento; volta à região do topo e pausa de 1 a 3 barras (pré, no ou pós rompimento); compra acima da pausa | intraday, poucos dados (−0,16R) |
+| E29 | **Pivô antecipado (por dentro da correção)** | Price action | Tendência definida; pivô menor dentro da correção do pivô maior; entrada antecipada acima dele; alvo 1 no topo do pivô maior | para estudo (−0,39R) |
+| E30 | **Abertura acima das 4 referências** | Price action | Abertura acima do fechamento anterior, da MM20 e da MM200, gap até 3%; primeiro pivô dos 30 min iniciais sem fechar o gap; só com gap real (ações, futuros) | poucos dados |
+| E31 | **Rompimento do range da abertura** | Price action | 30 min iniciais formam o range; 1º rompimento; pausa segurando o topo; compra acima da pausa | 5 e 15 min (−0,24R) |
+| E32 | **Virada em V a favor** | Price action | Queda violenta (≥ 2,5 ATR em 2 a 6 barras) acima da MM200; candle de virada forte e simétrico; fora da cara da MM20; stop abaixo do V | para estudo (−0,18R) |
+| E33 | **Virada em V contra** | Price action | A mesma, abaixo da MM200; alvo no topo de onde a queda começou | para estudo (−0,15R) |
+| E34 | **Virada em V nas Bandas de Bollinger** | Price action | Fecha fora da banda de baixo a ≥ 2,5 ATR da MM20 e o seguinte fecha dentro, de alta; alvo na MM20 | WIN/WDO −0,11R; geral −0,20R |
+| E35 | **1-2-3: fundo mais alto** | Price action | Depois de queda violenta: fundo 1, topo 2, fundo 3 mais alto; compra acima de 2; stop abaixo de 3 | para estudo (−0,28R) |
+| E36 | **Virada pela média 3x3 deslocada** | Price action | Depois de queda violenta, fecha acima da média de 3 deslocada em 3; pivô curto; compra acima dele | WIN/WDO −0,09R; geral −0,35R |
+| E37 | **Divergência no MACD** | Price action | Mínima nova com o histograma do MACD mais alto + candle de alta acima da máxima anterior | WIN/WDO −0,03R; geral −0,17R |
+| E38 | **Range: barra contrária no topo** | Price action | Range de 9 candles na MM20 subindo; barra de baixa colada no topo; compra acima do topo; mais de 3 toques = não entra | para estudo (−0,37R) |
+| E39 | **Preço entre as médias 20 e 200** | Price action | Preço entre a MM20 e a MM200 com ≥ 2,5 ATR entre elas; pivô clássico; 1:1 antes da MM200 | para estudo (−0,31R) |
+| E40 | **Lateral apoiada na MM20** | Price action | Lateral de 6 candles ≤ 1,2 ATR depois de tendência média; MM20 subindo por baixo sem entrar nos preços; compra acima da lateral | para estudo (−0,31R) |
+| E41 | **Lateral apoiada na MM20 + pullback** | Price action | A lateral rompeu; pullback que segura o topo; compra acima da máxima do rompimento | poucos dados (−0,24R) |
+| E42 | **Rompimento da tarde (lateral na MM20)** | Price action | Depois de 2h30; 4+ alternâncias dos fechamentos com a MM20; pivô no topo da lateral (pré, no ou pós rompimento) | para estudo (−0,25R) |
+| E43 | **Fundo duplo a favor** | Price action | A favor da tendência; dois fundos parecidos depois de impulso grande; candle de alta acima da máxima anterior; stop abaixo dos fundos | a menos ruim das novas (−0,12R; WIN/WDO −0,01R) |
+| E44 | **Passou a MM200: pullback** | Price action | Vinha abaixo da MM200, fechou acima há 3 a 15 candles; pullback segura perto dela; pivô clássico | poucos dados (−0,33R) |
+| E45 | **Longe da MM200: retorno** | Price action | Preço a ≥ 3 ATR da MM200; MM20 virada; pivô médio alinhado com ela; alvos até a MM200 | poucos dados (−0,35R) |
+| E46 | **Pausa de 1 barra na MM200** | Price action | Chega na MM200 por baixo com candle de alta; pausa de 1 barra; compra acima das duas máximas | o pior resultado (−0,65R) |
 
 "Onde se encaixa" é o ponto de partida; o **▶ Testar estratégia** mede isso de novo com os dados de hoje. Da E11 à E46, as
 estratégias existem só no aplicativo (sem script do Profit).
 
-Filtros comuns: risco entre 0,3 e 2,5 ATR nas estratégias de Pisani/Velez, no OGRO e no Keltner (a E6, a E7, a E8, a
+Filtros comuns: risco entre 0,3 e 2,5 ATR nas estratégias de price action, na E9 e no Keltner (a E6, a E7, a E8, a
 E11, a E12 e a E13 têm regra de stop própria; nas duas de Fibonacci o stop fica abaixo da pernada e pode ser largo:
 confira o % do capital no cartão). No intraday, sem entradas fora do horário, zeragem no horário do ativo e o dia para
 depois de N stops (padrão 2).
@@ -634,7 +632,7 @@ Esses números mudam a cada pregão: use **⚡ RODAR ROBÔ**, a aba **Comparar**
 
 ## Scripts do Profit (NTSL)
 
-Pasta `ntsl`: um indicador por estratégia (`E1_Halt_MM20.ntsl` … `E10_XTraders_Keltner.ntsl`). No Profit:
+Pasta `ntsl`: um indicador por estratégia (`E1_Halt_MM20.ntsl` … `E10_Keltner_Lateral.ntsl`). No Profit:
 *Ferramentas → Editor de Estratégias → Novo → Indicador*, cole, compile e aplique no gráfico de preço.
 Linha **branca** = entrada, **vermelha** = stop, **verde** = alvo. É o caminho para ver os sinais no WIN e no WDO
 reais, em tempo real.
@@ -687,10 +685,8 @@ Opções da linha de comando: `--porta N`, `--sem-janela`, `--sem-base`, `--base
 
 ## Fontes
 
-- Mario Pisani, apostila 2022; Oliver Velez, apostila de análise técnica.
-- André Machado (Ogro de Wall Street): pivôs, Fibonacci e médias, [Projeto Os 10%](https://projetoos10porcento.com.br/aprenda-com-o-ogro-de-wall-street-a-dominar-ranges-e-breakouts-para-entradas-mais-seguras/),
-  [Eu Quero Investir](https://euqueroinvestir.com/educacao-financeira/day-touro-andre-machado-ogro-de-wall-street).
-  A E9 é uma leitura objetiva da regra descrita, não o método oficial dele.
+- Price action clássico de day trade: pivôs de rompimento, médias de 9, 20 e 200, VWAP, viradas em V e projeção de
+  Fibonacci. As regras do robô são leituras objetivas e próprias dessas ideias de mercado.
 - **Fibonacci (E12, E13 e as ferramentas de desenho):** ajuda do TradingView para a
   [retração](https://www.tradingview.com/support/solutions/43000518158-fib-retracement/), a
   [projeção por tendência (Trend-Based Fib Extension)](https://www.tradingview.com/support/solutions/43000518137-trend-based-fib-extension-drawing-tool/),
@@ -708,8 +704,7 @@ Opções da linha de comando: `--porta N`, `--sem-janela`, `--sem-base`, `--base
   [o teste dele](https://www.adamhgrimes.com/testing-fibonaccis-12/);
   [testes econométricos de retrações](https://paperswithbacktest.com/strategies/can-returns-breed-like-rabbits-econometric-tests-for-fibonacci-retracements).
   O nosso teste chegou à mesma conclusão.
-- Adriano Mendes (XTraders): [canal no YouTube](https://www.youtube.com/@xtraders), aula "Keltner: o segredo pra
-  operar em dias laterais". A E10 é uma leitura objetiva dessa aula, não o método oficial dele.
+- Canal de Keltner em dia lateral (E10): leitura objetiva própria do canal de Keltner com IFR.
 - Larry Connors e Cesar Alvarez, *Short Term Trading Strategies That Work* (2008), [QuantifiedStrategies](https://www.quantifiedstrategies.com/rsi-2-strategy/).
 - Zarattini & Aziz (2023), *Can Day Trading Really Be Profitable?*, [Concretum](https://concretumgroup.com/can-day-trading-really-be-profitable/).
 - Zarattini, Aziz & Barbon (2024), *Beat the Market: An Effective Intraday Momentum Strategy for S&P500 ETF (SPY)* —

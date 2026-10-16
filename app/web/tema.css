@@ -328,7 +328,7 @@ body.vitrine #est { color: transparent; text-shadow: 0 0 9px rgba(232, 238, 248,
 .tut-pontos i.on { background: var(--neon1); width: 22px; }
 body.tut-aberto { overflow: hidden; }
 .acoes-topo > button { gap: .32em; }
-.slogan, .status > span { display: none; }
+.slogan { display: none; }          /* o texto do status (ex.: "sem dados novos há 5 min") aparece nas telas largas */
 .topo #est { min-width: 200px; max-width: 240px; }
 .vivo-topo { min-width: 140px; max-width: 210px; }
 .topo .ct-primeiro { display: none; }

@@ -57,7 +57,7 @@ for vK := 1 to vJ - 1 do
 # ------------------------------------------------------------------------------------------ as 6 regras
 REGRAS = {}
 
-REGRAS["E1"] = dict(nome="E1 HALT MM20", titulo="E1 - Halt na MM20 (Mario Pisani + Oliver Velez)", alvo=2.0, codigo="""
+REGRAS["E1"] = dict(nome="E1 HALT MM20", titulo="E1 - Halt na MM20", alvo=2.0, codigo="""
 v{P}Ok := false;
 if (v{P}M20[1] - v{P}M20[6] >= 0.2 * vA) and (v{P}C[1] > v{P}M200[1]) then
 begin
@@ -83,7 +83,7 @@ begin
 end;
 """)
 
-REGRAS["E2"] = dict(nome="E2 FIBONACCI", titulo="E2 - Gatilho de Fibonacci (Mario Pisani)", alvo=2.0, codigo="""
+REGRAS["E2"] = dict(nome="E2 FIBONACCI", titulo="E2 - Gatilho de Fibonacci", alvo=2.0, codigo="""
 v{P}Ok := false;
 if (v{P}M20[1] > v{P}M20[6]) and (v{P}C[1] > v{P}M200[1]) then
 begin
@@ -112,7 +112,7 @@ begin
 end;
 """)
 
-REGRAS["E3"] = dict(nome="E3 VWAP", titulo="E3 - Pullback na VWAP (Mario Pisani + Oliver Velez) - so intraday", alvo=2.0, codigo="""
+REGRAS["E3"] = dict(nome="E3 VWAP", titulo="E3 - Pullback na VWAP - so intraday", alvo=2.0, codigo="""
 v{P}Ok := false;
 if (Intraday = 1) and (vNb >= vMinB) and (vNb >= 4) then
 begin
@@ -146,7 +146,7 @@ begin
 end;
 """)
 
-REGRAS["E4"] = dict(nome="E4 ROMPIMENTO", titulo="E4 - Rompimento de base (Oliver Velez - power breakout)", alvo=2.0, codigo="""
+REGRAS["E4"] = dict(nome="E4 ROMPIMENTO", titulo="E4 - Rompimento de base (power breakout)", alvo=2.0, codigo="""
 v{P}Ok := false;
 if (v{P}M20[1] - v{P}M20[6] >= 0.2 * vA) and (v{P}C[1] > v{P}M200[1]) then
 begin
@@ -175,7 +175,7 @@ begin
 end;
 """)
 
-REGRAS["E5"] = dict(nome="E5 COMBINACAO+GIFT", titulo="E5 - Combinacao perfeita + Gift na MM9 (Oliver Velez + Mario Pisani)", alvo=2.0, codigo="""
+REGRAS["E5"] = dict(nome="E5 MEDIAS MM9", titulo="E5 - Medias alinhadas + correcao curta na MM9", alvo=2.0, codigo="""
 v{P}Ok := false;
 if (v{P}M9[1] > v{P}M20[1]) and (v{P}M20[1] > v{P}M200[1]) and (v{P}M9[1] > v{P}M9[4]) and (v{P}M20[1] - v{P}M20[6] >= 0.3 * vA) then
 begin
@@ -280,7 +280,7 @@ begin
 end;
 """)
 
-REGRAS["E9"] = dict(nome="E9 OGRO", titulo="E9 - OGRO: rompimento de pivo + Fibonacci (estilo Andre Machado, Ogro de Wall Street)", alvo=0.0,
+REGRAS["E9"] = dict(nome="E9 PIVO FIBO", titulo="E9 - Pivo + Fibonacci com medias alinhadas", alvo=0.0,
                     modo="fibo", codigo="""
 v{P}Ok := false;
 if (v{P}M9[1] > v{P}M20[1]) and (v{P}M20[1] > v{P}M200[1]) and (v{P}M20[1] > v{P}M20[6]) then
@@ -326,7 +326,7 @@ begin
 end;
 """)
 
-REGRAS["E10"] = dict(nome="E10 XTRADERS", titulo="E10 - XTRADERS: Keltner em dia lateral (setup do Adriano Mendes) - so intraday", alvo=0.0,
+REGRAS["E10"] = dict(nome="E10 KELTNER", titulo="E10 - Keltner no dia lateral - so intraday", alvo=0.0,
                      modo="fixo", codigo="""
 v{P}Ok := false;
 if (Intraday = 1) and (vNb >= 7) then
@@ -800,8 +800,8 @@ def gerar():
         if f.endswith(".ntsl"):
             os.remove(os.path.join(SAIDA, f))
     nomes = {"E1": "E1_Halt_MM20", "E2": "E2_Fibonacci", "E3": "E3_VWAP", "E4": "E4_Rompimento",
-             "E5": "E5_Combinacao_Gift", "E6": "E6_RSI2", "E7": "E7_ORB", "E8": "E8_Gap", "E9": "E9_OGRO",
-             "E10": "E10_XTraders_Keltner"}
+             "E5": "E5_Medias_MM9", "E6": "E6_RSI2", "E7": "E7_ORB", "E8": "E8_Gap", "E9": "E9_Pivo_Fibonacci",
+             "E10": "E10_Keltner_Lateral"}
     for cod, r in REGRAS.items():
         corpo = "begin\n" + ind(SERIES, 2) + "\n\n" + ind(processo(r).replace("{NOME}", r["nome"]), 2) + "\nend;\n"
         extra = ""

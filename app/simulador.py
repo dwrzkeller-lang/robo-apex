@@ -192,16 +192,19 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
         return dict(m=m, slots=cs, trades=list(trades), ordens=oo, aten=dict(aten))
 
     # ------------------------------------------------------------------ helpers
+    def em_passos(q):
+        """Quantidade em "passos" inteiros: contratos inteiros ou, no fracionado, quantos passo_lote cabem em q.
+        Assim as fatias das parciais sempre saem em multiplos do passo (e uma fatia menor que 1 passo nao sai)."""
+        return int(round(q / passo)) if fracionado else q
+
     def frac_parcial(q):                             # metade no 1:1 (contrato inteiro: so com 2 ou mais)
-        if fracionado:
-            return 0.5
+        q = em_passos(q)
         return math.floor(q / 2) / q if q >= 2 else 0.0
 
     def fracs_3alvos(q):
         """(fatia no alvo 1, fatia no alvo 2) da gestao de 3 alvos; o resto vai ate o alvo 3. Contrato inteiro: um terco
         em cada alvo com 3 ou mais; com 2, um no alvo 1 e um ate o alvo 3; com 1 nao ha parcial (so o stop sobe)."""
-        if fracionado:
-            return 1.0 / 3.0, 1.0 / 3.0
+        q = em_passos(q)
         if q >= 3:
             t = math.floor(q / 3) / q
             return t, t
@@ -211,8 +214,9 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
         """Escalonada 3: dois tercos saem no alvo 1. Escalonada 4: metade no alvo 1 e um quarto no alvo 2. O resto e
         carregado. Com contrato inteiro so sai o que da para dividir (com 1 contrato nada sai: so o stop sobe)."""
         f1, f2 = (2.0 / 3.0, 0.0) if g == "esc3" else (0.5, 0.25)
-        if fracionado:
-            return f1, f2
+        q = em_passos(q)
+        if q < 1:
+            return 0.0, 0.0
         n1 = math.floor(q * f1 + 1e-9)
         n2 = math.floor(q * f2 + 1e-9)
         if n1 + n2 >= q:                                 # sempre sobra pelo menos 1 contrato para carregar
@@ -226,7 +230,7 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
         if not por_risco:
             return contratos
         orcamento = max(0.0, capital0 + s["pnl"]) * pl["risco_pct"] / 100.0
-        por_lote = (risco + custo_p) * vp            # perda de 1 lote se for stopado (com os custos)
+        por_lote = (risco + slip + custo_p) * vp     # perda de 1 lote se for stopado (com o escorregamento da saida e os custos)
         q = orcamento / por_lote if por_lote > 0 else 0.0
         if fracionado:
             return round(math.floor(q / passo + 1e-9) * passo, 8)
@@ -262,7 +266,9 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
         s["pos"] = None
         s["pnl"] += din
         s["pnl_dia"] += din
-        if R < 0:
+        # conta para o limite de stops do dia so o stop de verdade: saida pelo stop que perdeu pelo menos meio risco.
+        # Stop no 0x0 (perdeu so as taxas), stop que ja subiu, zeragem do fim do dia e saida na mao nao contam.
+        if motivo.startswith("stop") and R <= -0.5:
             s["stops"] += 1
             if s["stops"] >= max_stops and G.intraday:
                 cancelar(s, i, "limite de %d stops no dia" % max_stops)
@@ -294,6 +300,11 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
         Gd = Gs[od["dir"]]
         stop_g = od["dir"] * od["stop"]
         risco = preco - stop_g
+        if risco <= tick / 2:
+            # o preco ja esta no stop ou alem dele (ex.: entrada na mao depois de o preco passar do stop): nao abre
+            od.update(status="cancelada", motivo="abriu além do stop", i_fim=i)
+            s["pend"].remove(od)
+            return False
         g = gestao_de(od["est"], gestao)
         alvos_g = None if not od.get("alvos") else tuple(None if x is None else od["dir"] * x for x in od["alvos"])
         # os alvos saem do risco TECNICO (sem a folga/tolerancia do plano): alargar o stop nao empurra o alvo para longe
@@ -384,10 +395,15 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
         o, h, l, c = ohlc or (Gp.o[i], Gp.h[i], Gp.l[i], Gp.c[i])
         ent, R = p["ent"], p["risco"]
         na_entrada = p["i_ent"] == i
+        l_dep = l                                       # minima DEPOIS da entrada (para o 0x0 e o degrau apos as parciais)
         if na_entrada and p.get("limite") and ohlc is None:
             # compra limitada: no candle em que executou nao se sabe se a maxima veio antes ou depois da execucao;
-            # do lado conservador, so o fechamento conta como preco alcancado depois da entrada
+            # do lado conservador, so o fechamento conta como preco alcancado depois da entrada. A minima do candle
+            # veio ANTES (foi ela que executou a ordem): para o 0x0 depois da parcial so vale o fechamento.
             h = max(ent, c)
+            l_dep = c
+        # Ordem stop: no candle da entrada vale a hipotese pior (a minima pode ter vindo depois da execucao), entao o stop
+        # e o 0x0 depois da parcial sao conferidos com a minima do candle inteiro. E de proposito (conservador).
         if not na_entrada and o <= p["stop"]:
             return fechar(s, p, p["frac"], o - slip, i, motivo_stop(p) + " (abriu além)", slip)
         if l <= p["stop"]:
@@ -399,7 +415,7 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
             if p["frac_parc"] > 0:
                 fechar(s, p, p["frac_parc"], p["alvo1"], i, "parcial")
             p["stop"] = max(p["stop"], ent)
-            if l <= ent:            # voltou ao 0x0 no mesmo candle: a ordem dos eventos e desconhecida -> pior caso
+            if l_dep <= ent:        # voltou ao 0x0 no mesmo candle: a ordem dos eventos e desconhecida -> pior caso
                 return fechar(s, p, p["frac"], ent - slip, i, "stop no 0x0", slip)
         if p["alvo2"] is not None and not p["parcial2"] and h >= p["alvo2"] + tick:
             p["parcial2"] = True                            # alvo 2 de 3: mais um terco sai e o stop sobe para o alvo 1
@@ -407,7 +423,7 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                 fechar(s, p, p["frac_parc2"], p["alvo2"], i, "parcial no alvo 2")
             degrau = p["alvo1"] if p["alvo1"] is not None else ent
             p["stop"] = max(p["stop"], degrau)
-            if l <= degrau:         # voltou ao alvo 1 no mesmo candle: a ordem dos eventos e desconhecida -> pior caso
+            if l_dep <= degrau:     # voltou ao alvo 1 no mesmo candle: a ordem dos eventos e desconhecida -> pior caso
                 return fechar(s, p, p["frac"], degrau - slip, i, motivo_stop(p), slip)
         if p["alvo"] is not None:
             if not na_entrada and o >= p["alvo"]:
@@ -517,10 +533,21 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
         return h_ini <= hm[i] < h_fim
 
     # ------------------------------------------------------------------ laco principal
+    min_zer = h_zer // 100 * 60 + h_zer % 100
     for i in range(i_loop, n):
         novo_dia = d[i] != d[i - 1]
-        fim_dia = G.intraday and (hm[i] >= h_zer or (i + 1 < G.n and d[i + 1] != d[i]))
+        # zeragem: no candle que TERMINA no horario de zeragem ou depois (inicio + tempo grafico), ou no ultimo candle do
+        # dia. Usa o fim do candle (e nao o candle seguinte) para o teste ao vivo zerar na mesma hora que o historico;
+        # o candle que ainda esta se formando nunca zera (o fechamento dele ainda nao existe).
+        fim_dia = G.intraday and i != i_formando and (hm[i] // 100 * 60 + hm[i] % 100 + G.tf >= min_zer
+                                                      or (i + 1 < G.n and d[i + 1] != d[i]))
         for s in slots:
+            if novo_dia and G.intraday and (s["pos"] or s["pend"]):
+                # rede de seguranca: sobrou operacao do dia anterior (faltou candle no fim do dia): zera na abertura
+                if s["pos"]:
+                    p = s["pos"]
+                    fechar(s, p, p["frac"], p["G"].o[i] - slip, i, "zeragem do dia (na abertura seguinte)", slip)
+                cancelar(s, i, "fim do dia")
             if novo_dia:
                 s["stops"] = 0
                 s["pnl_dia"] = 0.0
@@ -604,6 +631,10 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                         ref0 = od["gatilho"] if od["gatilho"] is not None else G.c[i]
                         novo_r = max(2 * tick, round(fs * abs(ref0 - od["stop"]) / tick) * tick)
                         od["stop"] = ref0 - od["dir"] * novo_r
+                        if od.get("extra"):
+                            # a folga/tolerancia do plano ja estava dentro da distancia: cresce na mesma proporcao do stop,
+                            # para os alvos continuarem medidos sobre o risco tecnico novo (fs vezes o tecnico)
+                            od["extra"] = min(novo_r - tick, round(fs * od["extra"] / tick) * tick)
                         if ra > 0:
                             od["alvo_manual"] = ref0 + od["dir"] * round(ra * novo_r / tick) * tick
                             od["alvos"] = None
@@ -670,11 +701,13 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                                 alvo2=None if p["alvo2"] is None else sg * p["alvo2"], parcial2=p["parcial2"],
                                 maxR=(p["maxfav"] - p["ent"]) / p["risco"], f=p["f"], manual=p["manual"]))
     # situacao do ultimo dia simulado (para a tela dizer "pode operar" / "pare por hoje")
-    s0 = slots[0] if slots else None
+    # (somando todas as estrategias; "pare por hoje" so quando TODAS estao travadas)
     dia = None
-    if s0 is not None and n > ini:
-        trava = s0["trava"] or ("limite de %d stops no dia" % max_stops if G.intraday and s0["stops"] >= max_stops else None)
-        dia = dict(data=d[n - 1], resultado=s0["pnl_dia"], stops=s0["stops"], trava=trava, capital=capital0 + s0["pnl"])
+    if slots and n > ini:
+        travas = [s["trava"] or ("limite de %d stops no dia" % max_stops if G.intraday and s["stops"] >= max_stops else None)
+                  for s in slots]
+        dia = dict(data=d[n - 1], resultado=sum(s["pnl_dia"] for s in slots), stops=sum(s["stops"] for s in slots),
+                   trava=travas[0] if all(travas) else None, capital=capital0 + sum(s["pnl"] for s in slots))
     if retrato is None and retomar and ponto == retomar["m"]:
         retrato = retomar                                      # nada novo depois do retrato: ele continua valendo
     return dict(trades=trades, ordens=ordens, abertas=abertas, aten=aten, ini=ini, fim=n - 1, codigos=codigos, dia=dia,

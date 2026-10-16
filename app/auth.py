@@ -9,7 +9,8 @@ Tudo fica em arquivos na pasta de dados (nada sai do computador):
 
 O administrador ja vem criado (ADMIN_EMAIL) SEM senha: quem abre o robo pela primeira vez define a senha dele.
 Nao existe senha padrao. Usuario novo recebe uma senha provisoria sorteada e e obrigado a troca-la no 1o acesso.
-Muitas senhas erradas seguidas bloqueiam aquele e-mail por alguns minutos.
+Muitas senhas erradas seguidas bloqueiam aquele e-mail, a partir daquele IP, por alguns minutos (alem do limite de
+pedidos por IP no servidor). No modo online o primeiro acesso pede tambem um codigo de uso unico (preparar_codigo).
 """
 import hashlib
 import hmac
@@ -30,6 +31,8 @@ LINHAS_REGISTRO = 5000
 EMAIL_OK = re.compile(r"^[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9.\-]{1,190}\.[A-Za-z]{2,24}$")
 ID_OK = re.compile(r"^[a-z0-9]{1,24}$")
 MAX_USUARIOS = 20000
+ARQ_CODIGO = "codigo_primeiro_acesso.txt"   # modo online: codigo de uso unico pedido no primeiro acesso
+_CONTAS = threading.BoundedSemaphore(4)     # no maximo 4 contas de senha (PBKDF2) ao mesmo tempo: o resto espera
 
 
 class Negado(Exception):
@@ -37,7 +40,48 @@ class Negado(Exception):
 
 
 def _hash(senha, sal, it=ITERACOES):
-    return hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), sal, it).hex()
+    with _CONTAS:
+        return hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), sal, it).hex()
+
+
+ADMIN_SESSAO_MIN = 15                       # o administrador principal entra de novo a cada 15 min (se nao tiver outro valor)
+
+
+def _sessao_max(u):
+    """Minutos que uma sessao deste usuario vale DEPOIS DO LOGIN (contados da entrada, nao do ultimo uso); 0 = sem limite.
+    Campo opcional `sessao_max_min` do usuario; o administrador principal tem 15 min por padrao."""
+    v = u.get("sessao_max_min")
+    if v is None and u.get("id") == ADMIN_ID:
+        v = ADMIN_SESSAO_MIN
+    try:
+        return max(0, int(v or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _texto(v, limite=200):
+    """Campo de texto vindo da tela: qualquer outra coisa (numero, lista...) vira vazio."""
+    return v[:limite] if isinstance(v, str) else ""
+
+
+class Limite:
+    """Balde de fichas por chave (ex.: rota + IP): `capacidade` pedidos seguidos e depois `por_minuto` por minuto."""
+
+    def __init__(self, capacidade, por_minuto):
+        self.cap, self.taxa = float(capacidade), por_minuto / 60.0
+        self.baldes = {}
+        self.trava = threading.Lock()
+
+    def pode(self, chave):
+        agora = time.monotonic()
+        with self.trava:
+            fichas, t = self.baldes.get(chave, (self.cap, agora))
+            fichas = min(self.cap, fichas + (agora - t) * self.taxa)
+            ok = fichas >= 1.0
+            self.baldes[chave] = (fichas - 1.0 if ok else fichas, agora)
+            if len(self.baldes) > 20000:                        # esquece quem ja esta com o balde cheio de novo
+                self.baldes = {k: v for k, v in self.baldes.items() if v[0] + (agora - v[1]) * self.taxa < self.cap}
+            return ok
 
 
 def _resumo(token):
@@ -76,7 +120,8 @@ class Acessos:
         for k, v in (self._ler(self.arq_s, {}).get("sessoes") or {}).items():
             if isinstance(v, dict) and agora - v.get("visto", 0) < SESSAO_LONGA and self._por_id(v.get("uid")):
                 self.sessoes[k] = v
-        self.erros = {}                                        # e-mail -> dict(vezes=[horarios], ate=fim do bloqueio, nivel)
+        self.erros = {}                                        # (e-mail, IP) -> dict(vezes=[horarios], ate=fim do bloqueio, nivel)
+        self.codigo_primeiro = None                            # modo online: codigo pedido no primeiro acesso (preparar_codigo)
         self._falso = dict(sal=secrets.token_bytes(16).hex(), hash="0" * 64, it=ITERACOES)   # para gastar o mesmo tempo com e-mail inexistente
         try:
             with open(self.arq_r, encoding="utf-8") as f:
@@ -156,8 +201,21 @@ class Acessos:
         return next((u for u in self.usuarios if u["id"] == uid), None)
 
     def _por_email(self, email):
-        e = (email or "").strip().lower()
+        e = _texto(email).strip().lower()
         return next((u for u in self.usuarios if u["email"].lower() == e), None)
+
+    def _por_email_compra(self, email):
+        """Conta pelo e-mail de entrada ou pelo e-mail usado na compra (Hotmart), que pode ser outro."""
+        e = _texto(email).strip().lower()
+        if not e:
+            return None
+        return self._por_email(e) or next((u for u in self.usuarios if (u.get("email_compra") or "").lower() == e), None)
+
+    def por_id(self, uid):
+        """Usuario (dict publico) ou None."""
+        with self.trava:
+            u = self._por_id(uid)
+            return self.publico(u) if u else None
 
     @staticmethod
     def publico(u):
@@ -169,11 +227,38 @@ class Acessos:
         """O que a tela de entrada precisa saber antes do login."""
         with self.trava:
             adm = self._por_id(ADMIN_ID)
-            return dict(primeiroAcesso=adm["senha"] is None, adminEmail=adm["email"])
+            return dict(primeiroAcesso=adm["senha"] is None, adminEmail=adm["email"], pedeCodigo=bool(self.codigo_primeiro))
 
-    def _definir(self, u, senha, provisoria=False):
+    def preparar_codigo(self):
+        """Modo online: enquanto o administrador nao tem senha, o primeiro acesso pede um codigo de uso unico, sorteado
+        agora, que so quem tem acesso ao servidor ve (janela do servidor e arquivo na pasta de dados). Devolve o codigo
+        (ou None se o administrador ja tem senha)."""
+        arq = os.path.join(self.pasta, ARQ_CODIGO)
+        with self.trava:
+            if self._por_id(ADMIN_ID)["senha"] is not None:
+                self.codigo_primeiro = None
+                try:
+                    os.remove(arq)
+                except OSError:
+                    pass
+                return None
+            self.codigo_primeiro = secrets.token_hex(5).upper()
+            with open(arq, "w", encoding="utf-8") as f:
+                f.write("Codigo do primeiro acesso do Robo Apex: %s\nE-mail do administrador: %s\n"
+                        "Ele vale uma vez so e muda a cada vez que o robo abre. Este arquivo some depois do primeiro acesso.\n"
+                        % (self.codigo_primeiro, self._por_id(ADMIN_ID)["email"]))
+            return self.codigo_primeiro
+
+    @staticmethod
+    def _senha_nova(senha):
+        """Conta da senha (PBKDF2, ~0,2 s): feita FORA da trava, para nao segurar os outros pedidos."""
         sal = secrets.token_bytes(16)
-        u["senha"] = dict(alg="pbkdf2-sha256", it=ITERACOES, sal=sal.hex(), hash=_hash(senha, sal))
+        return dict(alg="pbkdf2-sha256", it=ITERACOES, sal=sal.hex(), hash=_hash(senha, sal))
+
+    @staticmethod
+    def _definir(u, s, provisoria=False):
+        """s = resultado de _senha_nova."""
+        u["senha"] = s
         u["provisoria"] = bool(provisoria)
 
     def _confere(self, u, senha):
@@ -181,27 +266,44 @@ class Acessos:
         calc = _hash(senha if isinstance(senha, str) else "", bytes.fromhex(s["sal"]), int(s.get("it", ITERACOES)))
         return hmac.compare_digest(calc, s["hash"]) and u is not None and u.get("senha") is not None
 
-    def primeiro_acesso(self, senha, ip=""):
-        """Define a senha do administrador. So funciona enquanto ele nao tem senha."""
+    def primeiro_acesso(self, senha, ip="", codigo=None):
+        """Define a senha do administrador. So funciona enquanto ele nao tem senha (e, online, com o codigo do servidor)."""
         with self.trava:
             adm = self._por_id(ADMIN_ID)
             if adm["senha"] is not None:
                 raise Negado("O administrador já tem senha. Entre com ela.")
+            if self.codigo_primeiro:
+                dig = "".join(ch for ch in _texto(codigo, 60).upper() if ch.isalnum())
+                if not hmac.compare_digest(dig.encode(), self.codigo_primeiro.encode()):
+                    self.registrar("primeiro_negado", adm["email"], "código do primeiro acesso errado", ip)
+                    raise Negado("Código do primeiro acesso incorreto. Ele aparece na janela do servidor e no arquivo %s da "
+                                 "pasta de dados." % ARQ_CODIGO)
             erro = senha_valida(senha, adm["email"])
             if erro:
                 raise Negado(erro)
-            self._definir(adm, senha)
+        s = self._senha_nova(senha)
+        with self.trava:
+            if adm["senha"] is not None:                      # outra pessoa terminou primeiro enquanto a conta era feita
+                raise Negado("O administrador já tem senha. Entre com ela.")
+            self._definir(adm, s)
             adm["ultimo"] = time.time()                        # criar a senha ja e a primeira entrada
             self._gravar_usuarios()
+            if self.codigo_primeiro:
+                self.codigo_primeiro = None
+                try:
+                    os.remove(os.path.join(self.pasta, ARQ_CODIGO))
+                except OSError:
+                    pass
             self.registrar("primeiro_acesso", adm["email"], "senha do administrador criada", ip)
             return self._abrir_sessao(adm, False, ip)
 
-    def _bloqueado(self, email, agora):
-        e = self.erros.get(email)
+    def _bloqueado(self, chave, agora):
+        e = self.erros.get(chave)
         return max(0.0, e["ate"] - agora) if e and e.get("ate", 0) > agora else 0.0
 
-    def _errou(self, email, agora):
-        e = self.erros.setdefault(email, dict(vezes=[], ate=0.0, nivel=0))
+    def _errou(self, chave, agora):
+        """chave = (e-mail, IP): errar a senha de outra pessoa a partir de outro IP nao bloqueia a entrada dela."""
+        e = self.erros.setdefault(chave, dict(vezes=[], ate=0.0, nivel=0))
         e["vezes"] = [t for t in e["vezes"] if agora - t < JANELA_ERROS] + [agora]
         if len(e["vezes"]) >= MAX_ERROS:
             e["nivel"] = min(e["nivel"] + 1, 5)
@@ -212,26 +314,27 @@ class Acessos:
 
     def entrar(self, email, senha, manter=False, ip=""):
         """Devolve (codigo da sessao, usuario). Levanta Negado com uma mensagem que nao revela se o e-mail existe."""
-        email = (email or "").strip().lower()[:200]
+        email = _texto(email).strip().lower()[:200]
+        chave = (email, str(ip))
         agora = time.time()
         with self.trava:
-            falta = self._bloqueado(email, agora)
+            falta = self._bloqueado(chave, agora)
             if falta > 0:
                 self.registrar("entrada_negada", email, "bloqueado por tentativas", ip)
                 raise Negado("Muitas tentativas. Tente de novo em %d min." % max(1, round(falta / 60)))
             if len(self.erros) > 2000:
                 self.erros = {k: v for k, v in self.erros.items() if v.get("ate", 0) > agora or v["vezes"]}
-        u = self._por_email(email)
+            u = self._por_email(email)
         ok = self._confere(u, senha)                           # fora da trava: a conta do hash leva ~0,2 s
         with self.trava:
             if not ok or not u.get("ativo", True):
-                bloq = self._errou(email, agora)
+                bloq = self._errou(chave, agora)
                 motivo = "e-mail não cadastrado" if u is None else ("usuário desativado" if ok else "senha errada")
                 self.registrar("entrada_negada", email, motivo + (" · bloqueado por %d min" % round(bloq / 60) if bloq else ""), ip)
                 if ok:
                     raise Negado("Este usuário está desativado. Fale com o administrador.")
                 raise Negado("E-mail ou senha incorretos." + (" Muitas tentativas: aguarde %d min." % round(bloq / 60) if bloq else ""))
-            self.erros.pop(email, None)
+            self.erros.pop(chave, None)
             u["ultimo"] = agora
             self._gravar_usuarios()
             self.registrar("entrada", u["email"], "manter conectado" if manter else "", ip)
@@ -256,7 +359,8 @@ class Acessos:
                 return None
             agora = time.time()
             u = self._por_id(s["uid"])
-            if u is None or not u.get("ativo", True) or agora - s["visto"] > (SESSAO_LONGA if s.get("manter") else SESSAO_CURTA):
+            if u is None or not u.get("ativo", True) or agora - s["visto"] > (SESSAO_LONGA if s.get("manter") else SESSAO_CURTA) \
+                    or (_sessao_max(u) and agora - s.get("criado", agora) > _sessao_max(u) * 60):
                 self.sessoes.pop(k, None)
                 if s.get("manter"):
                     self._gravar_sessoes()
@@ -282,20 +386,35 @@ class Acessos:
         if len(self.sessoes) != antes:
             self._gravar_sessoes()
 
+    def _conferir_atual(self, u, senha, ip, evento, detalhe):
+        """Confere a senha atual (troca de senha ou de e-mail) contando os erros como numa entrada: muitos erros
+        seguidos bloqueiam por alguns minutos. A conta do hash e feita fora da trava."""
+        chave, agora = (u["email"].lower(), str(ip)), time.time()
+        with self.trava:
+            falta = self._bloqueado(chave, agora)
+        if falta > 0:
+            raise Negado("Muitas tentativas. Tente de novo em %d min." % max(1, round(falta / 60)))
+        if self._confere(u, senha):
+            return True
+        with self.trava:
+            bloq = self._errou(chave, agora)
+            self.registrar(evento, u["email"], detalhe + (" · bloqueado por %d min" % round(bloq / 60) if bloq else ""), ip)
+        return False
+
     def trocar_senha(self, uid, atual, nova, token=None, ip=""):
         u = self._por_id(uid)
         if u is None:
             raise Negado("Usuário não encontrado.")
-        if not self._confere(u, atual):
-            self.registrar("senha_negada", u["email"], "senha atual errada na troca", ip)
+        if not self._conferir_atual(u, atual, ip, "senha_negada", "senha atual errada na troca"):
             raise Negado("A senha atual não confere.")
         erro = senha_valida(nova, u["email"])
         if erro:
             raise Negado(erro)
         if atual == nova:
             raise Negado("A senha nova precisa ser diferente da atual.")
+        s = self._senha_nova(nova)
         with self.trava:
-            self._definir(u, nova)
+            self._definir(u, s)
             self._gravar_usuarios()
             self._encerrar_sessoes(uid, menos=_resumo(token) if token else None)     # as outras sessoes deste usuario caem
             self.registrar("senha_trocada", u["email"], "", ip)
@@ -306,13 +425,16 @@ class Acessos:
         u = self._por_id(uid)
         if u is None:
             raise Negado("Usuário não encontrado.")
+        if email is not None and not isinstance(email, str):
+            raise Negado("E-mail inválido.")
+        muda_email = email is not None and email.strip().lower() != u["email"].lower()
+        if muda_email and not self._conferir_atual(u, senha, ip, "email_negado", "senha atual errada na troca de e-mail"):
+            raise Negado("Para mudar o e-mail, confirme a senha atual.")
         with self.trava:
             if nome is not None:
                 u["nome"] = str(nome).strip()[:60]
-            if email is not None and email.strip().lower() != u["email"].lower():
+            if muda_email:
                 email = email.strip().lower()
-                if not self._confere(u, senha):
-                    raise Negado("Para mudar o e-mail, confirme a senha atual.")
                 if not EMAIL_OK.match(email):
                     raise Negado("E-mail inválido.")
                 if self._por_email(email):
@@ -334,11 +456,13 @@ class Acessos:
 
     def criar(self, admin, nome, email, papel="usuario", ip=""):
         """Cria o usuario com uma senha provisoria sorteada. Devolve (usuario, senha provisoria): ela so aparece agora."""
-        email = (email or "").strip().lower()
+        email = _texto(email).strip().lower()
         if not EMAIL_OK.match(email):
             raise Negado("E-mail inválido.")
         if papel not in ("admin", "usuario"):
             raise Negado("Papel inválido.")
+        prov = secrets.token_urlsafe(9)
+        s = self._senha_nova(prov)
         with self.trava:
             if self._por_email(email):
                 raise Negado("Já existe um usuário com este e-mail.")
@@ -347,8 +471,7 @@ class Acessos:
             uid = secrets.token_hex(6)
             u = dict(id=uid, email=email, nome=str(nome or "").strip()[:60] or email.split("@")[0], papel=papel, ativo=True,
                      senha=None, provisoria=True, criado=time.time(), ultimo=None)
-            prov = secrets.token_urlsafe(9)
-            self._definir(u, prov, provisoria=True)
+            self._definir(u, s, provisoria=True)
             self.usuarios.append(u)
             self._gravar_usuarios()
             self.registrar("usuario_criado", admin["email"], "%s (%s)" % (email, papel), ip)
@@ -357,17 +480,22 @@ class Acessos:
     # ------------------------------------------------------------------ cadastro pelo site e assinatura
     def cadastrar(self, nome, email, senha, aceite, ip="", assinatura=None):
         """Conta criada pela propria pessoa (cadastro aberto), com o aceite dos termos guardado (versao, data e IP)."""
-        email = (email or "").strip().lower()[:200]
+        email = _texto(email).strip().lower()[:200]
         if not EMAIL_OK.match(email):
             raise Negado("E-mail inválido.")
-        nome = str(nome or "").strip()[:60]
+        nome = _texto(nome, 200).strip()[:60]
         if len(nome) < 2:
             raise Negado("Escreva o seu nome.")
-        if not aceite or not aceite.get("versao") or not aceite.get("termos") or not aceite.get("risco") or not aceite.get("maior"):
+        if not isinstance(aceite, dict) or not aceite.get("versao") or not aceite.get("termos") or not aceite.get("risco") \
+                or not aceite.get("maior"):
             raise Negado("Para criar a conta é preciso aceitar os termos, o aviso de risco e confirmar ser maior de 18 anos.")
         erro = senha_valida(senha, email)
         if erro:
             raise Negado(erro)
+        with self.trava:
+            if self._por_email(email):
+                raise Negado("Já existe uma conta com este e-mail. Entre com ela (ou peça ao suporte para redefinir a senha).")
+        s = self._senha_nova(senha)
         with self.trava:
             if self._por_email(email):
                 raise Negado("Já existe uma conta com este e-mail. Entre com ela (ou peça ao suporte para redefinir a senha).")
@@ -377,19 +505,32 @@ class Acessos:
                      criado=time.time(), ultimo=time.time(), origem="cadastro",
                      aceite=dict(versao=str(aceite["versao"])[:20], quando=time.time(), ip=ip),
                      assinatura=assinatura or dict(status="inativa", ate=0, origem="", transacao=""))
-            self._definir(u, senha)
+            if assinatura:
+                u["email_compra"] = email                     # a compra feita antes do cadastro foi com este e-mail
+            self._definir(u, s)
             self.usuarios.append(u)
             self._gravar_usuarios()
             self.registrar("cadastro", email, "termos versão %s aceitos" % aceite["versao"], ip)
             return self._abrir_sessao(u, False, ip)
 
-    def definir_assinatura(self, email, status, ate, origem, transacao="", admin=None, ip=""):
-        """Liga/desliga a assinatura de quem tem este e-mail. Devolve True se a conta existe."""
+    def assinatura_de(self, email):
+        """Assinatura atual da conta deste e-mail (de entrada ou da compra): {} se a conta nao tem, None se nao existe conta."""
         with self.trava:
-            u = self._por_email(email)
+            u = self._por_email_compra(email)
+            return None if u is None else dict(u.get("assinatura") or {})
+
+    def definir_assinatura(self, email, status, ate, origem, transacao="", admin=None, ip="", compra=False, encerradas=None):
+        """Liga/desliga a assinatura de quem tem este e-mail. Devolve True se a conta existe.
+        compra=True: o e-mail veio da Hotmart (pode ser o e-mail da compra, guardado na conta, e nao o de entrada)."""
+        with self.trava:
+            u = self._por_email_compra(email) if compra else self._por_email(email)
             if u is None:
                 return False
             u["assinatura"] = dict(status=status, ate=ate, origem=origem, transacao=transacao, quando=time.time())
+            if encerradas:
+                u["assinatura"]["encerradas"] = list(encerradas)[-20:]
+            if compra:
+                u["email_compra"] = _texto(email).strip().lower()
             self._gravar_usuarios()
             self.registrar("assinatura", admin["email"] if admin else origem, "%s: %s até %s" % (u["email"], status,
                            time.strftime("%d/%m/%Y", time.gmtime((ate or 0) - 3 * 3600)) if ate else "-"), ip)
@@ -429,14 +570,16 @@ class Acessos:
 
     def redefinir(self, admin, uid, ip=""):
         """Sorteia outra senha provisoria (o usuario e obrigado a troca-la ao entrar) e encerra as sessoes dele."""
+        prov = secrets.token_urlsafe(9)
+        s = self._senha_nova(prov)
         with self.trava:
             u = self._por_id(uid)
             if u is None:
                 raise Negado("Usuário não encontrado.")
-            prov = secrets.token_urlsafe(9)
-            self._definir(u, prov, provisoria=True)
+            self._definir(u, s, provisoria=True)
             self._encerrar_sessoes(uid)
-            self.erros.pop(u["email"].lower(), None)
+            for k in [k for k in self.erros if k[0] == u["email"].lower()]:
+                self.erros.pop(k, None)
             self._gravar_usuarios()
             self.registrar("senha_redefinida", admin["email"], u["email"], ip)
             return self.publico(u), prov

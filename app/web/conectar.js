@@ -119,6 +119,9 @@
 
   function render() {
     const c = el(); if (!c || !C.d) return;
+    // não redesenha enquanto a pessoa digita em qualquer campo da aba (ela se atualiza a cada 5 s)
+    const foco = document.activeElement;
+    if (foco && c.contains(foco) && /^(INPUT|SELECT|TEXTAREA)$/.test(foco.tagName)) return;
     const d = C.d, cfg = d.cfg, ea = d.ea || {}, aceito = d.aceite && d.aceite.versao === d.termoVersao;
     const testes = (AX.testes && AX.testes.lista ? AX.testes.lista() : []).filter((x) => !x.ate);
     const enderecoRobo = `http://127.0.0.1:${d.porta || location.port || 8765}`;
@@ -168,25 +171,19 @@
       </div>
       <div class="nota">Multiplicador: contratos na corretora para cada contrato do teste. O EA nunca passa do lote máximo, e para o dia quando a perda do dia chega no limite (vale o menor entre este e o do EA).</div>
       <div class="botoes"><button class="primario" id="conSalvar">Salvar</button></div>
-      <details class="con-real"><summary>Conta real</summary>
+      <details class="con-real" id="conReal"${C.realAberta ? " open" : ""}><summary>Conta real</summary>
         <div class="nota">O EA vem travado em conta DEMO. Para usar em conta real, mude a opção <i>SomenteDemo</i> no EA <b>e</b> confirme aqui. A responsabilidade pelas ordens é sua.</div>
         ${cfg.real ? '<div class="botoes"><button id="conRealOff">Voltar a permitir só DEMO</button></div>'
           : '<label class="campo"><span>Escreva CONTA REAL para permitir</span><input id="conRealTxt" autocomplete="off"></label><div class="botoes"><button class="perigo" id="conRealOn">Permitir conta real</button></div>'}</details></div>`;
     h += `<div class="card"><div class="rot">PROFIT (NELOGICA)</div>
       <div class="nota">No Profit, a automação é feita dentro do próprio Profit: as estratégias E1 a E10 têm script NTSL pronto (pasta <b>ntsl</b> do robô). Abra no Profit em <i>Estratégias › Editor de estratégias</i>, cole o script e use a <b>Automação de estratégias</b> do Profit, primeiro no simulador dele. A ligação direta com o Profit (DLL) depende do pacote da Nelogica.</div></div>`;
     h += `<div class="card"><div class="rot">REGISTRO</div>${d.log.length ? `<div class="con-log">${d.log.map((x) => `<div><span>${quando(x.t)}</span><b>${AX.esc(x.tipo)}</b><em>${AX.esc(x.detalhe)}</em></div>`).join("")}</div>` : '<div class="nota">Nada ainda.</div>'}</div>`;
-    // não redesenha enquanto a pessoa digita no piloto (a aba se atualiza a cada 5 s)
-    const foco = document.activeElement;
-    if (foco && foco.closest && foco.closest(".piloto") && c.contains(foco)) return;
     c.innerHTML = h + guia();
     ligarGuia();
     ligarPiloto(d);
     const intro = $("conIntro"); if (intro) intro.ontoggle = () => { C.introAberta = intro.open; };
+    const real = $("conReal"); if (real) real.ontoggle = () => { C.realAberta = real.open; };
     const bt = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
-    bt("conLigar", () => {
-      if (!cfg.ligado && !confirm("Ligar o envio de ordens? O EA vai seguir o teste escolhido na conta conectada (" + (ea.tipo || "?") + ").")) return;
-      enviar({ acao: "ligar", ligado: !cfg.ligado }, cfg.ligado ? "Envio de ordens desligado." : "Envio de ordens ligado.");
-    });
     bt("conToken", () => { if (d.temToken && !confirm("Gerar um código novo? O EA com o código antigo para de funcionar.")) return; enviar({ acao: "token" }, "Código gerado."); });
     bt("conCopiar", async () => { try { await navigator.clipboard.writeText(C.token); AX.toast("Código copiado.", "ok"); } catch (e) { AX.toast("Selecione o código e copie com Ctrl+C.", "aviso"); } });
     bt("conSalvar", () => enviar({ acao: "config", simbolo: $("conSim").value, ativo: $("conAtivo").value, teste: $("conTeste").value || null,

@@ -145,17 +145,28 @@
     el.querySelectorAll("tr.clic").forEach((tr) => (tr.onclick = () => { AX.escolherEst(tr.dataset.est); AX.trocarAba("vivo"); }));
     const bg = $("iaGestoes"); if (bg) bg.onclick = () => AX.abrirGestoes();
     const ba = $("iaAjustar"); if (ba) ba.onclick = ajustar;
+    pintarAjuste();
     const cv = $("iaDiario"); if (cv) curva(cv, Di);
   }
 
+  // o "procurar o melhor ajuste" fica guardado em S.aj: a aba se redesenha sozinha e não pode apagar a busca nem o resultado
   async function ajustar() {
-    const el = $("iaAjuste");
-    el.innerHTML = '<div class="nota">testando as gestões e as proteções nas duas metades do histórico…</div>';
-    let j;
-    const pedido = AX.parametros(), vez = (ajustar.vez = (ajustar.vez || 0) + 1);     // resposta de um pedido antigo é descartada
-    try { j = await AX.json("/api/ajuste?" + pedido, { tempo: 240000 }); }
-    catch (e) { if (vez === ajustar.vez && $("iaAjuste")) $("iaAjuste").innerHTML = `<div class="nota ruim">${AX.esc(e.message)}</div>`; return; }
-    if (!$("iaAjuste") || vez !== ajustar.vez || pedido !== AX.parametros()) return;
+    const pedido = AX.parametros();
+    if (S.aj && S.aj.estado === "buscando" && S.aj.pedido === pedido) return;      // já está procurando: não começa outra
+    const a = (S.aj = { pedido, estado: "buscando" });
+    pintarAjuste();
+    try { a.j = await AX.json("/api/ajuste?" + pedido, { tempo: 240000 }); a.estado = "ok"; }
+    catch (e) { a.erro = e.message; a.estado = "erro"; }
+    if (S.aj === a) pintarAjuste();                                                  // resposta de um pedido antigo é descartada
+  }
+  function pintarAjuste() {
+    const el = $("iaAjuste"), a = S.aj;
+    if (!el || !a || a.pedido !== AX.parametros()) return;
+    if (a.estado === "buscando") el.innerHTML = '<div class="nota">testando as gestões e as proteções nas duas metades do histórico…</div>';
+    else if (a.estado === "erro") el.innerHTML = `<div class="nota ruim">${AX.esc(a.erro)}</div>`;
+    else mostrarAjuste(a.j);
+  }
+  function mostrarAjuste(j) {
     const D = { meta: { moeda: j.moeda } }, din = (v) => (v == null ? "-" : AX.dinheiro(v, D, true));
     const pr = (x) => (x.prot.length ? x.prot.map((k) => ({ corte: "corte antecipado", forca: "perdeu força", folga: "folga", tol: "tolerância" }[k] || k)).join(" + ") : "sem proteção");
     const lin = (x, rot) => `<tr><td>${rot}<br><small class="neutro">${AX.esc(x.nome)} · ${AX.esc(pr(x))}</small></td>

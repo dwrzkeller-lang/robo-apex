@@ -84,7 +84,7 @@
   const TOL = 6, FRACO = TOL - 0.5;                  // acerto do clique em px; dentro de uma área pintada o acerto é "fraco" e perde para uma linha por cima
   const LIMITE = 80, LARG_POS = 30, COR_PADRAO = "#ffd23f", FONTE = "11px Segoe UI, system-ui";
   const VERDE = "#22e39a", VERM = "#ff5c6e", CLARO = "#d9e0ea", PI2 = Math.PI * 2;
-  const CLIP = "apex_desenho_clip", UI = "apex_desenho_ui";
+  const CLIP = "apex_desenho_clip";
 
   // ---------------------------------------------------------------- estado
   let desenhos = [], ferramenta = "cursor", selecionado = null, oculto = false;
@@ -324,10 +324,10 @@
 
   const imaLigado = () => imaEl.classList.contains("on");
   const estilo = () => ({ cor: corEl.value, esp: +espEl.value || 2 });
-  function lerUi() { try { return JSON.parse(localStorage.getItem(UI) || "{}") || {}; } catch (e) { return {}; } }
-  function salvarUi() {              // lembra, só neste navegador: última ferramenta de cada grupo, cor, espessura e ímã
+  function lerUi() { const u = AX.pref.ui && AX.pref.ui.desenho; return u && typeof u === "object" ? u : {}; }
+  function salvarUi() {              // lembra na conta do usuário: última ferramenta de cada grupo, cor, espessura e ímã
     const ult = {}; for (const k in grupos) ult[k] = grupos[k].atual;
-    try { localStorage.setItem(UI, JSON.stringify({ grupos: ult, cor: corEl.value, esp: +espEl.value, ima: imaLigado() })); } catch (e) { /* sem armazenamento: só não lembra */ }
+    AX.pref.ui = Object.assign({}, AX.pref.ui, { desenho: { grupos: ult, cor: corEl.value, esp: +espEl.value, ima: imaLigado() } }); AX.salvarPref();
   }
   imaEl.onclick = () => { imaEl.setAttribute("aria-pressed", String(imaEl.classList.toggle("on"))); salvarUi(); };
   olhoEl.onclick = () => olho();

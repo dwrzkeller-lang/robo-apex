@@ -5,7 +5,7 @@ a = Analysis(
     ['app/robo_apex.py'],
     pathex=['app'],
     binaries=[],
-    datas=[('app/web', 'web')],
+    datas=[('app/web', 'web'), ('app/curso', 'curso')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
