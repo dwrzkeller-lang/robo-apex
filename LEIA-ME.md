@@ -15,6 +15,27 @@ estudos (RSI-2 de Connors, ORB de Zarattini & Aziz, fechamento de gap e o moment
 
 ---
 
+## Novidades da versão 3.5
+
+- **Pronto para o modo online:** cada assinante tem a sua pasta: preferências, o que a IA aprendeu com as edições, desenhos,
+  edições, lições, testes, boleta e MetaTrader ficam na conta dele e abrem iguais em qualquer computador. Candles do
+  MetaTrader não se misturam entre usuários.
+- **Segurança:** código de uso único no primeiro acesso online, limite de tentativas de login e cadastro, sessão do
+  administrador de 15 minutos, compras da Hotmart tratadas por transação (cancelamento vale até o fim do mês pago),
+  usuário vencido ou desativado não recebe sinal no EA, arquivos gravados sem risco de corromper.
+- **Menu depois do login:** escolha um dos 3 volumes do treinamento (ler na tela ou baixar) ou abra o robô ao vivo. Os
+  volumes só abrem para quem está logado e com a assinatura em dia.
+- **3 volumes de treinamento em PDF:** Conhecendo o robô; Backtest, replay e gestão; As estratégias por dentro.
+- **Página de vendas nova:** trade rodando no topo, faixa de resultados com período e operações de cada um, seção de
+  Inteligência Artificial, todos os mercados, quadro de gestão e preço com tudo incluso.
+- **Simulador mais fiel:** a zeragem do dia acontece no mesmo candle no backtest e ao vivo; ordem limitada não sai mais
+  no 0x0 por engano; entrada manual além do stop é cancelada; lote fracionado respeita o passo mínimo; o tamanho pelo
+  risco conta o escorregamento da saída; só stops de verdade contam para o limite de stops do dia.
+- **Tela:** a aba Conectar não apaga mais o que você digita; Comparar as gestões abre na aba certa; o topo e as janelas
+  funcionam no celular; a lista de cotações não pula para o começo.
+- **Nomes de estratégia genéricos** (sem nome de pessoas ou cursos) e EA 1.01 (cancela as outras ordens assim que uma
+  é executada).
+
 ## Novidades da versão 3.4
 
 - **21 setups novos de pivô, virada em V e rompimento (E26 a E46), um por um, para backtest:** pivô de 3 a 5 barras,

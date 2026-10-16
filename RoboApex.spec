@@ -5,7 +5,7 @@ a = Analysis(
     ['app/robo_apex.py'],
     pathex=['app'],
     binaries=[],
-    datas=[('app/web', 'web'), ('app/curso', 'curso')],
+    datas=[('app/web', 'web')],   # o curso pago (app/curso) NAO vai no exe: a Release e publica
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

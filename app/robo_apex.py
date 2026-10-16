@@ -57,7 +57,7 @@ import radar
 from estrategias import AQUECIMENTO, ESTRATEGIAS, GESTOES, GESTOES_CURTO, atencao
 from simulador import PROTECOES, atualizar_ultimo, estatisticas, preparar, simular
 
-VERSAO = "3.4"
+VERSAO = "3.5"
 ARGS = sys.argv[1:]
 
 
