@@ -109,6 +109,7 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
       seletivo=True                   -> filtro de contexto (estrategias.passa_seletivo): so a favor da tendencia do
                                          diario e, nas estrategias de correcao, so com tendencia limpa
       qual="A+" / "A" / "B"           -> so arma sinais com nota de qualidade A+, A para cima ou B para cima (qualidade.py)
+      rodizio={dia: [codigos]}        -> so as estrategias escolhidas para aquele dia armam ordens (rodizio automatico)
 
     tempos + ajustes (teste ao vivo) = o que o usuario mudou na mao. Cada ajuste: dict(t=horario do candle em que foi
       feito, tipo, chave="EST|t_sinal|dir", ...). "stop"/"alvo" (valor) valem a partir do candle SEGUINTE; "sair" e
@@ -131,6 +132,7 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
     loss_dia, meta_dia = float(pl.get("loss_dia") or 0.0), float(pl.get("meta_dia") or 0.0)
     seletivo = bool(pl.get("seletivo"))
     qual_min = pl.get("qual") if pl.get("qual") in ("A+", "A", "B") else ""
+    rodizio = pl.get("rodizio")                        # {dia: [codigos]}: rodizio automatico (so as escolhidas do dia entram)
     prot = set(pl.get("prot") or ())                 # protecoes do plano: folga, tol, corte, forca (ver PROTECOES)
     regras = dict(pl.get("regras") or {})             # cod -> (fator do stop, alvo em vezes o risco): a "Minha regra" do usuario
     h_ini, h_fim, h_zer = cfg["hora_inicio"], cfg["hora_fim"], cfg["hora_zeragem"]
@@ -561,6 +563,8 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                     and not (G.intraday and s["stops"] >= max_stops)):
                 for cod in s["cods"]:
                     if not pode_entrar(i, cod):
+                        continue
+                    if rodizio is not None and cod not in rodizio.get(d[i], ()):
                         continue
                     od = avaliar(Gs, cod, i)
                     if not od:

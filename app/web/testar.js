@@ -55,7 +55,7 @@
     </div>`;
   }
   async function testar(est, silencioso = false) {
-    const cod = est || (AX.pref.est !== "TODAS" ? AX.pref.est : AX.pref.ultEst);
+    const cod = est || (!["TODAS", "AUTO"].includes(AX.pref.est) ? AX.pref.est : AX.pref.ultEst);
     const e = AX.cfg.estMap[cod];
     if (!e) return AX.toast("Escolha uma estratégia no topo.", "aviso");
     if (!silencioso) { M.per = M.per && M.cod === cod && M.aberto ? M.per : periodoInicial(); M.cod = cod; M.aberto = true; }

@@ -31,6 +31,7 @@ import threading
 import time
 import traceback
 import urllib.parse
+import urllib.request
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
@@ -54,7 +55,7 @@ import radar
 from estrategias import AQUECIMENTO, ESTRATEGIAS, GESTOES, GESTOES_CURTO, atencao
 from simulador import PROTECOES, atualizar_ultimo, estatisticas, preparar, simular
 
-VERSAO = "3.2"
+VERSAO = "3.3"
 ARGS = sys.argv[1:]
 
 
@@ -91,7 +92,7 @@ def _cripto_viva(chave, tf):
             B, fonte, cfg = cripto.candles(BASE, chave, tf)
             return df.marcar(B, ant[0] if ant else None), fonte, cfg
         return fn
-    return df.vivo(("cr", chave, tf), fabrica, 4.0)
+    return df.vivo(("cr", chave, tf), fabrica, 4.0, 60.0)        # retrato com mais de 1 min (ex.: tela recem-aberta): espera o novo
 
 
 _MT5_MEM = {}
@@ -140,7 +141,7 @@ def carregar(chave, tf):
         if chave not in df.ATIVOS:
             raise ValueError("ativo desconhecido: %s" % chave)
         cfg = df.ATIVOS[chave]
-        B, fonte = df.carregar(BASE, chave, tf)
+        B, fonte = df.carregar(BASE, chave, tf, max_idade=60.0)        # mais velho que 1 min: busca agora em vez de mostrar o antigo
     if len(B["c"]) < AQUECIMENTO + 20:
         raise RuntimeError("Poucos candles (%d) em %s. Preciso de pelo menos %d." % (len(B["c"]), chave, AQUECIMENTO + 20))
     return B, fonte, cfg
@@ -198,10 +199,59 @@ def impressao(B, m):
 _RET = collections.OrderedDict()
 
 
+# ------------------------------------------------------------------------------------------ rodizio automatico
+# A cada dia, so operam as 3 estrategias que mais ganharam (soma em vezes o risco) nos 20 dias de pregao anteriores, e
+# so as que ficaram no positivo. So usa dias que ja terminaram: nada olha o futuro. Teste com custos (90 mil operacoes,
+# 12 ativos, 5/15/60 min): media -0,060R contra -0,117R operando todas (a perda caiu pela metade nas duas metades do
+# periodo), mas continua negativa: nao e garantia de lucro.
+RODIZIO_DIAS, RODIZIO_N = 20, 3
+_ROD = collections.OrderedDict()
+
+
+def rodizio_mapa(chave, tf, B, Gs, sc, gestao, contratos, max_stops, plano):
+    """{dia AAAAMMDD: (codigos escolhidos)} para todos os dias dos candles (o de hoje sai dos dias anteriores)."""
+    d = B["d"]
+    hoje = d[-1]
+    i_ontem = bisect.bisect_left(d, hoje) - 1
+    pl = {k: v for k, v in (plano or {}).items() if k != "rodizio"}
+    key = (chave, tf, hoje, i_ontem, B.get("sid") if i_ontem < 0 else impressao(B, max(AQUECIMENTO, i_ontem)), gestao,
+           float(contratos), max_stops, json.dumps(pl, sort_keys=True, default=str))
+    if key in _ROD:
+        _ROD.move_to_end(key)
+        return _ROD[key]
+    por = collections.defaultdict(lambda: collections.defaultdict(float))
+    if i_ontem > AQUECIMENTO:
+        for cod in ESTRATEGIAS:
+            if ESTRATEGIAS[cod]["intraday"] and tf >= 1440:
+                continue
+            r = simular_c(chave, tf, B, Gs, sc, [cod], AQUECIMENTO, i_ontem, False, gestao=gestao, contratos=contratos,
+                          max_stops=max_stops, plano=pl or None)
+            for t in r["trades"]:
+                por[cod][d[t["i_ent"]]] += t["R"]
+    dias = sorted(set(d[AQUECIMENTO:]))
+    mapa = {}
+    for k, dia in enumerate(dias):
+        janela = dias[max(0, k - RODIZIO_DIAS):k]
+        if len(janela) < 5:
+            continue
+        somas = sorted(((sum(por[c].get(x, 0.0) for x in janela), c) for c in por), reverse=True)[:RODIZIO_N]
+        mapa[dia] = [c for v, c in somas if v > 0]
+    _ROD[key] = mapa
+    while len(_ROD) > 40:
+        _ROD.popitem(last=False)
+    return mapa
+
+
 def simular_c(chave, tf, B, Gs, sc, cods, i_ini=None, i_fim=None, aberto=False, gestao="padrao", contratos=1.0, max_stops=2,
               juntas=False, com_atencao=False, plano=None, ajustes=None):
     """Simulacao com retomada: continua do ultimo retrato valido desta mesma consulta em vez de refazer o periodo.
-    O retrato fica 2 candles atras do fim (o ultimo candle fechado as vezes e corrigido pela fonte). Chamar com a TRAVA."""
+    O retrato fica 2 candles atras do fim (o ultimo candle fechado as vezes e corrigido pela fonte). Chamar com a TRAVA.
+    cods == ["AUTO"]: rodizio automatico (as 3 melhores estrategias dos ultimos 20 dias, a cada dia)."""
+    if "AUTO" in cods:
+        mapa = rodizio_mapa(chave, tf, B, Gs, sc, gestao, contratos, max_stops, plano)
+        cods = [c for c in ESTRATEGIAS if not (ESTRATEGIAS[c]["intraday"] and tf >= 1440)]
+        juntas = False
+        plano = dict(plano or {}, rodizio=mapa)
     n = len(B["c"])
     vivo = i_fim is None or i_fim >= n - 1
     alvo = (n - 3) if vivo else i_fim
@@ -379,7 +429,7 @@ def _pedido(q):
     if tf not in df.TEMPOS:
         tf = 5
     est = q.get("est", ["E1"])[0]
-    if est != "TODAS" and est not in ESTRATEGIAS:
+    if est not in ("TODAS", "AUTO") and est not in ESTRATEGIAS:
         raise ValueError("estratégia desconhecida: %s" % est)
     gestao = q.get("gestao", ["padrao"])[0]
     if gestao not in GESTOES:
@@ -687,8 +737,14 @@ def api_sim(q, uid=None):
                 foraDoPlano=sum(1 for o in r["ordens"] if o["status"] == "cancelada" and o["motivo"].startswith("risco acima do plano")),
                 iIni=r["ini"], iFim=r["fim"], dataIni=d[r["ini"]], dataFim=d[r["fim"]],
                 dataMin=d[AQUECIMENTO], dataMax=d[-1], ultimo=n - 1, codigos=r["codigos"],
+                offsetLocal=int(3600 * df.offset_horas(cfg.get("fuso", "BRT"), time.time())),     # relogio do ativo (contagem do candle)
                 sid=B.get("sid"), n=n, fp=str(impressao(B, n - 3)), idade=idade_dados(chave, tf), ia=ia_res,
                 iaSel=IA_estado(chave, tf, gestao, contratos))
+    if est == "AUTO":                                  # rodizio: quais estrategias operam hoje (e as dos ultimos dias)
+        with TRAVA:
+            mapa = rodizio_mapa(chave, tf, B, Gs, sc, gestao, contratos, max_stops, P["plano"])
+        meta["rodizio"] = [[k, mapa[k]] for k in sorted(mapa)[-6:]]
+        aten_ult = [x for x in aten_ult if x[0] in mapa.get(d[-1], [])]
     out = dict(meta=meta, abertas=_sem_f(r["abertas"]), atenUlt=aten_ult, stats=st, porEst=por_est, contexto=contexto(chave),
                edN=n_ed, statsRobo=st_robo)
     out.update(series)
@@ -833,7 +889,7 @@ def _ligar_piloto(uid, p, ip, u):
         raise ValueError("O EA ainda não mandou os candles de %s. Abra o MetaTrader, coloque o EA no gráfico desse símbolo "
                          "com o seu código de conexão e espere o \"EA CONECTADO\"." % sim)
     est = str(p.get("est") or "")
-    if est != "TODAS" and est not in ESTRATEGIAS:
+    if est not in ("TODAS", "AUTO") and est not in ESTRATEGIAS:
         raise ValueError("Escolha a estratégia.")
     antigo = CONEX.publico(uid)["cfg"].get("teste")
     x = TESTES.ligar(uid, dict(ativo="MT5:" + sim, tf=_int({"tf": [p.get("tf")]}, "tf", 5), est=est, gestao=p.get("gestao"),
@@ -851,6 +907,54 @@ def _ligar_piloto(uid, p, ip, u):
     r = CONEX.acao(uid, dict(acao="ligar", ligado=True), ip)
     ACESSOS.registrar("piloto_ligado", u["email"], "%s %s %s min nota %s" % (sim, est, x["tf"], p.get("qual") or "todas"), ip)
     return r
+
+
+_LISTA = {"t": 0.0, "v": {}}
+_LISTA_TRAVA = threading.Lock()
+
+
+def api_lista(q):
+    """Lista de cotacoes do mercado aberto no topo (como a lista do TradingView): ultimo preco, variacao do dia e se o
+    mercado esta aberto. Bolsa e mundo: um pedido so ao Yahoo para varios simbolos (spark), guardado por 10 s.
+    Cripto: Binance (24 h)."""
+    mercado = q.get("mercado", ["b3"])[0]
+    if mercado == "cripto":
+        d = api_cripto_mercado()
+        return dict(itens=[dict(chave=x["chave"], nome=x["moeda"] + "/USDT", preco=x["preco"], varPct=x["var"],
+                                var=x["preco"] - x["preco"] / (1 + x["var"] / 100.0), aberto=True, dec=None) for x in d.get("moedas", [])])
+    chaves = [k for k, v in df.ATIVOS.items() if v.get("mercado") != "cripto" and v.get("yahoo")]
+    if mercado == "opcoes":
+        chaves = [k for k in chaves if df.ATIVOS[k].get("grupo") == "Ações da B3" or k in ("WIN", "BOVA11")]
+    with _LISTA_TRAVA:
+        faltam = [k for k in chaves if time.time() - _LISTA["v"].get(k, {}).get("_t", 0) > 10]
+        for i in range(0, len(faltam), 20):
+            parte = faltam[i:i + 20]
+            sims = ",".join(urllib.parse.quote(df.ATIVOS[k]["yahoo"], safe="") for k in parte)
+            try:
+                req = urllib.request.Request("https://query1.finance.yahoo.com/v7/finance/spark?symbols=%s&range=1d&interval=5m" % sims,
+                                             headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=12) as r:
+                    js = json.loads(r.read().decode("utf-8"))
+            except Exception:
+                continue
+            por_sim = {x.get("symbol"): x for x in (js.get("spark") or {}).get("result") or []}
+            for k in parte:
+                cfg = df.ATIVOS[k]
+                x = por_sim.get(cfg["yahoo"])
+                try:
+                    m = x["response"][0]["meta"]
+                    esc = cfg.get("escala", 1.0)
+                    preco, ant = m["regularMarketPrice"] * esc, (m.get("previousClose") or m.get("chartPreviousClose")) * esc
+                    t = m.get("regularMarketTime") or 0
+                except (TypeError, KeyError, IndexError):
+                    continue
+                # aberto: negociou nos ultimos 20 min (B3 tem ~15 min de atraso na fonte gratuita)
+                _LISTA["v"][k] = dict(chave=k, nome=cfg.get("curto") or cfg["nome"].split(" - ")[0].split(" (")[0], preco=preco,
+                                      var=preco - ant, varPct=100.0 * (preco - ant) / ant if ant else 0.0,
+                                      aberto=time.time() - t < (35 * 60 if cfg.get("mercado") == "b3" else 20 * 60),
+                                      dec=cfg["decimais"], _t=time.time())
+        itens = [{kk: vv for kk, vv in _LISTA["v"][k].items() if kk != "_t"} for k in chaves if k in _LISTA["v"]]
+    return dict(itens=itens)
 
 
 _MERCADO_CR = {"t": 0.0, "v": None}
@@ -1115,7 +1219,7 @@ class Sentinela:
                 bruto = _ler_json(os.path.join(pasta_de(uid), "estado_testes.json"), [])
                 ok = []
                 for x in bruto if isinstance(bruto, list) else []:
-                    if (isinstance(x, dict) and x.get("id") and x.get("ativo") and (x.get("est") == "TODAS" or x.get("est") in ESTRATEGIAS)
+                    if (isinstance(x, dict) and x.get("id") and x.get("ativo") and (x.get("est") in ("TODAS", "AUTO") or x.get("est") in ESTRATEGIAS)
                             and isinstance(x.get("desde"), (int, float)) and x["desde"] > 0):
                         x.setdefault("ajustes", [])
                         x.pop("erro", None)
@@ -1177,7 +1281,7 @@ class Sentinela:
 
     def ligar(self, uid, p):
         chave, tf, est = str(p.get("ativo", "")), int(p.get("tf", 5)), str(p.get("est", ""))
-        if est != "TODAS" and est not in ESTRATEGIAS:
+        if est not in ("TODAS", "AUTO") and est not in ESTRATEGIAS:
             raise ValueError("estratégia desconhecida")
         if chave.startswith("CSV:"):
             raise ValueError("Arquivo CSV não recebe candles novos: escolha um ativo ao vivo.")
@@ -2046,6 +2150,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(BOLETA.estado(uid, q.get("ativo", [None])[0]))
             if cam == "/api/testar":
                 return self._json(api_testar(q))
+            if cam == "/api/lista":
+                return self._json(api_lista(q))
             if cam == "/api/minhas":
                 return self._json(api_minhas(q))
             if cam == "/api/cripto/mercado":

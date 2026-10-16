@@ -265,6 +265,7 @@ def _yahoo_para_barras(js, cfg, tf=5):
             h_, l_ = max(o, h, l, c), min(o, h, l, c)
             _add(b, datetime(dt.year, dt.month, dt.day), o * escala, h_ * escala, l_ * escala, c * escala, v or 0)
         return b
+    retrato = None
     for i, t in enumerate(ts):
         o, h, l, c, v = q["open"][i], q["high"][i], q["low"][i], q["close"][i], q["volume"][i]
         if None in (o, h, l, c):
@@ -272,13 +273,29 @@ def _yahoo_para_barras(js, cfg, tf=5):
         dt = hora_local(cfg, t)
         if not fds and dt.weekday() >= 5:
             continue
-        if (dt.hour * 60 + dt.minute - s0) % tf:
-            continue        # retrato do preco "agora" (fora da grade do tempo grafico), nao e candle
         hm = dt.hour * 100 + dt.minute
         if hm < sessao[0] or hm > sessao[1]:
             continue
+        if (dt.hour * 60 + dt.minute - s0) % tf or dt.second:
+            retrato = (dt, c)     # o preco de AGORA (fora da grade): vai para o candle que esta se formando, logo abaixo
+            continue
         h_, l_ = max(o, h, l, c), min(o, h, l, c)       # o Yahoo as vezes manda maxima < fechamento
         _add(b, dt, o * escala, h_ * escala, l_ * escala, c * escala, v or 0)
+    if retrato:
+        # O candle em formacao do Yahoo fica com o fechamento parado por minutos; o ultimo ponto da serie e o preco de
+        # agora. Ele atualiza o candle aberto (fechamento, maxima e minima) ou abre o candle novo, como no TradingView.
+        dt, c = retrato
+        c *= escala
+        m = dt.hour * 60 + dt.minute
+        m0 = s0 + ((m - s0) // tf) * tf
+        ini = dt.replace(hour=m0 // 60, minute=m0 % 60, second=0, microsecond=0)
+        t_ini = int(datetime(ini.year, ini.month, ini.day, ini.hour, ini.minute, tzinfo=timezone.utc).timestamp())
+        if b["t"] and b["t"][-1] == t_ini:
+            b["c"][-1] = c
+            b["h"][-1] = max(b["h"][-1], c)
+            b["l"][-1] = min(b["l"][-1], c)
+        elif not b["t"] or t_ini > b["t"][-1]:
+            _add(b, ini, c, c, c, c, 0)
     return b
 
 
@@ -318,7 +335,8 @@ class _Celula:
     def ler(self, max_idade=None):
         """max_idade (segundos): se o retrato e mais velho que isso, renova AGORA e espera (so para quem ja esta num
         trabalho de fundo, como a base de 5 meses pedindo os candles de hoje)."""
-        if self.valor is None or (max_idade is not None and time.time() - self.t_ok >= max_idade):
+        # (com a fonte fora do ar, quem pede nao fica esperando a cada pedido: uma tentativa a cada 30 s)
+        if self.valor is None or (max_idade is not None and time.time() - self.t_ok >= max_idade and time.time() - self.t_tentativa >= 30.0):
             with self.trava:                                   # so quem pediu ESTA fonte espera
                 if self.valor is None:
                     self.valor = self.fn(None)                 # primeira carga: o erro sobe para quem pediu
@@ -333,6 +351,7 @@ class _Celula:
         return self.valor
 
     def _renovar_agora(self):
+        self.t_tentativa = time.time()
         try:
             novo = self.fn(self.valor)
             if novo is not None:
@@ -455,6 +474,10 @@ def carregar_yahoo(base, chave, tf=5, guardar=True, max_idade=None):
                 if not (js.get("chart") or {}).get("result"):
                     raise RuntimeError("o Yahoo nao devolveu candles")
                 novo = _yahoo_para_barras(js, cfg, tf=tf)
+                if novo["t"] and ant_b and ant_b["t"] and ant_b["t"][-1] == novo["t"][-1]:
+                    # candle ainda aberto: a maxima e a minima que ele ja fez nao se perdem entre uma atualizacao e outra
+                    novo["h"][-1] = max(novo["h"][-1], ant_b["h"][-1])
+                    novo["l"][-1] = min(novo["l"][-1], ant_b["l"][-1])
                 b = _juntar(ant_b, novo) if novo["t"] else ant_b
                 if guardar and tf < 1440 and len(b["t"]) != st["n_gravado"] and agora - st["gravado"] > 300:
                     gravar_hist(b)                             # no disco no maximo a cada 5 min
@@ -464,7 +487,8 @@ def carregar_yahoo(base, chave, tf=5, guardar=True, max_idade=None):
                 fonte += " · %d dias guardados" % len(set(b["d"]))
             return b, fonte
         return fn
-    return vivo(("y", os.path.abspath(base), chave, tf, guardar), fabrica, 20.0 if tf < 1440 else 900.0, max_idade)
+    ttl = 900.0 if tf >= 1440 else 20.0 if cfg.get("mercado") == "b3" else 8.0      # moedas e futuros: preco quase ao vivo
+    return vivo(("y", os.path.abspath(base), chave, tf, guardar), fabrica, ttl, max_idade)
 
 
 # ------------------------------------------------------------------------------------------ base de 5 meses

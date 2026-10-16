@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="opcoes.css">
 <link rel="stylesheet" href="perfil.css">
 <link rel="stylesheet" href="tema.css">
-<link rel="stylesheet" href="tema2.css">
+<link rel="stylesheet" href="tv.css">
 </head>
 <body>
 
@@ -60,9 +60,10 @@
   <div class="acoes-topo">
     <button id="btTestar" class="bt-testar" data-dica="Testar esta estratégia: roda a estratégia escolhida neste ativo, no período do topo, em 5, 15 e 60 minutos. Mostra quanto ganhou e perdeu, mês a mês e semana a semana, e deixa ligar o teste ao vivo.">▶ Testar<span class="lg"> estratégia</span></button>
     <button id="btMinhas" class="bt-minhas" data-dica="Minhas estratégias: escolha as suas favoritas e veja de uma vez como cada uma foi neste ativo e o que cada uma está fazendo agora.">★ Minhas<span class="lg"> estratégias</span></button>
+    <button id="btTempoReal" class="bt-tempo-real" data-dica="Ao vivo: fecha o replay, volta para a aba Agora, busca os candles de agora e leva o gráfico até o candle que está se formando (tempo real).">● AO VIVO</button>
     <button id="btReplay" class="bt-replay" data-dica="Replay: escolha um dia e assista o pregão inteiro candle a candle, com a estratégia escolhida entrando e saindo na hora em que aconteceu. Você controla a velocidade, pausa e avança.">⏪ Replay</button>
   </div>
-  <div class="campo campo-vivo"><span>Ao vivo <i class="q" data-dica="Como estão os testes ao vivo que você ligou neste mercado: quantos estão rodando, quanto fizeram hoje e desde que foram ligados (simulado, sem dinheiro). Sem teste ligado fica em standby: nenhuma estratégia roda sozinha. Clique para ver cada um."></i></span>
+  <div class="campo campo-vivo"><span>Robôs ligados <i class="q" data-dica="Como estão os testes ao vivo que você ligou neste mercado: quantos estão rodando, quanto fizeram hoje e desde que foram ligados (simulado, sem dinheiro). Sem teste ligado fica em standby: nenhuma estratégia roda sozinha. Clique para ver cada um."></i></span>
     <button id="btAoVivo" class="vivo-topo standby" type="button"><i class="vt-luz"></i><span class="vt-tit">standby</span><span class="vt-sub">nenhum teste ligado</span></button></div>
   <button id="btTutorial" class="bt-icone" data-dica="Tutorial: um passeio de 1 minuto pelo robô.">?</button>
   <div class="status" id="statusDados"><i class="luz"></i><span>carregando…</span></div>
@@ -113,7 +114,6 @@
     <div class="graf-botoes">
       <button id="btCandles" data-dica="Aparência dos candles: cores de alta e de baixa, candle cheio ou vazado e a opção de colorir pela tendência das médias. Duplo clique num candle abre a mesma janela.">Candles</button>
       <button id="btPerfil" data-dica="Volume por preço, estilo Profit: onde houve mais negócio em cada faixa de preço, os principais pontos de compra e de venda e quantas entradas das estratégias aconteceram em cada lugar.">Volume por preço</button>
-      <button id="btRaiox" class="bt-raiox" data-dica="Raio-X do price action: estrutura (HH, HL, LH, LL), rompimentos (BOS e CHoCH), zonas de demanda e oferta, desequilíbrios (FVG) e liquidez desenhados no gráfico. Clique para ligar ou desligar.">◎ Raio-X</button>
       <button id="btInd" data-dica="Indicadores: médias móveis à escolha, VWAP, Bollinger, Keltner, volume, IFR e estocástico; os níveis que o robô traça sozinho; e como as operações aparecem no gráfico. São só para leitura: as estratégias não mudam.">Indicadores</button>
       <button id="btPeriodoTodo" data-dica="Mostra o período inteiro escolhido no topo.">↔</button>
       <button id="btCentro" data-dica="Volta para o último candle com a escala de preço automática (tecla Home).">⌖ Centralizar</button>
@@ -144,8 +144,8 @@
     <!-- ============================== AO VIVO ============================== -->
     <section class="aba on" id="aba-vivo">
       <div class="erro oculto" id="erroVivo"></div>
+      <div class="card lista" id="cardLista"></div>
       <div class="card momento" id="cardVivo"><div class="estado">-</div></div>
-      <div class="card raiox oculto" id="cardRaiox"></div>
       <div id="chipRobo"></div>
       <div class="card boleta oculto" id="cardBoleta"></div>
       <div class="card oculto" id="cardCripto"></div>
@@ -316,7 +316,7 @@
 <script src="desenho.js"></script>
 <script src="ops.js"></script>
 <script src="aovivo.js"></script>
-<script src="raiox.js"></script>
+<script src="lista.js"></script>
 <script src="plano.js"></script>
 <script src="opcoes.js"></script>
 <script src="perfil.js"></script>

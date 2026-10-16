@@ -1,0 +1,224 @@
+/* ROBÔ APEX 3.3 · visual limpo no estilo do TradingView: cores chapadas, sem brilho, sem degradê, sem desfoque.
+   Fundo #131722, painéis #1e222d, bordas #2a2e39, texto #d1d4dc, azul #2962ff, alta #089981, baixa #f23645.
+   Fica por cima de style.css e tema.css (carregado por último). */
+:root {
+  --bg: #131722; --bg2: #131722; --bg3: #1e222d; --bg4: #2a2e39;
+  --linha: #2a2e39; --linha2: #363a45; --txt: #d1d4dc; --txt2: #787b86;
+  --verde: #089981; --verde2: #089981; --verm: #f23645; --amar: #f7c548; --laranja: #ff9800;
+  --aqua: #2962ff; --fucsia: #e040fb; --azul: #2962ff; --roxo: #7e57c2;
+  --acento: #2962ff; --acento2: #5b8def; --neon1: #2962ff; --neon2: #2962ff;
+  --grad: #2962ff; --vidro: #1e222d; --sombra: none; --raio: 6px;
+  --fonte: -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, "Segoe UI", sans-serif;
+}
+body.modo-cripto { --neon1: #f7931a; --neon2: #f7931a; --acento: #f7931a; --acento2: #ffb74d; --grad: #f7931a; }
+body.modo-opcoes { --neon1: #089981; --neon2: #089981; --acento: #089981; --acento2: #26a69a; --grad: #089981; }
+
+*, *::before, *::after { text-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+html, body { background: var(--bg); color: var(--txt); font-family: var(--fonte); font-size: 13px; }
+body::before, body::after { display: none !important; animation: none !important; }
+b, .grande, .tab .n, .op-d, .op-h { font-variant-numeric: tabular-nums; }
+
+/* ---------------- controles ---------------- */
+button, select, input { background: var(--bg3); color: var(--txt); border: 1px solid var(--linha); border-radius: 4px; box-shadow: none !important; font-family: var(--fonte); }
+button:hover:not(:disabled), select:hover { background: var(--bg4); border-color: var(--linha2); }
+input:focus, select:focus, button:focus-visible { outline: none; border-color: var(--acento); box-shadow: none; }
+.primario, button.primario { background: var(--acento) !important; color: #fff !important; border-color: var(--acento) !important; }
+.primario:hover:not(:disabled) { filter: brightness(1.1); }
+.primario::after, .bt-testar::after { display: none !important; }
+.perigo, button.perigo { background: transparent; color: var(--verm); border-color: var(--verm); }
+.perigo:hover:not(:disabled) { background: rgba(242, 54, 69, .12); }
+.secundario { background: transparent; border-color: var(--acento); color: var(--acento2); }
+.mini-btn { border-radius: 4px; }
+.seg { background: var(--bg3); border: 1px solid var(--linha); border-radius: 4px; }
+.seg button { background: transparent; border: 0; border-radius: 0; color: var(--txt2); }
+.seg button.on { background: var(--bg4) !important; color: var(--txt) !important; font-weight: 600; }
+.chk input, input[type=checkbox] { accent-color: var(--acento); }
+
+/* ---------------- topo: barra de ferramentas do TradingView ---------------- */
+.topo { background: var(--bg) !important; border-bottom: 1px solid var(--linha); box-shadow: none !important; padding: 6px 10px; column-gap: 6px; }
+.topo::after { display: none !important; }
+.logo { box-shadow: none; border-radius: 6px; width: 28px; height: 28px; }
+.titulo { background: none !important; -webkit-text-fill-color: var(--txt) !important; color: var(--txt) !important; letter-spacing: 1.5px; font-size: 14px; font-weight: 700; }
+.titulo .versao { -webkit-text-fill-color: var(--txt2) !important; color: var(--txt2) !important; background: var(--bg3); border: 1px solid var(--linha); }
+.campo > span { color: var(--txt2); font-size: 10px; letter-spacing: .3px; text-transform: none; font-weight: 500; }
+.topo select, .topo input, .periodo-sel, .topo .seg, .mercados, .acoes-topo > button, .topo .bt-icone, .vivo-topo { height: 30px; }
+.topo select, .topo input, .periodo-sel { background: var(--bg) !important; border: 1px solid transparent !important; font-weight: 600; color: var(--txt); }
+.topo select:hover, .topo input:hover, .periodo-sel:hover { background: var(--bg3) !important; border-color: var(--linha) !important; }
+.mercados { background: transparent; border: 1px solid var(--linha); border-radius: 4px; padding: 2px; }
+.mercados button { color: var(--txt2); border-radius: 3px; font-weight: 600; }
+.mercados button.on { background: var(--bg4) !important; color: var(--txt) !important; box-shadow: none !important; }
+.bt-testar, .bt-minhas, .bt-replay { background: transparent !important; border: 1px solid var(--linha) !important; color: var(--txt) !important; box-shadow: none !important; font-weight: 600; border-radius: 4px; letter-spacing: 0; }
+.bt-testar { color: #fff !important; background: var(--acento) !important; border-color: var(--acento) !important; }
+.bt-testar:hover:not(:disabled), .bt-minhas:hover:not(:disabled), .bt-replay:hover:not(:disabled) { background: var(--bg4) !important; filter: none; }
+.bt-testar:hover:not(:disabled) { background: #1e53e5 !important; }
+.bt-icone, #btTutorial { background: transparent; border-color: transparent; color: var(--txt2); }
+.bt-icone:hover { background: var(--bg3); color: var(--txt); }
+.bt-conta { background: var(--acento) !important; color: #fff !important; }
+.vivo-topo { background: transparent; border: 1px solid var(--linha); border-radius: 4px; }
+.vivo-topo.on { border-color: var(--verde); box-shadow: none; }
+.vivo-topo.em-op { border-color: var(--acento); box-shadow: none; }
+.vivo-topo.on .vt-luz { background: var(--verde); box-shadow: none; }
+
+/* ---------------- gráfico ---------------- */
+.grafico { background: #131722; }
+.grafico::before, .grafico::after { display: none !important; }
+.ferramentas { background: var(--bg); border-right: 1px solid var(--linha); }
+.ferramentas button { background: transparent; border-color: transparent; color: var(--txt2); }
+.ferramentas button:hover { background: var(--bg3); color: var(--txt); }
+.ferramentas button.on { background: var(--bg4); border-color: transparent; color: var(--acento2); box-shadow: none; }
+.graf-botoes button { background: var(--bg) !important; border: 1px solid var(--linha) !important; border-radius: 4px; color: var(--txt); font-weight: 500; }
+.graf-botoes button:hover { background: var(--bg3) !important; }
+.graf-botoes button.on { background: var(--bg4) !important; color: var(--txt) !important; box-shadow: none !important; }
+.legenda { font-family: var(--fonte); font-size: 12.5px; color: var(--txt); background: transparent; }
+.legenda .lg-ativo b { font-size: 13px; }
+.legenda s { text-decoration: none; color: var(--txt2); margin: 0 3px 0 6px; }
+.lg-alta { color: #089981; } .lg-baixa { color: #f23645; }
+.lg-vivo { font-style: normal; color: var(--verde); font-weight: 600; }
+#lgFecha { font-style: normal; color: var(--txt2); font-variant-numeric: tabular-nums; }
+.hud-vivo { background: var(--bg3) !important; border: 1px solid var(--linha) !important; box-shadow: none !important; border-radius: 4px !important; }
+.carga-meio { background: var(--bg3); border: 1px solid var(--linha); box-shadow: none; border-radius: 6px; }
+
+/* quadro do candle (clique) */
+.vela-info { position: absolute; z-index: 9; width: 180px; background: var(--bg3); border: 1px solid var(--linha2); border-radius: 4px; padding: 8px 10px; font-size: 12.5px; box-shadow: 0 6px 20px rgba(0, 0, 0, .45); }
+.vela-info.oculto { display: none; }
+.vela-info .vi-cab { display: flex; justify-content: space-between; align-items: center; color: var(--txt2); font-size: 11.5px; margin-bottom: 6px; }
+.vela-info .vi-cab button { border: 0; background: transparent; padding: 0 2px; color: var(--txt2); }
+.vela-info > div:not(.vi-cab) { display: flex; justify-content: space-between; padding: 2px 0; }
+.vela-info > div span { color: var(--txt2); }
+
+/* editor da boleta (clique na etiqueta da posição) */
+.bol-editor { position: absolute; z-index: 10; width: 280px; background: var(--bg3); border: 1px solid var(--linha2); border-radius: 4px; padding: 10px 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, .5); }
+.bol-editor .be-cab { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.bol-editor .be-cab span { margin-left: auto; font-weight: 700; }
+.bol-editor .be-x { border: 0; background: transparent; color: var(--txt2); padding: 0 2px; }
+.bol-editor .be-grade { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.bol-editor .be-bts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 10px; }
+
+/* ---------------- painel da direita ---------------- */
+.painel { background: var(--bg) !important; border-left: 1px solid var(--linha); }
+.divisor { border-left: 1px solid var(--linha); }
+.abas { background: var(--bg) !important; border-bottom: 1px solid var(--linha); }
+.abas button { background: transparent; border: 0; color: var(--txt2); border-radius: 0; }
+.abas button:hover { background: var(--bg3); color: var(--txt); }
+.abas button.on { color: var(--txt); background: transparent; }
+.abas button.on::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--acento); box-shadow: none; }
+.abas button.on svg { filter: none; stroke: var(--txt); }
+.subabas button { background: transparent; border: 1px solid var(--linha); color: var(--txt2); }
+.subabas button.on { background: var(--bg4) !important; color: var(--txt) !important; border-color: var(--linha2) !important; }
+.card { background: var(--bg) !important; border: 0 !important; border-bottom: 1px solid var(--linha) !important; border-radius: 0 !important; box-shadow: none !important; }
+.card::before, .card::after { display: none !important; }
+.card:hover { box-shadow: none !important; }
+.rot { color: var(--txt2); letter-spacing: .6px; font-weight: 600; }
+.grande { color: inherit; }
+.bom, .ganho { color: #089981; } .ruim, .perda { color: #f23645; }
+.tab tr { border-color: var(--linha); }
+.tab td, .tab th { border-color: var(--linha) !important; }
+.op:hover, .clic:hover { background: var(--bg3); }
+.op.sel { background: var(--bg4); }
+.chip { background: var(--bg3); border: 1px solid var(--linha); color: var(--txt2); }
+.chip.sobe { color: #089981; border-color: rgba(8, 153, 129, .4); } .chip.desce { color: #f23645; border-color: rgba(242, 54, 69, .4); }
+.toast { background: var(--bg3); border: 1px solid var(--linha2); border-radius: 4px; box-shadow: 0 6px 20px rgba(0, 0, 0, .45); }
+.popover, .menu-graf { background: var(--bg3) !important; border: 1px solid var(--linha2) !important; border-radius: 4px !important; box-shadow: 0 8px 24px rgba(0, 0, 0, .5) !important; }
+.modal { background: rgba(0, 0, 0, .55); }
+.modal-janela, #modalRobo .modal-janela { background: var(--bg) !important; border: 1px solid var(--linha2) !important; border-radius: 6px !important; box-shadow: 0 20px 60px rgba(0, 0, 0, .6) !important; }
+.tst-tf, .tst-kpis > div, .tst-per, .tst-curva-caixa, .rpd-quem > div, .vt-item { background: var(--bg3) !important; border: 1px solid var(--linha) !important; border-radius: 4px !important; box-shadow: none !important; }
+.tst-tf.on { border-color: var(--acento) !important; }
+.tst-vivo { background: transparent; border-color: var(--verde); color: var(--verde); }
+.pop-sinal { background: var(--bg3); border: 1px solid var(--linha2); border-left-width: 4px; border-radius: 4px; box-shadow: 0 8px 24px rgba(0, 0, 0, .5); }
+.rpd { background: var(--bg3); border: 1px solid var(--linha2); border-radius: 4px; box-shadow: 0 8px 24px rgba(0, 0, 0, .5); }
+.rpd-play { background: var(--acento) !important; color: #fff !important; }
+.rpd-tit { color: var(--txt2); }
+.bt-replay { color: var(--txt) !important; }
+.bol-compra { background: #089981 !important; box-shadow: none !important; border: 0 !important; color: #fff !important; }
+.bol-venda { background: #f23645 !important; box-shadow: none !important; border: 0 !important; color: #fff !important; }
+.bol-compra:hover:not(:disabled) { background: #0aa58b !important; } .bol-venda:hover:not(:disabled) { background: #ff4757 !important; }
+.splash { background: var(--bg) !important; }
+.splash-janela { background: var(--bg3) !important; border: 1px solid var(--linha2) !important; box-shadow: none !important; border-radius: 6px !important; }
+.splash-barra i, .rp-prog > div, .ia-trilho i, .op-barra i, .ct-barras i { background: var(--acento) !important; box-shadow: none !important; }
+.tutorial .tut-luz { box-shadow: 0 0 0 2px var(--acento) !important; }
+.tut-balao { background: var(--bg3) !important; border: 1px solid var(--linha2) !important; box-shadow: 0 10px 30px rgba(0, 0, 0, .6) !important; border-radius: 6px !important; }
+.tut-pontos i.on { background: var(--acento); } .tut-pontos i.foi { background: var(--txt2); }
+.dica { background: var(--bg4) !important; border: 1px solid var(--linha2) !important; box-shadow: 0 4px 14px rgba(0, 0, 0, .5) !important; border-radius: 4px !important; }
+.chip-robo, .boleta, .momento { background: var(--bg) !important; }
+.momento .estado { letter-spacing: .5px; }
+
+/* ---------------- nota de qualidade, piloto (sem efeitos) ---------------- */
+.nota-mini { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 16px; padding: 0 4px; border-radius: 3px; font-style: normal;
+  font: 700 10px var(--fonte); vertical-align: 1px; border: 1px solid currentColor; }
+.n-Ap { color: #089981; } .n-A { color: #2962ff; } .n-B { color: #f7c548; } .n-C { color: #787b86; }
+.por-nota { margin: 10px 0 4px; }
+.por-nota small { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--txt2); margin-bottom: 4px; }
+.por-nota .tab td, .por-nota .tab th { padding: 3px 6px; font-size: 12px; }
+.piloto .rot { display: flex; align-items: center; gap: 8px; }
+.pil-ic { width: 10px; height: 10px; border-radius: 2px; background: var(--acento); flex: none; }
+.pil-estado { margin-left: auto; font: 700 11px var(--fonte); letter-spacing: .5px; padding: 2px 8px; border-radius: 3px; border: 1px solid currentColor; }
+.pil-estado.bom { color: #089981; } .pil-estado.alerta { color: #f7c548; } .pil-estado.ruim { color: #f23645; } .pil-estado.neutro { color: var(--txt2); }
+.piloto.bom { border-left: 3px solid #089981 !important; } .piloto.alerta { border-left: 3px solid #f7c548 !important; } .piloto.ruim { border-left: 3px solid #f23645 !important; }
+.pil-status { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 10px 0; }
+.pil-status > div { padding: 6px 8px; border-radius: 4px; background: var(--bg3); border: 1px solid var(--linha); min-width: 0; }
+.pil-status small { display: block; font-size: 10.5px; color: var(--txt2); }
+.pil-status b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pil-status em { display: block; font-style: normal; font-size: 10.5px; color: var(--txt2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pil-motivo.alerta { color: #f7c548; } .pil-motivo.ruim { color: #f23645; } .pil-motivo.bom { color: #089981; }
+.pil-form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.pil-bts { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 6px; }
+.pil-bts .largo { flex: 1; min-width: 180px; padding: 9px 12px; font-weight: 700; }
+@media (max-width: 1500px) { .pil-status { grid-template-columns: 1fr 1fr; } }
+
+/* topo sempre numa linha: quando falta espaço, os campos de escolha encolhem */
+.topo { flex-wrap: nowrap; align-items: flex-end; }
+.topo > * { flex-shrink: 0; }
+.topo > .campo:not(.pequeno):not(.campo-vivo) { flex-shrink: 1; min-width: 74px; }
+.topo > .campo select { min-width: 0 !important; width: 100%; text-overflow: ellipsis; }
+.topo > .campo:has(#est) { flex-basis: 240px; }
+.topo > .campo:has(#ativo) { flex-basis: 170px; }
+.topo > .campo:has(#periodoSel) { flex-basis: 150px; }
+.topo > .campo:has(#tf) { flex-basis: 90px; }
+.topo .vivo-topo { max-width: 200px; }
+
+/* ---------------- lista de cotações (como a do TradingView) ---------------- */
+.lista { padding: 10px 12px 6px !important; }
+.ls-det { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: end; }
+.ls-nome b { font-size: 15px; display: block; }
+.ls-nome span { color: var(--txt2); font-size: 12px; }
+.ls-preco { text-align: right; }
+.ls-preco b { font-size: 24px; font-weight: 600; display: block; line-height: 1.1; }
+.ls-preco span { font-size: 13px; font-weight: 600; }
+.ls-status { grid-column: 1 / span 2; display: flex; align-items: center; gap: 6px; color: var(--txt2); font-size: 12px; margin-top: 2px; }
+.ls-status i, .ls-s i { width: 7px; height: 7px; border-radius: 50%; background: var(--txt2); display: inline-block; flex: none; }
+.ls-status.on { color: #089981; } .ls-status.on i, .ls-s i.on { background: #089981; }
+.ls-lista { margin-top: 8px; }
+.ls-lista summary { display: grid; grid-template-columns: 1fr 80px 70px 62px; gap: 6px; cursor: pointer; color: var(--txt2); font-size: 11.5px; padding: 4px 0; list-style: none; border-top: 1px solid var(--linha); }
+.ls-lista summary::-webkit-details-marker { display: none; }
+.ls-lista summary span { text-align: right; }
+.ls-linhas { max-height: 210px; overflow-y: auto; }
+.ls-l { display: grid; grid-template-columns: 1fr 80px 70px 62px; gap: 6px; padding: 4px 0; font-size: 12.5px; cursor: pointer; font-variant-numeric: tabular-nums; border-radius: 3px; }
+.ls-l > span:not(.ls-s) { text-align: right; }
+.ls-l:hover { background: var(--bg3); }
+.ls-l.on { background: rgba(41, 98, 255, .14); }
+.ls-s { display: flex; align-items: center; gap: 6px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.legenda { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 12px; row-gap: 2px; max-width: calc(100% - 470px); }
+.legenda > span { white-space: nowrap; }
+.legenda .lg-ativo { white-space: nowrap; }
+.bt-tempo-real { background: transparent !important; border: 1px solid var(--linha) !important; color: var(--txt) !important; font-weight: 600; border-radius: 4px; padding: 0 10px; white-space: nowrap; height: 30px; display: inline-flex; align-items: center; gap: 4px; }
+.bt-tempo-real::first-letter { color: #089981; }
+.bt-tempo-real:hover { background: var(--bg4) !important; }
+.rodizio { margin: 10px 0 4px; }
+.rodizio small { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--txt2); margin-bottom: 4px; }
+.rod-l { display: flex; align-items: center; gap: 10px; padding: 3px 0; font-size: 12.5px; border-bottom: 1px solid var(--linha); }
+.rod-l > span { width: 44px; color: var(--txt2); }
+.rod-l.hoje > span { color: var(--txt); font-weight: 700; }
+.rod-l b { display: flex; gap: 4px; flex-wrap: wrap; font-weight: 600; }
+.rod-l i, .rod-hoje b { font-style: normal; padding: 1px 6px; border-radius: 3px; background: var(--bg3); border: 1px solid var(--linha); }
+.rod-l em { color: var(--txt2); font-style: normal; font-weight: 400; }
+.rod-hoje { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 12px; border-bottom: 1px solid var(--linha); font-size: 12.5px; }
+.acoes-topo, .mercados, .topo .bt-icone, .status, .topo .bt-conta { align-self: flex-end; }
+.acoes-topo { display: flex; gap: 4px; }
+.acoes-topo > button { height: 30px; display: inline-flex; align-items: center; padding: 0 10px; gap: .3em; }
+.bt-tempo-real { font-weight: 700 !important; letter-spacing: .3px; }
+.acoes-topo { align-items: flex-end; }
+.acoes-topo > button, .acoes-topo > .bt-replay { height: 30px !important; }
+@media (max-width: 1440px) { #periodoTxt { display: none; } }
+/* o tutorial continua com o fundo parado e embaçado (pedido do dono) */
+.tutorial .tut-veu { backdrop-filter: blur(5px) !important; -webkit-backdrop-filter: blur(5px) !important; background: rgba(10, 12, 18, .6) !important; }
+.subabas { background: var(--bg) !important; z-index: 3; border-bottom: 1px solid var(--linha); }

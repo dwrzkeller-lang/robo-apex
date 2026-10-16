@@ -42,7 +42,7 @@
       ${xs.length ? `<div class="vt-lista">${xs.map((x, i) => {
         const r = x.res || {};
         return `<div class="vt-item" data-i="${i}">
-          <div class="vt-l1"><b>${AX.esc(AX.rotAtivo(x.ativo))}</b> · ${AX.esc(tfTxt(x.tf))} · ${AX.esc(x.est === "TODAS" ? "minhas estratégias" : x.est)}
+          <div class="vt-l1"><b>${AX.esc(AX.rotAtivo(x.ativo))}</b> · ${AX.esc(tfTxt(x.tf))} · ${AX.esc(x.est === "TODAS" ? "minhas estratégias" : x.est === "AUTO" ? "rodízio" : x.est)}
             <span class="dir ${AX.cls(r.total)}">${r.n != null ? din(r.total, r.moeda) : "calculando…"}</span></div>
           <div class="vt-l2">${r.estado ? AX.testes.estadoTxt(r) : ""}<span class="dir">hoje: <b class="${AX.cls(r.hoje)}">${din(r.hoje || 0, r.moeda)}</b> (${r.nHoje || 0} op${r.nHoje === 1 ? "" : "s"}) · total ${r.n || 0} ops</span></div>
         </div>`;

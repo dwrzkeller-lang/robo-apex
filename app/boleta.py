@@ -165,9 +165,32 @@ class Boleta:
                 elif al is not None and ((d > 0 and h >= al) or (d < 0 and l <= al)):
                     alem = not criacao and ((d > 0 and o > al) or (d < 0 and o < al))
                     self._fechar(e, ativo, sc, cfg, p["qtd"], o if alem else al, "alvo" + (" (abriu além)" if alem else ""), t[k])
+            p = e["pos"].get(ativo)
+            if p and fechado and p.get("gestao") in ("be", "trail") and p.get("t_abriu", 0) < t[k]:
+                self._gerir(p, B, k, sc, cfg)
             if fechado:
                 e["visto"][ativo] = t[k]
         return B, cfg, sc
+
+    @staticmethod
+    def _gerir(p, B, k, sc, cfg):
+        """Gestao automatica da posicao no fechamento do candle k: empate (stop no preco medio quando andou 1 vez o risco)
+        ou trailing stop (stop a 1,5 ATR do fechamento, so andando a favor)."""
+        d, pm, r = p["lado"], p["pm"], p.get("risco") or 0.0
+        c = B["c"][k]
+        tick = sc["tick"]
+        arred = lambda v: round(round(v / tick) * tick, cfg["decimais"] + 2)       # noqa: E731
+        if p["gestao"] == "be":
+            if r > 0 and d * (c - pm) >= r and (p.get("stop") is None or d * (p["stop"] - pm) < 0):
+                p["stop"] = arred(pm + d * tick)                 # empate: o stop vai para o preco medio (+1 tick)
+        else:
+            ini = max(1, k - 13)
+            trs = [max(B["h"][i] - B["l"][i], abs(B["h"][i] - B["c"][i - 1]), abs(B["l"][i] - B["c"][i - 1])) for i in range(ini, k + 1)]
+            atr = sum(trs) / len(trs) if trs else 0.0
+            if atr > 0:
+                novo = arred(c - d * 1.5 * atr)
+                if p.get("stop") is None or d * (novo - p["stop"]) > 0:
+                    p["stop"] = novo
 
     def _todos(self, e):
         ativos = set(e["pos"]) | {o["ativo"] for o in e["ordens"]}
@@ -205,6 +228,7 @@ class Boleta:
                 aberto_res = round(p["lado"] * (agora - p["pm"]) * sc["valor_ponto"] * p["qtd"]
                                    - self._custo(sc, p["pm"], p["qtd"]) - self._custo(sc, agora, p["qtd"]), 2)
             pos.append(dict(ativo=a, nome=nome, lado=p["lado"], qtd=p["qtd"], pm=p["pm"], stop=p.get("stop"), alvo=p.get("alvo"),
+                            gestao=p.get("gestao", ""), gestaoNome=p.get("gestaoNome", ""),
                             desde=p["desde"], agora=agora, res=aberto_res, dec=dec, moeda=moeda))
         hoje = time.strftime("%Y%m%d", time.gmtime(time.time() - 3 * 3600))
         dia = [x for x in e["hist"] if time.strftime("%Y%m%d", time.gmtime(x["quando"] - 3 * 3600)) == hoje]
@@ -212,7 +236,7 @@ class Boleta:
                     dia=dict(n=len(dia), por_moeda=_somar(dia)), total=dict(n=len(e["hist"]), por_moeda=_somar(e["hist"])))
 
     def acao(self, uid, p):
-        """p = dict(acao=...). Acoes: ordem, cancelar, zerar, zerar_tudo, mover, limpar."""
+        """p = dict(acao=...). Acoes: ordem, cancelar, zerar, zerar_tudo, mover, gestao, limpar."""
         pasta = self.pasta_de(uid)
         acao = p.get("acao")
         with _trava(uid):
@@ -236,13 +260,15 @@ class Boleta:
                 lado, qtd = -pos["lado"], pos["qtd"]
                 self._executar(e, a, sc, cfg, lado, 2 * qtd, preco + lado * sc["slip"], None, None, t, "invertida na mão")
                 if a in e["pos"]:
-                    e["pos"][a].update(stop=None, alvo=None, t_abriu=t)
+                    e["pos"][a].update(stop=None, alvo=None, t_abriu=t, gestao="", gestaoNome="")
             elif acao == "zerar_tudo":
                 for a in list(e["pos"]):
                     self._zerar(e, a, "zerada na mão")
                 e["ordens"] = []
             elif acao == "mover":
                 self._mover(e, p)
+            elif acao == "gestao":
+                self._gestao(e, p)
             elif acao == "limpar":
                 if e["pos"] or e["ordens"]:
                     raise ValueError("Zere as posições e cancele as ordens antes de limpar o histórico.")
@@ -319,6 +345,31 @@ class Boleta:
             e["seq"] += 1
             e["ordens"].append(dict(id=e["seq"], ativo=ativo, lado=lado, tipo=tipo, preco=ref, qtd=qtd, stop=stop, alvo=alvo,
                                     t_candle=t, quando=time.time(), dec=cfg["decimais"]))
+
+    GESTOES = {"": "manual", "alvo2": "alvo 2:1", "alvo3": "alvo 3:1", "alvo4": "alvo 4:1", "be": "empate no 1:1", "trail": "trailing stop (1,5 ATR)"}
+
+    def _gestao(self, e, p):
+        """Gestao da posicao da boleta: alvo em N vezes o risco (precisa de stop), empate no 1R ou trailing stop."""
+        ativo = str(p.get("ativo", ""))
+        pos = e["pos"].get(ativo)
+        if not pos:
+            raise ValueError("Não há posição neste ativo.")
+        g = str(p.get("gestao") or "")
+        if g not in self.GESTOES:
+            raise ValueError("gestão desconhecida")
+        B, _, cfg = self.carregar(ativo, TF)
+        sc = self.sessao(cfg)
+        tick = sc["tick"]
+        d, pm = pos["lado"], pos["pm"]
+        if g in ("alvo2", "alvo3", "alvo4", "be"):
+            if pos.get("stop") is None:
+                raise ValueError("Coloque um stop antes: o alvo e o empate são medidos em vezes o risco (distância até o stop).")
+            r = abs(pm - pos["stop"])
+            pos["risco"] = r
+            if g.startswith("alvo"):
+                pos["alvo"] = round(round((pm + d * int(g[-1]) * r) / tick) * tick, cfg["decimais"] + 2)
+        pos["gestao"] = g if g in ("be", "trail") else ""
+        pos["gestaoNome"] = self.GESTOES[g]
 
     def _mover(self, e, p):
         ativo = str(p.get("ativo", ""))

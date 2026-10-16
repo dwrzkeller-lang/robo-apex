@@ -16,6 +16,30 @@ estudos (RSI-2 de Connors, ORB de Zarattini & Aziz, fechamento de gap e o moment
 
 ---
 
+## Novidades da versão 3.3
+
+- **Gráfico em tempo real de verdade:** o robô descartava o último ponto que o Yahoo manda, que é o preço de AGORA, e o
+  candle aberto ficava minutos atrasado (às vezes parecendo "fechado"). Agora esse preço atualiza o candle que está se
+  formando, ou abre o candle novo, como no TradingView; moedas e futuros são atualizados a cada 8 s, e se a tela ficou
+  parada o robô busca o dado novo antes de mostrar. Conferido: EUR/USD, USD/JPY, GBP/USD e Bitcoin no mesmo minuto do
+  TradingView.
+- **Botão ● AO VIVO no topo:** fecha o replay, volta para a aba Agora e leva o gráfico até o candle de agora.
+- **Visual limpo no estilo do TradingView:** sem brilho, sem fumaça, sem degradê; cores e fontes do TradingView, topo
+  numa linha só e alinhado, painel encaixado.
+- **Lista de cotações** no topo da aba Agora (como a do TradingView): o ativo em destaque com preço, variação do dia e
+  mercado aberto ou fechado, e a lista do mercado com último, variação e %. Clique numa linha para abrir o ativo.
+- **Legenda do TradingView** no gráfico (Abr, Máx, Mín, Fch e a variação) e o relógio "fecha em mm:ss" do candle aberto.
+- **Clique num candle:** quadro com abertura, máxima, mínima, fechamento, variação, amplitude e volume.
+- **Boleta no gráfico, como no Profit:** clique na etiqueta da posição para editar stop, alvo e gestão (zerar e
+  inverter também); dois cliques abrem direto na gestão (alvo 2:1, 3:1, 4:1, empate no 1:1 ou trailing stop de 1,5 ATR,
+  que o robô aplica sozinho no fechamento de cada candle); o "✕" de cada etiqueta zera a posição, tira o stop ou o alvo,
+  ou cancela a ordem.
+- **⟳ Rodízio automático** (na lista de estratégias e no piloto automático): a cada dia, o robô opera só as 3
+  estratégias que mais ganharam nos 20 pregões anteriores (e só as que ficaram no positivo), sem olhar o futuro. Teste
+  com custos em 90.864 operações (12 ativos; 5, 15 e 60 min): todas −0,117R por operação; rodízio −0,060R (a perda
+  caiu pela metade nas duas metades do período). Continua negativo: não é garantia de lucro.
+- Saiu o Raio-X do price action (a nota A/B/C de cada entrada continua).
+
 ## Novidades da versão 3.2
 
 - **Dados de verdade à noite:** moedas (EUR/USD, GBP/USD, USD/JPY, AUD/USD), ouro, prata e petróleo agora têm candles

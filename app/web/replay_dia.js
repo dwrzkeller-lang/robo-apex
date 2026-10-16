@@ -19,7 +19,7 @@
     const D = AX.vivo.D;
     if (!D) return AX.toast("Espere o gráfico carregar.", "aviso");
     const max = AX.dataISO(D.meta.dataMax), min = AX.dataISO(D.meta.dataMin);
-    const est = AX.pref.est === "TODAS" ? "minhas estratégias juntas" : AX.pref.est + " · " + AX.nomeEst(AX.pref.est);
+    const est = AX.pref.est === "TODAS" ? "minhas estratégias juntas" : AX.pref.est === "AUTO" ? "rodízio automático" : AX.pref.est + " · " + AX.nomeEst(AX.pref.est);
     pop.innerHTML = `<div class="rot">REPLAY DO PREGÃO ${AX.q("Escolha o dia. O robô volta o gráfico para a abertura daquele dia e toca candle a candle até o fechamento, com a estratégia entrando e saindo na hora em que aconteceu. Ativo, tempo gráfico e estratégia são os do topo.")}</div>
       <label class="campo"><span>Dia</span><input type="date" id="rpdDia" min="${min}" max="${max}" value="${AX.esc(P.diaIso && P.diaIso >= min && P.diaIso <= max ? P.diaIso : max)}"></label>
       <div class="rpd-quem"><div><small>Ativo</small><b>${AX.esc(AX.rotAtivo(AX.pref.ativo))}</b></div><div><small>Tempo</small><b>${AX.esc(D.meta.nomeTf)}</b></div><div><small>Estratégia</small><b>${AX.esc(est)}</b></div></div>
@@ -136,7 +136,7 @@
   function pintarBarra() {
     if (!barra || !P.D) return;
     const D = P.D, k = Math.max(P.ini, Math.min(P.fim, P.k));
-    const est = AX.pref.est === "TODAS" ? "minhas estratégias" : D.meta.est;
+    const est = AX.pref.est === "TODAS" ? "minhas estratégias" : AX.pref.est === "AUTO" ? "rodízio" : D.meta.est;
     barra.querySelector(".rpd-tit").textContent = `REPLAY · ${AX.dataTxt(P.dia)} · ${AX.rotAtivo(D.meta.ativo)} ${D.meta.nomeTf} · ${est}`;
     barra.querySelector(".rpd-hora").textContent = P.k < P.ini ? "antes da abertura" : hora(D.t[k]);
     const fe = (D.trades || []).filter((t) => t.i_sai <= P.k && t.i_ent >= P.ini), tot = fe.reduce((s, t) => s + t.dinheiro, 0);

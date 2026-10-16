@@ -19,6 +19,8 @@ simples, sem jargão.
 - As estratégias **E2 e E9 não são alteradas**. Melhoria entra como estratégia nova (E14, E15…).
 - Tela simples: tudo que não for óbvio tem um "?" com explicação (`data-dica` ou `AX.q("texto")`).
 - Sem dependências novas no servidor (só biblioteca padrão do Python 3.12).
+- Tempo real: o último ponto da série do Yahoo é o preço de AGORA e atualiza o candle em formação (`_yahoo_para_barras`);
+  retrato com mais de 60 s é buscado de novo antes de responder. Não volte a descartar esse ponto.
 - Moedas, metais e petróleo têm sessão de 24 h; índices dos EUA usam o futuro (NQ, ES, YM). Mudou a fonte ou o horário
   de um ativo? Ponha-o em `FONTE_NOVA_*` (dados_fonte.py) para os arquivos guardados ganharem nome novo.
 - `dados/` (contas, sessões, cache, desenhos) nunca vai para o Git. Nenhuma senha, token ou e-mail pessoal no repositório.
@@ -41,6 +43,7 @@ sem candles.
 - `app/estrategias.py` (E1–E23, gestões), `app/simulador.py` (execução, custos, proteções), `app/ia.py`,
   `app/auth.py`, `app/dados_fonte.py`, `app/opcoes.py`, `app/profit.py`, `app/avisos.py`.
 - `app/qualidade.py` — nota de qualidade A+/A/B/C de cada sinal (price action, só com o passado) e o filtro `qual`.
+- Rodízio automático: estratégia `AUTO` (`rodizio_mapa` + `simular_c` em robo_apex.py; filtro `rodizio` no simulador).
 - `app/boleta.py` — boleta simulada (paper trading ao vivo). `app/corretora.py` — conexão MetaTrader 5 (termo, código,
   candles do EA viram o ativo `MT5:<simbolo>`, sinal em texto para o EA; piloto automático com travas do servidor
   e botão de emergência `ZERAR=1`). Foco do dono: o robô operar sozinho na conta de cada usuário pela corretora. `app/assinaturas.py` — site online: termos,
@@ -50,8 +53,9 @@ sem candles.
   replay da entrada e "E se…" (as edições ficam em `estado_edicoes.json` e o SERVIDOR as aplica como ajustes; "Usar como
   regra" vira o parâmetro `regra` = fator do stop e alvo em R por estratégia); `testar.js` (Testar estratégia e Minhas
   estratégias; curva em `curva.js`); `replay_dia.js` (botão Replay do topo) e `vela_viva.js` (candle se formando);
-  `aovivo.js` (Ao vivo do topo e pop-up dos sinais, só do mercado aberto); `raiox.js` (Raio-X do price action);
-  `tema2.css` (visual 3.2); `boleta.js`; `mercado.js` (modo Cripto); `conectar.js`; `tutorial.js`; `vitrine.js` (`?vitrine=1` borra
+  `aovivo.js` (Ao vivo do topo e pop-up dos sinais, só do mercado aberto); `lista.js` (lista de cotações no topo da aba
+  Agora, rota `/api/lista`); `tv.css` (visual limpo no estilo do TradingView, carregado por último: sem brilho, degradê
+  ou desfoque); `boleta.js` (boleta e as etiquetas dela no gráfico: clique edita, dois cliques gestão, ✕ zera/tira); `mercado.js` (modo Cripto); `conectar.js`; `tutorial.js`; `vitrine.js` (`?vitrine=1` borra
   o nome das estratégias para prints); `tema.css` (visual da 3.0); `desenho.js` ferramentas de desenho; `dicas.js` os "?".
 - `ntsl/` — scripts para o Profit, gerados por `ferramentas/gerar_ntsl.py`.
 - `ferramentas/backtest.py` — testes das estratégias com custos.

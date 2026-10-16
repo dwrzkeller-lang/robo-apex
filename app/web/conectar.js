@@ -59,7 +59,7 @@
     const teste = (AX.testes && AX.testes.lista ? AX.testes.lista() : []).find((x) => String(x.id) === String(cfg.teste) && !x.ate);
     const sims = d.simbolos || [];
     const v = (k, pad) => (P[k] != null ? P[k] : pad);
-    const ests = AX.cfg.estrategias.map((e) => `<option value="${e.cod}"${v("est", teste ? teste.est : AX.pref.est !== "TODAS" ? AX.pref.est : "E2") === e.cod ? " selected" : ""}>${e.cod} · ${AX.esc(e.nome)}</option>`).join("");
+    const ests = `<option value="AUTO"${v("est", teste ? teste.est : "") === "AUTO" ? " selected" : ""}>⟳ Rodízio automático (3 melhores de cada dia)</option>` + AX.cfg.estrategias.map((e) => `<option value="${e.cod}"${v("est", teste ? teste.est : !["TODAS", "AUTO"].includes(AX.pref.est) ? AX.pref.est : "E2") === e.cod ? " selected" : ""}>${e.cod} · ${AX.esc(e.nome)}</option>`).join("");
     const gests = Object.entries(AX.cfg.gestoes).map(([k, n]) => `<option value="${k}"${v("gestao", teste ? teste.gestao : "padrao") === k ? " selected" : ""}>${AX.esc(n)}</option>`).join("");
     const tfSel = +v("tf", teste ? teste.tf : 5), qual = v("qual", teste ? teste.qual || "" : "A");
     return `<div class="card piloto ${cls}"><div class="rot"><i class="pil-ic"></i>PILOTO AUTOMÁTICO ${AX.q("Um botão liga a estratégia na sua conta: o robô acompanha o mercado com os candles da SUA corretora (enviados pelo EA) e, a cada sinal, o EA envia, move e cancela as ordens no seu MetaTrader. As travas do robô (horário, máximo de operações e perda do dia) param as ordens novas; a posição aberta segue com o stop e o alvo. O botão de emergência zera tudo.")}

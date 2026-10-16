@@ -172,53 +172,134 @@
     B.relogio = setInterval(atualizar, AX.aba === "vivo" && ativo ? 2000 : 8000);
   }
 
-  // ---------------------------------------------------------------- linhas da boleta no gráfico (stop e alvo arrastáveis)
+  // ---------------------------------------------------------------- boleta no gráfico, como no Profit
+  // Cada linha tem uma etiqueta com "✕": na posição zera, no stop/alvo tira, na ordem cancela. Clique na etiqueta da
+  // posição abre o editor (stop, alvo, gestão, zerar, inverter); dois cliques abrem direto na gestão. O stop e o alvo
+  // também podem ser arrastados.
+  const GEST_BOL = [["", "Manual (você move)"], ["alvo2", "Alvo 2:1"], ["alvo3", "Alvo 3:1"], ["alvo4", "Alvo 4:1"], ["be", "Empate no 1:1 (stop no preço médio)"], ["trail", "Trailing stop (1,5 ATR)"]];
   const linhas = () => {
     const p = posAqui(), out = [];
     if (p) {
-      out.push(["pm", p.pm, p.lado > 0 ? COR.compra : COR.venda, `BOLETA ${p.lado > 0 ? "COMPRADO" : "VENDIDO"} ${AX.num(p.qtd, p.qtd % 1 ? 2 : 0)} `, false]);
-      if (p.stop != null) out.push(["stop", p.stop, COR.perda, "⇕ STOP ", true]);
-      if (p.alvo != null) out.push(["alvo", p.alvo, COR.ganho, "⇕ ALVO ", true]);
+      const g = p.gestaoNome && p.gestaoNome !== "manual" ? ` · ${p.gestaoNome}` : "";
+      out.push({ tipo: "pm", preco: p.pm, cor: p.lado > 0 ? COR.compra : COR.venda, nome: `${p.lado > 0 ? "COMPRADO" : "VENDIDO"} ${AX.num(p.qtd, p.qtd % 1 ? 2 : 0)} @ `, fim: (p.res != null ? "  " + AX.dinheiro(p.res, { meta: { moeda: p.moeda } }, true) : "") + g, arrasta: false });
+      if (p.stop != null) out.push({ tipo: "stop", preco: p.stop, cor: COR.perda, nome: "STOP ", fim: "", arrasta: true });
+      if (p.alvo != null) out.push({ tipo: "alvo", preco: p.alvo, cor: COR.ganho, nome: "ALVO ", fim: "", arrasta: true });
     }
-    for (const o of ordensAqui()) out.push(["ordem", o.preco, "#ffa53a", `${o.lado > 0 ? "COMPRA" : "VENDA"} ${o.tipo === "limite" ? "LIMITADA" : "STOP"} `, false]);
+    for (const o of ordensAqui()) out.push({ tipo: "ordem", id: o.id, preco: o.preco, cor: "#ff9800", nome: `${o.lado > 0 ? "COMPRA" : "VENDA"} ${o.tipo === "limite" ? "LIMITADA" : "STOP"} ${AX.num(o.qtd, o.qtd % 1 ? 2 : 0)} @ `, fim: "", arrasta: false });
     return out;
   };
+  B.rects = [];
   AX.camadas.push((ctx, u) => {
     const D = AX.graficoMostra();
+    B.rects = [];
     if (!D || D.meta.ativo !== AX.pref.ativo || AX.emReplay) return;
-    for (const [tipo, preco0, cor, nome, arrasta] of linhas()) {
-      const preco = B.drag && B.drag === tipo ? B.valor : preco0;
+    for (const L of linhas()) {
+      const preco = B.drag && B.drag === L.tipo ? B.valor : L.preco;
       const y = u.y(preco); if (y == null) continue;
-      ctx.strokeStyle = cor; ctx.lineWidth = tipo === "pm" ? 2 : 1.5; ctx.setLineDash(tipo === "ordem" ? [6, 4] : arrasta ? [] : [2, 3]);
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(u.W, y); ctx.stroke(); ctx.setLineDash([]);
-      ctx.font = "700 11px Segoe UI, system-ui"; const txt = nome + AX.fmt(preco), w = ctx.measureText(txt).width + 12, x0 = 8;
-      ctx.fillStyle = cor; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x0, y - 10, w, 20, 4); else ctx.rect(x0, y - 10, w, 20); ctx.fill();
-      ctx.fillStyle = "#06101c"; ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.fillText(txt, x0 + 6, y + 0.5);
+      ctx.strokeStyle = L.cor; ctx.lineWidth = L.tipo === "pm" ? 1.5 : 1; ctx.setLineDash(L.tipo === "ordem" ? [6, 4] : L.tipo === "pm" ? [] : [4, 3]);
+      ctx.beginPath(); ctx.moveTo(0, Math.round(y) + 0.5); ctx.lineTo(u.W, Math.round(y) + 0.5); ctx.stroke(); ctx.setLineDash([]);
+      ctx.font = "600 11px -apple-system, Segoe UI, Roboto, sans-serif";
+      const txt = L.nome + AX.fmt(preco) + L.fim, w = ctx.measureText(txt).width + 12, x0 = 8, h = 20, wx = 20;
+      // etiqueta: fundo da cor da linha + caixinha do ✕
+      ctx.fillStyle = L.cor; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x0, y - h / 2, w + wx, h, 3); else ctx.rect(x0, y - h / 2, w + wx, h); ctx.fill();
+      ctx.fillStyle = "rgba(0, 0, 0, .22)"; ctx.fillRect(x0 + w, y - h / 2, wx, h);
+      ctx.fillStyle = "#fff"; ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.fillText(txt, x0 + 6, y + 0.5);
+      ctx.textAlign = "center"; ctx.fillText("✕", x0 + w + wx / 2, y + 0.5);
+      B.rects.push({ L, x0, y0: y - h / 2, x1: x0 + w, xX: x0 + w + wx, y1: y + h / 2 });
     }
   });
   const area = $("areaGrafico"), graf = $("chart");
+  function pontoNoGraf(e) { const r = graf.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top, ok: e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom }; }
+  function rotuloSob(e) {
+    if (AX.emReplay || (AX.desenho && AX.desenho.ferramenta() !== "cursor")) return null;
+    const p = pontoNoGraf(e); if (!p.ok) return null;
+    for (const r of B.rects) if (p.y >= r.y0 && p.y <= r.y1 && p.x >= r.x0 && p.x <= r.xX) return { r, noX: p.x > r.x1 };
+    return null;
+  }
   function linhaSob(e) {
     if (!posAqui() || AX.emReplay || !graf.contains(e.target) || (AX.desenho && AX.desenho.ferramenta() !== "cursor")) return null;
     if (AX.replay && AX.replay.editando && AX.replay.editando()) return null;
-    const r = graf.getBoundingClientRect(), y = e.clientY - r.top;
+    const y = pontoNoGraf(e).y;
     let melhor = null, dmin = 7;
-    for (const [tipo, preco, , , arrasta] of linhas()) {
-      if (!arrasta) continue;
-      const yy = AX.S.candle.priceToCoordinate(preco);
-      if (yy != null && Math.abs(yy - y) < dmin) { dmin = Math.abs(yy - y); melhor = tipo; }
+    for (const L of linhas()) {
+      if (!L.arrasta) continue;
+      const yy = AX.S.candle.priceToCoordinate(L.preco);
+      if (yy != null && Math.abs(yy - y) < dmin) { dmin = Math.abs(yy - y); melhor = L.tipo; }
     }
     return melhor;
   }
+  async function clicarX(L) {
+    if (L.tipo === "pm") { if (confirm("Zerar a posição da boleta agora, a mercado?")) await acao({ acao: "zerar", ativo: AX.pref.ativo }, "Posição zerada.", "perda"); }
+    else if (L.tipo === "ordem") await acao({ acao: "cancelar", id: L.id, ativo: AX.pref.ativo }, "Ordem cancelada.");
+    else await acao({ acao: "mover", ativo: AX.pref.ativo, [L.tipo]: null }, L.tipo === "stop" ? "Stop retirado." : "Alvo retirado.");
+    AX.redesenhar();
+  }
+  // editor da posição (clique na etiqueta)
+  let editor = null;
+  function fecharEditor() { if (editor) { editor.remove(); editor = null; } }
+  function abrirEditor(r, focoGestao) {
+    const p = posAqui(); if (!p) return;
+    fecharEditor();
+    const m = meta(), f = (v) => (v == null ? "" : AX.fmt(v, m ? m.decimais : p.dec).replace(/\./g, ""));
+    editor = document.createElement("div");
+    editor.className = "bol-editor";
+    editor.innerHTML = `<div class="be-cab"><b>${p.lado > 0 ? "Comprado" : "Vendido"} ${AX.num(p.qtd, p.qtd % 1 ? 2 : 0)} @ ${AX.fmt(p.pm, p.dec)}</b>
+        <span class="${AX.cls(p.res)}">${p.res != null ? AX.dinheiro(p.res, { meta: { moeda: p.moeda } }, true) : ""}</span><button class="be-x" aria-label="Fechar">✕</button></div>
+      <div class="be-grade"><label class="campo"><span>Stop (preço)</span><input id="beStop" inputmode="decimal" value="${f(p.stop)}" placeholder="sem stop"></label>
+        <label class="campo"><span>Alvo (preço)</span><input id="beAlvo" inputmode="decimal" value="${f(p.alvo)}" placeholder="sem alvo"></label></div>
+      <label class="campo"><span>Gestão da posição ${AX.q("Alvo 2:1, 3:1 ou 4:1 = o alvo fica a 2, 3 ou 4 vezes a distância até o stop. Empate = quando o preço anda 1 vez o risco a favor, o stop vai para o preço médio. Trailing = o stop acompanha o preço a 1,5 ATR, só andando a favor. O robô confere no fechamento de cada candle.")}</span>
+        <select id="beGest">${GEST_BOL.map(([k, t]) => `<option value="${k}"${(p.gestao || (p.gestaoNome && p.gestaoNome.startsWith("alvo") ? "alvo" + p.gestaoNome.slice(5, 6) : "")) === k ? " selected" : ""}>${t}</option>`).join("")}</select></label>
+      <div class="be-bts"><button class="primario" id="beSalvar">Salvar</button><button id="beInv">Inverter</button><button class="perigo" id="beZerar">Zerar</button></div>`;
+    area.appendChild(editor);
+    const ar = area.getBoundingClientRect(), gr = graf.getBoundingClientRect();
+    editor.style.left = Math.min(ar.width - 300, gr.left - ar.left + r.xX + 8) + "px";
+    editor.style.top = Math.max(8, Math.min(ar.height - 230, gr.top - ar.top + r.y0 - 10)) + "px";
+    for (const i of editor.querySelectorAll("input, select")) i.onkeydown = (e) => { e.stopPropagation(); if (e.key === "Escape") fecharEditor(); if (e.key === "Enter") $("beSalvar").click(); };
+    editor.querySelector(".be-x").onclick = fecharEditor;
+    $("beZerar").onclick = async () => { fecharEditor(); await acao({ acao: "zerar", ativo: AX.pref.ativo }, "Posição zerada.", "perda"); AX.redesenhar(); };
+    $("beInv").onclick = async () => { fecharEditor(); await acao({ acao: "inverter", ativo: AX.pref.ativo }, "Posição invertida."); AX.redesenhar(); };
+    $("beSalvar").onclick = async () => {
+      const st = lerNum($("beStop").value), al = lerNum($("beAlvo").value), g = $("beGest").value;
+      if (Number.isNaN(st) || Number.isNaN(al)) return AX.toast("Não entendi o preço do stop ou do alvo.", "aviso");
+      const mud = {};
+      if ((st ?? null) !== (p.stop ?? null)) mud.stop = st;
+      if ((al ?? null) !== (p.alvo ?? null) && !g.startsWith("alvo")) mud.alvo = al;
+      if (Object.keys(mud).length) await acao(Object.assign({ acao: "mover", ativo: AX.pref.ativo }, mud), "Stop e alvo salvos.");
+      if (g !== (p.gestao || "") || g.startsWith("alvo")) await acao({ acao: "gestao", ativo: AX.pref.ativo, gestao: g }, "Gestão: " + GEST_BOL.find((x) => x[0] === g)[1] + ".");
+      fecharEditor(); AX.redesenhar();
+    };
+    setTimeout(() => (focoGestao ? $("beGest") : $("beStop")).focus(), 30);
+  }
+  area.addEventListener("dblclick", (e) => {
+    const hit = rotuloSob(e);
+    if (!hit || hit.noX || hit.r.L.tipo !== "pm") return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    abrirEditor(hit.r, true);
+  }, true);
   area.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 || B.drag) return;
-    const tipo = linhaSob(e); if (!tipo) return;
+    if (editor && !editor.contains(e.target)) fecharEditor();
+    const hit = rotuloSob(e);
+    if (hit && (hit.noX || hit.r.L.tipo === "pm" || hit.r.L.tipo === "ordem")) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      if (hit.noX) clicarX(hit.r.L);
+      else if (hit.r.L.tipo === "pm") abrirEditor(hit.r, false);
+      return;
+    }
+    const tipo = hit ? hit.r.L.tipo : linhaSob(e); if (!tipo || !["stop", "alvo"].includes(tipo)) return;
     e.preventDefault(); e.stopImmediatePropagation();
     B.drag = tipo; B.valor = posAqui()[tipo];
     try { area.setPointerCapture(e.pointerId); } catch (err) { /* ok */ }
     area.style.cursor = "ns-resize";
   }, true);
   area.addEventListener("pointermove", (e) => {
-    if (!B.drag) { if (!e.buttons && linhaSob(e)) area.style.cursor = "ns-resize"; return; }
+    if (!B.drag) {
+      if (e.buttons) return;
+      // só mexe no cursor por causa da boleta (o editor "E se…" e os desenhos também usam o cursor)
+      const c = rotuloSob(e) ? "pointer" : linhaSob(e) ? "ns-resize" : null;
+      if (c) { area.style.cursor = c; B.cursor = true; } else if (B.cursor) { area.style.cursor = ""; B.cursor = false; }
+      return;
+    }
     e.preventDefault(); e.stopImmediatePropagation();
     if (!e.buttons) { soltar(e); return; }
     const r = graf.getBoundingClientRect(), pr = AX.S.candle.coordinateToPrice(e.clientY - r.top), m = meta();
@@ -241,9 +322,11 @@
 
   AX.on("config", () => { atualizar().then(() => { render(); agendar(); }); });
   AX.on("dadosVivo", () => { if (!B.e) return; pintarDinamico(); });
+  AX.on("tecla", (e) => { if (e.key === "Escape") fecharEditor(); });
+  AX.on("mudou", fecharEditor);
   AX.on("mudou", (o) => { if (o === "ativo" || o === "tf") { B.e && render(); atualizar(); } });
   AX.on("carregado", () => render());
   AX.on("aba", () => agendar());
   setInterval(agendar, 15000);
-  AX.boleta = { render, atualizar };
+  AX.boleta = { render, atualizar, posicao: () => posAqui() };
 })();

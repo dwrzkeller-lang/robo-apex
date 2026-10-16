@@ -17,11 +17,11 @@
     som: true, auto: true, per: "1m", de: "", ate: "", larg: {}, ind: null, opsVista: "per",
     tam: "fixo", risco: 1, lossDia: 0, metaDia: 0, seletivo: false, metaMes: 0, quedaMax: 0,     // aba Plano
     criptos: [], prot: [],
-    candles: { alta: "#14d9a0", baixa: "#ff3b6b", tipo: "cheio", tendencia: false }, notificar: false,
+    candles: { alta: "#089981", baixa: "#f23645", tipo: "cheio", tendencia: false }, notificar: false,
     unidade: "reais", emReais: true,
     mercado: "b3", ultAtivo: { b3: "WIN", opcoes: "PETR4", cripto: "BN:BTCUSDT" },          // Bolsa, Opções ou Cripto
     minhas: ["E1", "E2", "E9", "E16", "E19", "E21"], regras: {}, tutorialVisto: false,                     // resultados em dinheiro (ou em R) e dólar convertido para reais
-    graf: { fundo: "#04060c", gradeV: true, gradeH: true, mira: false, linhaPreco: true } };      // aparência (botão direito no gráfico)
+    graf: { fundo: "#131722", gradeV: true, gradeH: true, mira: false, linhaPreco: true } };      // aparência (botão direito no gráfico)
   const lerLS = (k) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } };
   // A tela só sabe quem entrou depois da primeira resposta do servidor; por isso guarda o último usuário deste navegador.
   // Se quem entrou for outro, as preferências dele são carregadas e a página recomeça (ver `identificar`).
@@ -47,8 +47,9 @@
   const corOk = (c) => /^#[0-9a-f]{6}$/i.test(c || "");
   const pc = AX.pref.candles || {};
   { const g = AX.pref.graf || {}, pg = PADRAO.graf;
-    if (g.fundo === "#0b0e14") g.fundo = pg.fundo;                                  // visual 3.2: quem usava o fundo de fábrica ganha o novo
-    if (AX.pref.candles && AX.pref.candles.alta === "#26a69a" && AX.pref.candles.baixa === "#ef5350") Object.assign(AX.pref.candles, { alta: "#14d9a0", baixa: "#ff3b6b" });
+    if (["#0b0e14", "#04060c"].includes(g.fundo)) g.fundo = pg.fundo;            // quem usava um fundo de fábrica antigo ganha o novo
+    if (AX.pref.candles && [["#26a69a", "#ef5350"], ["#14d9a0", "#ff3b6b"]].some(([a, b]) => AX.pref.candles.alta === a && AX.pref.candles.baixa === b))
+      Object.assign(AX.pref.candles, { alta: "#089981", baixa: "#f23645" });
     AX.pref.graf = { fundo: corOk(g.fundo) ? g.fundo : pg.fundo, gradeV: g.gradeV !== false, gradeH: g.gradeH !== false, mira: !!g.mira, linhaPreco: g.linhaPreco !== false };
     if (AX.pref.unidade !== "R") AX.pref.unidade = "reais";
     if (!["b3", "opcoes", "cripto"].includes(AX.pref.mercado)) AX.pref.mercado = "b3";
@@ -155,7 +156,7 @@
   AX.dataISO = (d) => { const s = String(d); return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`; };
   AX.isoInt = (iso) => (iso ? parseInt(String(iso).replace(/-/g, ""), 10) || 0 : 0);
   AX.esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-  AX.nomeEst = (cod) => (cod === "TODAS" ? "Minhas estratégias juntas" : ((AX.cfg && AX.cfg.estMap[cod]) || {}).nome || cod);
+  AX.nomeEst = (cod) => (cod === "TODAS" ? "Minhas estratégias juntas" : cod === "AUTO" ? "Rodízio automático" : ((AX.cfg && AX.cfg.estMap[cod]) || {}).nome || cod);
   AX.dirTxt = (d) => (d > 0 ? "COMPRA" : "VENDA");
   // pontinho de interrogação com a explicação ao passar o mouse (dicas.js)
   AX.q = (txt) => `<i class="q" data-dica="${AX.esc(txt)}"></i>`;
@@ -230,8 +231,8 @@
   const COR = { mm9: "#ee5a67", mm20: "#4795f1", mm200: "#8448d2", vw: "#b48c14", compra: "#22d3ee", venda: "#e056fd", ganho: "#22e39a", perda: "#ff5c6e" };
   const chart = LightweightCharts.createChart($("chart"), {
     autoSize: true,
-    layout: { background: { type: "solid", color: "#04060c" }, textColor: "#7d8daa", fontFamily: "Cascadia Mono, Consolas, Segoe UI, monospace", fontSize: 11 },
-    grid: { vertLines: { color: "#0d1422" }, horzLines: { color: "#0d1422" } },
+    layout: { background: { type: "solid", color: "#131722" }, textColor: "#b2b5be", fontFamily: "-apple-system, BlinkMacSystemFont, Trebuchet MS, Roboto, Ubuntu, sans-serif", fontSize: 12 },
+    grid: { vertLines: { color: "#1e222d" }, horzLines: { color: "#1e222d" } },
     rightPriceScale: { borderColor: "#232c3b" },
     timeScale: { borderColor: "#232c3b", timeVisible: true, secondsVisible: false, rightOffset: 6 },
     crosshair: { mode: 0 },
@@ -254,7 +255,7 @@
   AX.chart = chart; AX.S = S; AX.COR = COR;
 
   // ---- aparência (botão direito no gráfico): fundo, linhas de grade, mira, linha do preço; e a unidade dos resultados
-  const FUNDOS = [["Padrão (Nexus)", "#04060c"], ["Clássico", "#0b0e14"], ["Preto", "#000000"], ["Grafite", "#131722"], ["Azul-noite", "#0a1428"], ["Verde-escuro", "#0c1512"], ["Claro", "#ffffff"]];
+  const FUNDOS = [["Padrão (TradingView)", "#131722"], ["Escuro", "#0b0e14"], ["Preto", "#000000"], ["Grafite", "#131722"], ["Azul-noite", "#0a1428"], ["Verde-escuro", "#0c1512"], ["Claro", "#ffffff"]];
   function aplicarGrafico() {
     const g = AX.pref.graf, n = parseInt(g.fundo.slice(1), 16), r = n >> 16, v = (n >> 8) & 255, b = n & 255;
     const claro = 0.299 * r + 0.587 * v + 0.114 * b > 140, passo = claro ? -22 : 12;
@@ -412,10 +413,25 @@
     AX.redesenhar();
   };
 
+  // legenda no estilo do TradingView: ativo · tempo · fonte, e Abr Máx Mín Fch com a variação do candle (cor do candle)
   function legenda(D, k) {
-    $("legenda").innerHTML = `<span><b>${AX.esc(AX.rotAtivo(D.meta.ativo))}</b> · ${D.meta.nomeTf} · ${AX.quando(D, k, true)}</span>` +
-      `<span>A ${AX.fmt(D.o[k])} · M ${AX.fmt(D.h[k])} · m ${AX.fmt(D.l[k])} · F ${AX.fmt(D.c[k])}</span>` + (AX.ind ? AX.ind.legenda(D, k) : "");
+    const sobe = D.c[k] >= D.o[k], ref = k > 0 ? D.c[k - 1] : D.o[k], dv = D.c[k] - ref, cls = sobe ? "lg-alta" : "lg-baixa";
+    const ult = k === D.meta.iFim && D.meta.formando && D.meta.aoVivo;
+    $("legenda").innerHTML = `<span class="lg-ativo"><b>${AX.esc(AX.rotAtivo(D.meta.ativo))}</b> · ${D.meta.nomeTf} · ${AX.quando(D, k, true)}${ult ? ' · <span class="lg-vivo">ao vivo</span><em id="lgFecha"></em>' : ""}</span>` +
+      `<span class="lg-ohlc ${cls}"><s>Abr</s>${AX.fmt(D.o[k])} <s>Máx</s>${AX.fmt(D.h[k])} <s>Mín</s>${AX.fmt(D.l[k])} <s>Fch</s>${AX.fmt(D.c[k])} ` +
+      `<s></s>${dv >= 0 ? "+" : "−"}${AX.fmt(Math.abs(dv))} (${dv >= 0 ? "+" : "−"}${AX.num(Math.abs((100 * dv) / (ref || 1)), 2)}%)</span>` + (AX.ind ? AX.ind.legenda(D, k) : "");
+    contagem();
   }
+  // quanto falta para o candle aberto fechar (como o relógio ao lado do preço no TradingView)
+  function contagem() {
+    const el = document.getElementById("lgFecha"), D = G.D;
+    if (!el || !D) return;
+    const tf = D.meta.tf; if (tf >= 1440) { el.textContent = ""; return; }
+    const fim = D.t[D.meta.iFim] + tf * 60, agoraLocal = Date.now() / 1000 + (D.meta.offsetLocal || 0);
+    const falta = Math.max(0, Math.round(fim - agoraLocal));
+    el.textContent = falta > 0 && falta <= tf * 60 ? ` · fecha em ${String(Math.floor(falta / 60)).padStart(2, "0")}:${String(falta % 60).padStart(2, "0")}` : "";
+  }
+  setInterval(contagem, 1000);
 
   // A escala de preço volta SEMPRE para o automático quando o gráfico é reposicionado: se o usuário arrastou o eixo de
   // preço (isso desliga o automático) e depois trocou de ativo/tempo/estratégia, os candles ficavam fora da tela.
@@ -490,6 +506,33 @@
     v.close = preco; if (preco > v.high) v.high = preco; if (preco < v.low) v.low = preco;
     S.candle.update(v);
   };
+  // clique num candle: quadro com abertura, máxima, mínima, fechamento, variação, amplitude e volume (como no TradingView)
+  const caixaVela = document.createElement("div");
+  caixaVela.className = "vela-info oculto";
+  $("areaGrafico").appendChild(caixaVela);
+  const fecharVela = () => caixaVela.classList.add("oculto");
+  chart.subscribeClick((p) => {
+    const D = G.D;
+    if (!D || !p || p.logical == null || !p.point || (AX.desenho && AX.desenho.ferramenta && AX.desenho.ferramenta() !== "cursor")) return fecharVela();
+    const k = Math.round(p.logical);
+    if (k < 0 || k > G.k) return fecharVela();
+    const yH = S.candle.priceToCoordinate(D.h[k]), yL = S.candle.priceToCoordinate(D.l[k]);
+    if (yH == null || yL == null || p.point.y < yH - 6 || p.point.y > yL + 6) return fecharVela();     // clicou fora do candle
+    const ref = k > 0 ? D.c[k - 1] : D.o[k], dv = D.c[k] - ref, sobe = D.c[k] >= D.o[k];
+    const lin = (n, v, c = "") => `<div><span>${n}</span><b class="${c}">${v}</b></div>`;
+    caixaVela.innerHTML = `<div class="vi-cab">${AX.quando(D, k, true)}<button aria-label="Fechar">✕</button></div>` +
+      lin("Abertura", AX.fmt(D.o[k]), sobe ? "lg-alta" : "lg-baixa") + lin("Máxima", AX.fmt(D.h[k]), sobe ? "lg-alta" : "lg-baixa") +
+      lin("Mínima", AX.fmt(D.l[k]), sobe ? "lg-alta" : "lg-baixa") + lin("Fechamento", AX.fmt(D.c[k]), sobe ? "lg-alta" : "lg-baixa") +
+      lin("Variação", `${dv >= 0 ? "+" : "−"}${AX.fmt(Math.abs(dv))} (${dv >= 0 ? "+" : "−"}${AX.num(Math.abs((100 * dv) / (ref || 1)), 2)}%)`, dv >= 0 ? "lg-alta" : "lg-baixa") +
+      lin("Amplitude", AX.fmt(D.h[k] - D.l[k])) + (D.meta.temVolume ? lin("Volume", AX.num(D.v[k], 0)) : "");
+    caixaVela.querySelector("button").onclick = fecharVela;
+    const W = $("chart").clientWidth;
+    caixaVela.style.left = (p.point.x + 200 > W ? p.point.x - 190 : p.point.x + 16) + "px";
+    caixaVela.style.top = Math.max(30, Math.min($("chart").clientHeight - 220, p.point.y - 60)) + "px";
+    caixaVela.classList.remove("oculto");
+  });
+  AX.on("tecla", (e) => { if (e.key === "Escape") fecharVela(); });
+  AX.on("mudou", fecharVela);
   chart.subscribeCrosshairMove((p) => {
     const D = G.D; if (!D) return;
     let k = G.k;
@@ -498,7 +541,7 @@
   });
 
   // ---------------------------------------------------------------- aparência dos candles (botão e duplo clique)
-  const PREDEF = [["Neon (padrão)", "#14d9a0", "#ff3b6b"], ["Verde e vermelho clássico", "#26a69a", "#ef5350"], ["Azul e laranja (daltônico)", "#3b8cff", "#ff9f1a"], ["Branco e cinza", "#e6ebf2", "#5b6578"], ["Verde e vermelho vivos", "#00d49a", "#ff3b4e"]];
+  const PREDEF = [["Padrão (TradingView)", "#089981", "#f23645"], ["Verde e vermelho clássico", "#26a69a", "#ef5350"], ["Azul e laranja (daltônico)", "#3b8cff", "#ff9f1a"], ["Branco e cinza", "#e6ebf2", "#5b6578"], ["Verde e vermelho vivos", "#00d49a", "#ff3b4e"]];
   function aplicarCandles(refazer) {
     AX.salvarPref();
     S.candle.applyOptions(opcoesCandle());
@@ -638,7 +681,7 @@
     } else {
       const leitura = k === m.iFim && m.ctx ? `<div class="mo-chips"><span class="chip ${m.ctx.diario > 0 ? "sobe" : m.ctx.diario < 0 ? "desce" : ""}">${m.ctx.diario > 0 ? "▲ diário em alta" : m.ctx.diario < 0 ? "▼ diário em baixa" : "■ diário sem tendência"}</span><span class="chip">${m.ctx.er >= 0.35 ? "movimento limpo" : "movimento em serrote"}</span>${m.seletivo ? '<span class="chip">modo seletivo</span>' : ""}</div>` : "";
       const antiga = e.teste && D.abertas.some((a) => a.t_ent <= e.teste.r.meta.desde);
-      html = `<div class="estado">AGUARDANDO SETUP</div><div class="detalhe">${m.est === "TODAS" ? "Nenhuma estratégia" : AX.esc(AX.nomeEst(m.est)) + " não"} tem setup ${hist ? "no fim do período (" + AX.quando(D, k, true) + ")" : "agora"}.${selo}</div>
+      html = `<div class="estado">AGUARDANDO SETUP</div><div class="detalhe">${["TODAS", "AUTO"].includes(m.est) ? "Nenhuma estratégia" + (m.est === "AUTO" ? " do rodízio" : "") : AX.esc(AX.nomeEst(m.est)) + " não"} tem setup ${hist ? "no fim do período (" + AX.quando(D, k, true) + ")" : "agora"}.${selo}</div>
         ${antiga ? '<div class="detalhe">A operação aberta no gráfico começou antes de o teste ser ligado: ela não conta no teste.</div>' : ""}${leitura}${saiu}${aviso}`;
     }
     el.className = "card momento " + cls + (hist ? " hist" : "");
@@ -788,7 +831,7 @@
   function montarEstrategias() {
     const diario = +AX.pref.tf >= 1440, minhas = new Set(AX.pref.minhas || []);
     const op = (e) => `<option value="${e.cod}" ${e.intraday && diario ? "disabled" : ""}>${minhas.has(e.cod) ? "★ " : ""}${e.cod} · ${AX.esc(e.nome)}${e.intraday && diario ? " (só intraday)" : ""}</option>`;
-    $("est").innerHTML = `<option value="TODAS">★ Minhas estratégias juntas (${minhas.size})</option>` +
+    $("est").innerHTML = `<option value="AUTO">⟳ Rodízio automático (as 3 melhores de cada dia)</option><option value="TODAS">★ Minhas estratégias juntas (${minhas.size})</option>` +
       `<optgroup label="Minhas estratégias">${AX.cfg.estrategias.filter((e) => minhas.has(e.cod)).map(op).join("")}</optgroup>` +
       `<optgroup label="Todas as estratégias">${AX.cfg.estrategias.filter((e) => !minhas.has(e.cod)).map(op).join("")}</optgroup>`;
     $("est").value = AX.pref.est;
@@ -803,7 +846,7 @@
     if (cod === AX.pref.est) return;
     const e = AX.cfg.estMap[cod];
     if (e && e.intraday && +AX.pref.tf >= 1440) { AX.toast(`${e.nome} só funciona em gráfico intraday.`, "aviso"); montarEstrategias(); return; }
-    if (cod !== "TODAS") AX.pref.ultEst = cod;
+    if (cod !== "TODAS" && cod !== "AUTO") AX.pref.ultEst = cod;
     AX.pref.est = cod; AX.salvarPref(); montarEstrategias();
     AX.emit("mudou", "est");
   };
@@ -870,7 +913,7 @@
     $("btTutorial").onclick = () => (AX.tutorial ? AX.tutorial.abrir() : null);
     if (!AX.cfg.tempos.some((t) => +t.tf === +AX.pref.tf)) AX.pref.tf = 5;
     if (!(AX.pref.gestao in AX.cfg.gestoes)) AX.pref.gestao = "padrao";
-    if (AX.pref.est !== "TODAS" && !AX.cfg.estMap[AX.pref.est]) AX.pref.est = "TODAS";
+    if (!["TODAS", "AUTO"].includes(AX.pref.est) && !AX.cfg.estMap[AX.pref.est]) AX.pref.est = "TODAS";
     if (!AX.cfg.estMap[AX.pref.ultEst]) AX.pref.ultEst = "E1";
     sa.value = AX.pref.ativo; st.value = AX.pref.tf; sg.value = AX.pref.gestao;
     ajustarContratos(); corrigirEst(); marcarPeriodo();
@@ -1141,6 +1184,35 @@
     setTimeout(() => { const g = $("btGestLado"); if (g) g.scrollIntoView({ block: "center", behavior: "smooth" }); }, 80);
   };
   AX.rerenderVivo = () => { if (V.D) renderVivo(V.D); };
+  // rodízio automático: quais estratégias operaram (ou operam hoje) em cada dia
+  const RODIZIO_DICA = "A cada dia, o robô opera só as 3 estratégias que mais ganharam nos 20 pregões anteriores (e só as que ficaram no positivo). Usa só dias que já terminaram: nada olha o futuro. Nos testes com custos (90 mil operações, 12 ativos, 5/15/60 min) a perda média caiu pela metade comparado a operar todas (−0,060R contra −0,117R por operação), mas continuou negativa: não é garantia de lucro.";
+  function rodizioHtml(m) {
+    const r = m.rodizio || [];
+    if (!r.length) return `<div class="rodizio"><small>Rodízio automático ${AX.q(RODIZIO_DICA)}</small><div class="nota">Calculando as escolhas dos últimos dias…</div></div>`;
+    return `<div class="rodizio"><small>Rodízio automático · estratégias de cada dia ${AX.q(RODIZIO_DICA)}</small>
+      ${r.slice().reverse().map(([dia, cods], j) => `<div class="rod-l${j === 0 ? " hoje" : ""}"><span>${j === 0 ? "Hoje" : AX.dataTxt(dia).slice(0, 5)}</span><b>${cods.length ? cods.map((c) => `<i data-dica="${AX.esc(AX.nomeEst(c))}">${c}</i>`).join("") : '<em>nenhuma no positivo: fica de fora</em>'}</b></div>`).join("")}</div>`;
+  }
+  AX.rodizioHtml = rodizioHtml;
+  AX.on("dadosVivo", (D) => {                        // aba Agora: as estratégias do rodízio de hoje, numa linha
+    const el = $("chipRobo"); if (!el) return;
+    const hoje = D.meta.est === "AUTO" && D.meta.rodizio && D.meta.rodizio.length ? D.meta.rodizio[D.meta.rodizio.length - 1][1] : null;
+    el.innerHTML = hoje ? `<div class="rod-hoje">⟳ Rodízio hoje: ${hoje.length ? hoje.map((c) => `<b data-dica="${AX.esc(AX.nomeEst(c))}">${c}</b>`).join(" ") : "nenhuma estratégia no positivo, o robô fica de fora"} ${AX.q(RODIZIO_DICA)}</div>` : "";
+  });
+  // botão "AO VIVO": sai de qualquer replay e vai para o candle de agora (tempo real)
+  $("btTempoReal").onclick = async () => {
+    if (AX.replayDia && AX.replayDia.ativo()) AX.replayDia.parar(true);
+    if (AX.replay && AX.replay.ativo()) AX.replay.fechar();
+    AX.emReplay = false;
+    let mudouPer = false;
+    if (AX.pref.per === "custom" && AX.pref.ate && AX.isoInt(AX.pref.ate) < AX.isoInt(new Date().toISOString().slice(0, 10))) { AX.pref.per = "hoje"; mudouPer = true; }
+    AX.pref.auto = true; $("autoVivo").checked = true; AX.salvarPref(); marcarPeriodo();
+    if (AX.aba !== "vivo") trocarAba("vivo");
+    V.velho = true;
+    AX.carga(true);
+    try { await AX.carregarVivo(); } finally { AX.carga(false); }
+    if (V.D) { AX.mostrar(V.D, V.D.meta.iFim); AX.centralizar(); }
+    AX.toast(mudouPer ? "Ao vivo: período mudado para hoje." : "Ao vivo: mostrando o candle de agora.", "ok");
+  };
   // aba Agora: o resultado do período numa linha só (o completo fica na aba Resultado)
   function resumoCurto(D) {
     const st = D.stats, el = $("resumoCurto");
@@ -1191,7 +1263,7 @@
       ${plano ? `<div class="linha-ctx"><span>Plano: ${plano}</span></div>` : ""}
       ${m.foraDoPlano ? `<div class="linha-ctx"><span class="ruim">${m.foraDoPlano} ordem(ns) ficaram de fora: o lote mínimo arriscava mais que ${AX.num(m.riscoPct, 1)}% do capital.</span></div>` : ""}
       <div class="linha-ctx">${ctx}</div>
-      <div class="botoes finos"><button id="btExplica" data-dica="Abre uma minijanela com o desenho do setup e o passo a passo desta estratégia.">❔ Como funciona ${est === "TODAS" ? "o modo Minhas estratégias" : "a " + AX.esc(est)}</button></div>
+      ${est === "AUTO" ? rodizioHtml(m) : `<div class="botoes finos"><button id="btExplica" data-dica="Abre uma minijanela com o desenho do setup e o passo a passo desta estratégia.">❔ Como funciona ${est === "TODAS" ? "o modo Minhas estratégias" : "a " + AX.esc(est)}</button></div>`}
       <details><summary>Como ler · detalhes</summary>
         <div class="nota">${AX.esc(st.explica || "")}${st.n ? ` Média na 1ª metade: ${AX.dinheiro(st.exp1, D, true)} · na 2ª: ${AX.dinheiro(st.exp2, D, true)}. Ganho médio ÷ perda média: ${AX.num(st.payoff, 2)} · fator de lucro ${AX.num(st.fatorLucro, 2)}.` : ""}</div>
         ${cx && (cx.favor.n || cx.contra.n) ? `<div class="nota">A favor da tendência do diário: ${cx.favor.n} operações, média ${AX.dinheiro(cx.favor.media, D, true)}. Contra: ${cx.contra.n} operações, média ${AX.dinheiro(cx.contra.media, D, true)}.</div>` : ""}
@@ -1202,7 +1274,7 @@
     AX.sparkline($("sparkVivo"), D.trades.map((t) => t.dinheiro), (i, v, ac) => `Operação ${i} de ${D.trades.length}: ${AX.dinheiro(v, D, true)} · acumulado ${AX.dinheiro(ac, D, true)}`);
     $("resumoVivo").querySelectorAll(".gest-btns button").forEach((b) => (b.onclick = () => AX.escolherGestao(b.dataset.g)));
     $("btGestLado").onclick = () => { GEST.aberto = !GEST.aberto; renderVivo(V.D); };
-    $("btExplica").onclick = () => (AX.explica ? AX.explica.abrir(est) : AX.toast("A explicação ainda está carregando.", "aviso"));
+    if ($("btExplica")) $("btExplica").onclick = () => (AX.explica ? AX.explica.abrir(est) : AX.toast("A explicação ainda está carregando.", "aviso"));
     if (GEST.aberto) gestoesLado();
     // TODAS: cada estratégia sozinha
     const tv = $("tabelaVivo");

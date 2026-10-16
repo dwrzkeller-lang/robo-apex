@@ -363,7 +363,7 @@
   }
 
   // ---------------------------------------------------------------- ligar, parar, apagar
-  const nomeCombo = (x) => (x.est === "TODAS" ? "TODAS juntas" : x.est + " · " + AX.nomeEst(x.est));
+  const nomeCombo = (x) => (x.est === "TODAS" ? "TODAS juntas" : x.est === "AUTO" ? "Rodízio automático" : x.est + " · " + AX.nomeEst(x.est));
   const tfTxt = (tf) => ((AX.cfg.tempos.find((t) => +t.tf === +tf) || {}).nome || tf + " min");
   const tamTxt = (x) => (x.tam === "risco" ? "risco de " + AX.num(x.risco, 1) + "% por operação" : AX.unidade({ fracionado: !!(AX.infoAtivo(x.ativo) || {}).fracionado }, x.contratos));
   async function ligar() {
