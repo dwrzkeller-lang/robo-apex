@@ -17,11 +17,11 @@
     som: true, auto: true, per: "1m", de: "", ate: "", larg: {}, ind: null, opsVista: "per",
     tam: "fixo", risco: 1, lossDia: 0, metaDia: 0, seletivo: false, metaMes: 0, quedaMax: 0,     // aba Plano
     criptos: [], prot: [],
-    candles: { alta: "#26a69a", baixa: "#ef5350", tipo: "cheio", tendencia: false }, notificar: false,
+    candles: { alta: "#14d9a0", baixa: "#ff3b6b", tipo: "cheio", tendencia: false }, notificar: false,
     unidade: "reais", emReais: true,
     mercado: "b3", ultAtivo: { b3: "WIN", opcoes: "PETR4", cripto: "BN:BTCUSDT" },          // Bolsa, Opções ou Cripto
     minhas: ["E1", "E2", "E9", "E16", "E19", "E21"], regras: {}, tutorialVisto: false,                     // resultados em dinheiro (ou em R) e dólar convertido para reais
-    graf: { fundo: "#0b0e14", gradeV: true, gradeH: true, mira: false, linhaPreco: true } };      // aparência (botão direito no gráfico)
+    graf: { fundo: "#04060c", gradeV: true, gradeH: true, mira: false, linhaPreco: true } };      // aparência (botão direito no gráfico)
   const lerLS = (k) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } };
   // A tela só sabe quem entrou depois da primeira resposta do servidor; por isso guarda o último usuário deste navegador.
   // Se quem entrou for outro, as preferências dele são carregadas e a página recomeça (ver `identificar`).
@@ -47,6 +47,8 @@
   const corOk = (c) => /^#[0-9a-f]{6}$/i.test(c || "");
   const pc = AX.pref.candles || {};
   { const g = AX.pref.graf || {}, pg = PADRAO.graf;
+    if (g.fundo === "#0b0e14") g.fundo = pg.fundo;                                  // visual 3.2: quem usava o fundo de fábrica ganha o novo
+    if (AX.pref.candles && AX.pref.candles.alta === "#26a69a" && AX.pref.candles.baixa === "#ef5350") Object.assign(AX.pref.candles, { alta: "#14d9a0", baixa: "#ff3b6b" });
     AX.pref.graf = { fundo: corOk(g.fundo) ? g.fundo : pg.fundo, gradeV: g.gradeV !== false, gradeH: g.gradeH !== false, mira: !!g.mira, linhaPreco: g.linhaPreco !== false };
     if (AX.pref.unidade !== "R") AX.pref.unidade = "reais";
     if (!["b3", "opcoes", "cripto"].includes(AX.pref.mercado)) AX.pref.mercado = "b3";
@@ -228,8 +230,8 @@
   const COR = { mm9: "#ee5a67", mm20: "#4795f1", mm200: "#8448d2", vw: "#b48c14", compra: "#22d3ee", venda: "#e056fd", ganho: "#22e39a", perda: "#ff5c6e" };
   const chart = LightweightCharts.createChart($("chart"), {
     autoSize: true,
-    layout: { background: { type: "solid", color: "#0b0e14" }, textColor: "#8491a5", fontFamily: "Segoe UI, system-ui" },
-    grid: { vertLines: { color: "#141a24" }, horzLines: { color: "#141a24" } },
+    layout: { background: { type: "solid", color: "#04060c" }, textColor: "#7d8daa", fontFamily: "Cascadia Mono, Consolas, Segoe UI, monospace", fontSize: 11 },
+    grid: { vertLines: { color: "#0d1422" }, horzLines: { color: "#0d1422" } },
     rightPriceScale: { borderColor: "#232c3b" },
     timeScale: { borderColor: "#232c3b", timeVisible: true, secondsVisible: false, rightOffset: 6 },
     crosshair: { mode: 0 },
@@ -252,7 +254,7 @@
   AX.chart = chart; AX.S = S; AX.COR = COR;
 
   // ---- aparência (botão direito no gráfico): fundo, linhas de grade, mira, linha do preço; e a unidade dos resultados
-  const FUNDOS = [["Padrão", "#0b0e14"], ["Preto", "#000000"], ["Grafite", "#131722"], ["Azul-noite", "#0a1428"], ["Verde-escuro", "#0c1512"], ["Claro", "#ffffff"]];
+  const FUNDOS = [["Padrão (Nexus)", "#04060c"], ["Clássico", "#0b0e14"], ["Preto", "#000000"], ["Grafite", "#131722"], ["Azul-noite", "#0a1428"], ["Verde-escuro", "#0c1512"], ["Claro", "#ffffff"]];
   function aplicarGrafico() {
     const g = AX.pref.graf, n = parseInt(g.fundo.slice(1), 16), r = n >> 16, v = (n >> 8) & 255, b = n & 255;
     const claro = 0.299 * r + 0.587 * v + 0.114 * b > 140, passo = claro ? -22 : 12;
@@ -496,7 +498,7 @@
   });
 
   // ---------------------------------------------------------------- aparência dos candles (botão e duplo clique)
-  const PREDEF = [["Verde e vermelho", "#26a69a", "#ef5350"], ["Azul e laranja (daltônico)", "#3b8cff", "#ff9f1a"], ["Branco e cinza", "#e6ebf2", "#5b6578"], ["Verde e vermelho vivos", "#00d49a", "#ff3b4e"]];
+  const PREDEF = [["Neon (padrão)", "#14d9a0", "#ff3b6b"], ["Verde e vermelho clássico", "#26a69a", "#ef5350"], ["Azul e laranja (daltônico)", "#3b8cff", "#ff9f1a"], ["Branco e cinza", "#e6ebf2", "#5b6578"], ["Verde e vermelho vivos", "#00d49a", "#ff3b4e"]];
   function aplicarCandles(refazer) {
     AX.salvarPref();
     S.candle.applyOptions(opcoesCandle());
@@ -693,6 +695,7 @@
     if (p.lossDia > 0) o.lossDia = p.lossDia;
     if (p.metaDia > 0) o.metaDia = p.metaDia;
     if (p.seletivo) o.seletivo = 1;
+    if (["A+", "A", "B"].includes(p.qual)) o.qual = p.qual;                       // filtro de qualidade (nota de price action)
     if (p.emReais !== false) o.brl = 1;                                         // conta em reais: dólar convertido
     if (Array.isArray(p.prot) && p.prot.length) o.prot = p.prot.join(",");      // proteções do stop (aba Plano)
     const rg = AX.regraTxt(p);
@@ -1174,6 +1177,13 @@
       html += `<div class="resumo-topo"><div><div class="grande neutro">sem operações</div><div class="sub">nenhum setup desta estratégia no período escolhido</div></div>${AX.seloCurto(st)}</div>`;
     }
     const cx = st.ctx;
+    // resultado por nota de qualidade (price action) neste período: mostra se filtrar ajudaria aqui
+    const pn = st.porNota || {};
+    if (st.n >= 6 && Object.keys(pn).some((k) => k !== "-")) {
+      const linhaN = (k) => { const x = pn[k]; return x ? `<tr><td><i class="nota-mini n-${k.replace("+", "p")}">${k}</i></td><td class="n">${x.n}</td><td class="n">${AX.pct((100 * x.ganhos) / x.n, 0)}</td><td class="n ${AX.cls(x.media)}">${AX.dinheiro(x.media, D, true)}</td><td class="n ${AX.cls(x.total)}">${AX.dinheiro(x.total, D, true)}</td></tr>` : ""; };
+      html += `<div class="por-nota"><small>Por nota de qualidade${AX.q("Cada entrada recebe uma nota de price action no momento do sinal (estrutura, espaço até a barreira, diário e rejeição). A tabela mostra como cada nota se saiu NESTE ativo e período. O filtro fica na aba Plano (“Qualidade da entrada”) e no piloto automático. Amostra pequena engana: confira em períodos maiores.")}${m.qual ? ` <span class="chip">filtro: ${m.qual === "B" ? "B para cima" : m.qual === "A" ? "só A e A+" : "só A+"}</span>` : ""}</small>
+        <table class="tab"><tr><th>Nota</th><th class="n">Ops</th><th class="n">Acerto</th><th class="n">Média</th><th class="n">Total</th></tr>${["A+", "A", "B", "C"].map(linhaN).join("")}</table></div>`;
+    }
     html += `<div class="gest"><small>Gestão${AX.q("Como a operação é conduzida depois da entrada. Padrão = a de cada estratégia. 2:1, 3:1, 4:1 = alvo a tantas vezes o risco. Parcial = metade no 1:1 e o resto no 2:1. Condução = metade no 1:1 e o resto carregado pela MM9. Trailing ATR = sem alvo, o stop sobe 2 ATR atrás do melhor preço. Trailing degraus = sem alvo, a cada 1R a favor o stop sobe 1R.")}</small>
         <div class="gest-btns">${Object.keys(AX.cfg.gestoes).map((g) => `<button data-g="${g}" class="${g === m.gestao ? "on" : ""}" data-dica="${AX.esc(AX.cfg.gestoes[g])}">${AX.esc(gc[g] || g)}</button>`).join("")}</div>
         <button class="gest-cmp ${GEST.aberto ? "on" : ""}" id="btGestLado" data-dica="Roda esta mesma estratégia, neste período, com cada gestão, e mostra lado a lado. Serve para ver se carregar a operação (trailing) teria rendido mais que o alvo fixo.">comparar todas ${GEST.aberto ? "▴" : "▾"}</button></div>

@@ -21,6 +21,7 @@ as outras ordens pendentes sao canceladas.
 import bisect
 import math
 
+from qualidade import nota as nota_qualidade, passa as passa_qualidade
 from estrategias import (AQUECIMENTO, ESTRATEGIAS, Grafico, atencao, avaliar, eficiencia, eficiencia_em, faixa_de_ruido,
                          passa_seletivo, tendencia_diaria)
 from ia import caracteristicas
@@ -107,6 +108,7 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
       loss_dia, meta_dia (dinheiro)   -> intraday: para de abrir operacoes no dia depois de perder / ganhar esse valor
       seletivo=True                   -> filtro de contexto (estrategias.passa_seletivo): so a favor da tendencia do
                                          diario e, nas estrategias de correcao, so com tendencia limpa
+      qual="A+" / "A" / "B"           -> so arma sinais com nota de qualidade A+, A para cima ou B para cima (qualidade.py)
 
     tempos + ajustes (teste ao vivo) = o que o usuario mudou na mao. Cada ajuste: dict(t=horario do candle em que foi
       feito, tipo, chave="EST|t_sinal|dir", ...). "stop"/"alvo" (valor) valem a partir do candle SEGUINTE; "sair" e
@@ -128,6 +130,7 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
     capital0 = float(pl.get("capital") or 0.0)
     loss_dia, meta_dia = float(pl.get("loss_dia") or 0.0), float(pl.get("meta_dia") or 0.0)
     seletivo = bool(pl.get("seletivo"))
+    qual_min = pl.get("qual") if pl.get("qual") in ("A+", "A", "B") else ""
     prot = set(pl.get("prot") or ())                 # protecoes do plano: folga, tol, corte, forca (ver PROTECOES)
     regras = dict(pl.get("regras") or {})             # cod -> (fator do stop, alvo em vezes o risco): a "Minha regra" do usuario
     h_ini, h_fim, h_zer = cfg["hora_inicio"], cfg["hora_fim"], cfg["hora_zeragem"]
@@ -244,7 +247,8 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                  ent=sg * p["ent"], stop=sg * p["stop_ini"], alvo=None if p["alvo"] is None else sg * p["alvo"],
                  sai=sg * (p["ent"] + p["pts"]), motivo=motivo, gestao=p["gest"], parcial=p["parcial"],
                  risco=p["risco"], pts=pts_liq, R=R, maxR=(p["maxfav"] - p["ent"]) / p["risco"],
-                 dinheiro=din, info=p["info"], q=q, custo=(p["custo_pts"] + p["esc"]) * vp * q, ctx=p["ctx"])
+                 dinheiro=din, info=p["info"], q=q, custo=(p["custo_pts"] + p["esc"]) * vp * q, ctx=p["ctx"],
+                 qual=p.get("qual"))
         if p["alvo1"] is not None or p["alvo2"] is not None:
             t.update(alvo1=None if p["alvo1"] is None else sg * p["alvo1"], alvo2=None if p["alvo2"] is None else sg * p["alvo2"])
         if p["f"] is not None:
@@ -325,7 +329,7 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
         p = dict(est=od["est"], dir=od["dir"], G=Gd, ent=preco, stop=stop_g, stop_ini=stop_g, risco=risco,
                  alvo=alvo, alvo1=alvo1, rot=rot, gest=g, frac=1.0, pts=0.0,
                  parcial=False, i_sinal=od["i_sinal"], i_ent=i, sair=None, maxfav=preco, motivo="", info=od["info"],
-                 q=q, custo_pts=custo_p, esc=slip if esc_ent is None else esc_ent, frac_parc=fp1, ctx=od.get("ctx", 0),
+                 q=q, custo_pts=custo_p, esc=slip if esc_ent is None else esc_ent, frac_parc=fp1, ctx=od.get("ctx", 0), qual=od.get("qual"),
                  alvo2=alvo2, parcial2=False, frac_parc2=fp2, f=od.get("f"), manual=manual or ("edicao" if od.get("editado") else None),
                  stop_manual=stop_g if od.get("stop_manual") else None, limite=od["tipo"] == "limite")
         s["pos"] = p
@@ -600,6 +604,11 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                             od["alvos"] = None
                         od["regra"] = True
                         od["info"] = (od.get("info") or "") + " · com a sua regra"
+                    # nota de qualidade do sinal (price action, so com o passado) e o filtro "so entradas A/B"
+                    qn = nota_qualidade(G, i, od["dir"], od["gatilho"] if od["gatilho"] is not None else G.c[i], od["stop"])
+                    od["qual"], od["qualItens"] = qn["nota"], qn["itens"]
+                    if qual_min and not passa_qualidade(qn["nota"], qual_min):
+                        continue
                     repetida = False
                     for velha in list(s["pend"]):
                         if (velha["est"] == cod and od["tipo"] == "limite" and velha["tipo"] == "limite" and velha["dir"] == od["dir"]
@@ -651,7 +660,7 @@ def simular(Gs, cfg, codigos, gestao="padrao", contratos=1.0, max_stops=2, junta
                                 stop=sg * p["stop"], stop_ini=sg * p["stop_ini"],
                                 alvo=None if p["alvo"] is None else sg * p["alvo"], gestao=p["gest"], parcial=p["parcial"],
                                 risco=p["risco"], R=(p["pts"] + p["frac"] * (Gp.c[ult] - p["ent"]) - p["custo_pts"]) / p["risco"],
-                                sair=p["sair"], info=p["info"], q=p["q"], ctx=p["ctx"],
+                                sair=p["sair"], info=p["info"], q=p["q"], ctx=p["ctx"], qual=p.get("qual"),
                                 alvo1=None if p["alvo1"] is None else sg * p["alvo1"],
                                 alvo2=None if p["alvo2"] is None else sg * p["alvo2"], parcial2=p["parcial2"],
                                 maxR=(p["maxfav"] - p["ent"]) / p["risco"], f=p["f"], manual=p["manual"]))
@@ -711,6 +720,12 @@ def estatisticas(trades, capital, d_sai):
     riscos = [t["risco"] * t.get("q", 1.0) for t in trades]
     # custo medio em R: quanto do risco de cada operacao vai embora em taxa e escorregamento
     custo_r = _media([t.get("custo", 0.0) / (abs(t["dinheiro"] / t["R"])) for t in trades if t["R"] and t["dinheiro"]])
+    por_nota = {}
+    for t in trades:
+        x = por_nota.setdefault(t.get("qual") or "-", dict(n=0, total=0.0, ganhos=0))
+        x["n"] += 1; x["total"] += t["dinheiro"]; x["ganhos"] += t["dinheiro"] > 0
+    for x in por_nota.values():
+        x["media"] = x["total"] / x["n"]
     favor = [t["dinheiro"] for t in trades if t.get("ctx", 0) > 0]
     contra = [t["dinheiro"] for t in trades if t.get("ctx", 0) < 0]
     meses = {}
@@ -729,7 +744,7 @@ def estatisticas(trades, capital, d_sai):
                custos=custos, bruto=sum(din) + custos, custoR=custo_r,
                ctx=dict(favor=dict(n=len(favor), media=_media(favor), total=sum(favor)),
                         contra=dict(n=len(contra), media=_media(contra), total=sum(contra))),
-               meses=[meses[k] for k in sorted(meses)], capitalFinal=eq)
+               meses=[meses[k] for k in sorted(meses)], capitalFinal=eq, porNota=por_nota)
     if n < 30:
         out.update(veredito="POUCOS DADOS", cor="amarelo",
                    explica="Só %d operações: amostra pequena demais para concluir. Aumente o período ou use outro tempo gráfico." % n)

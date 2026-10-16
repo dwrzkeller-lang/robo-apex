@@ -54,7 +54,7 @@ import radar
 from estrategias import AQUECIMENTO, ESTRATEGIAS, GESTOES, GESTOES_CURTO, atencao
 from simulador import PROTECOES, atualizar_ultimo, estatisticas, preparar, simular
 
-VERSAO = "3.1"
+VERSAO = "3.2"
 ARGS = sys.argv[1:]
 
 
@@ -368,7 +368,7 @@ def _plano(q, capital):
     """Regras do plano de trade que vem da tela (aba Plano): tamanho por risco, limite de perda e meta do dia, modo seletivo."""
     return dict(regras=regras_de(q.get("regra", [""])[0]), tam="risco" if q.get("tam", ["fixo"])[0] == "risco" else "fixo", risco_pct=_float(q, "risco", 1.0, 0.05, 20.0),
                 capital=capital, loss_dia=_float(q, "lossDia", 0.0, 0.0, 1e9), meta_dia=_float(q, "metaDia", 0.0, 0.0, 1e9),
-                seletivo=q.get("seletivo", ["0"])[0] == "1",
+                seletivo=q.get("seletivo", ["0"])[0] == "1", qual=q.get("qual", [""])[0] if q.get("qual", [""])[0] in ("A+", "A", "B") else "",
                 prot=tuple(sorted(x for x in q.get("prot", [""])[0].split(",") if x in PROTECOES)))
 
 
@@ -680,7 +680,7 @@ def api_sim(q, uid=None):
                 horaInicio=sc["hora_inicio"], horaFim=sc["hora_fim"], horaZeragem=sc["hora_zeragem"], intraday=tf < 1440,
                 est=est, gestao=gestao, contratos=contratos, capital=capital, maxStops=max_stops, per=per,
                 aoVivo=vivo, formando=aberto and vivo, temVolume=any(vol[-400:]),
-                tam=pl["tam"], riscoPct=pl["risco_pct"], lossDia=pl["loss_dia"], metaDia=pl["meta_dia"], seletivo=pl["seletivo"],
+                tam=pl["tam"], riscoPct=pl["risco_pct"], lossDia=pl["loss_dia"], metaDia=pl["meta_dia"], seletivo=pl["seletivo"], qual=pl.get("qual", ""),
                 custoPct=sc.get("custo_pct", 0.0), cripto=bool(cfg.get("cripto")), curto=cfg.get("curto"), prot=list(pl["prot"]),
                 usdbrl=P.get("cambio") or _usdbrl(),
                 dia=r["dia"], ctx=ctx_ult,
@@ -821,6 +821,36 @@ def api_minhas(q):
         except Exception as e:
             juntas = dict(erro=str(e))
     return dict(ativo=P["chave"], tf=P["tf"], linhas=linhas, juntas=juntas)
+
+
+def _ligar_piloto(uid, p, ip, u):
+    """Piloto automatico: liga (ou troca) o teste ao vivo no ativo da corretora com a estrategia escolhida e manda o EA
+    seguir, com as travas do servidor. Um botao so na aba Conectar."""
+    sim = str(p.get("simbolo") or CONEX.publico(uid)["cfg"].get("simbolo") or "").strip().upper()
+    if not sim:
+        raise ValueError("Escreva o símbolo do MetaTrader (o do gráfico onde o EA está).")
+    if sim not in CONEX.simbolos_de(uid):
+        raise ValueError("O EA ainda não mandou os candles de %s. Abra o MetaTrader, coloque o EA no gráfico desse símbolo "
+                         "com o seu código de conexão e espere o \"EA CONECTADO\"." % sim)
+    est = str(p.get("est") or "")
+    if est != "TODAS" and est not in ESTRATEGIAS:
+        raise ValueError("Escolha a estratégia.")
+    antigo = CONEX.publico(uid)["cfg"].get("teste")
+    x = TESTES.ligar(uid, dict(ativo="MT5:" + sim, tf=_int({"tf": [p.get("tf")]}, "tf", 5), est=est, gestao=p.get("gestao"),
+                               contratos=p.get("contratos") or 1, capital=p.get("capital") or 10000, maxstops=p.get("maxstops") or 2,
+                               qual=p.get("qual") or "", cods=p.get("cods") or "", regra=p.get("regra") or "", brl=p.get("brl"),
+                               prot=p.get("prot") or [], seletivo=p.get("seletivo")))
+    if antigo and str(antigo) != str(x["id"]):
+        try:
+            TESTES.parar(uid, antigo)
+        except Exception:
+            pass
+    CONEX.acao(uid, dict(acao="config", simbolo=sim, ativo=p.get("ativo") or "WIN", teste=x["id"], mult=p.get("mult") or 1,
+                         max_lote=p.get("max_lote") or 1, perda_dia=p.get("perda_dia") or 0, max_ops=p.get("max_ops") or 0,
+                         hora_ini=p.get("hora_ini") or 0, hora_fim=p.get("hora_fim") or 0), ip)
+    r = CONEX.acao(uid, dict(acao="ligar", ligado=True), ip)
+    ACESSOS.registrar("piloto_ligado", u["email"], "%s %s %s min nota %s" % (sim, est, x["tf"], p.get("qual") or "todas"), ip)
+    return r
 
 
 _MERCADO_CR = {"t": 0.0, "v": None}
@@ -968,7 +998,7 @@ def _gravar_json(arq, obj):
 
 
 CAMPOS_TESTE = ("ativo", "tf", "est", "gestao", "contratos", "capital", "maxstops", "tam", "risco", "lossDia", "metaDia", "seletivo", "prot",
-                "cods", "regra")
+                "cods", "regra", "qual")
 
 
 def _calc_teste(x, B, fonte, cfg, uid=None):
@@ -984,7 +1014,8 @@ def _calc_teste(x, B, fonte, cfg, uid=None):
     capital = float(x.get("capital") or 10000.0)
     pl = dict(tam="risco" if x.get("tam") == "risco" else "fixo", risco_pct=float(x.get("risco") or 1.0), capital=capital,
               loss_dia=float(x.get("lossDia") or 0.0), meta_dia=float(x.get("metaDia") or 0.0), seletivo=bool(x.get("seletivo")),
-              prot=tuple(sorted(p for p in (x.get("prot") or []) if p in PROTECOES)), regras=regras_de(x.get("regra")))
+              prot=tuple(sorted(p for p in (x.get("prot") or []) if p in PROTECOES)), regras=regras_de(x.get("regra")),
+              qual=x.get("qual") if x.get("qual") in ("A+", "A", "B") else "")
     if x.get("brl") and cfg.get("moeda") == "US$":
         cambio = _usdbrl()
         if cambio:
@@ -1159,7 +1190,8 @@ class Sentinela:
                  lossDia=max(0.0, float(p.get("lossDia") or 0)), metaDia=max(0.0, float(p.get("metaDia") or 0)),
                  seletivo=bool(p.get("seletivo")), prot=[z for z in (p.get("prot") or []) if z in PROTECOES], ajustes=[],
                  cods=",".join(c for c in str(p.get("cods") or "").split(",") if c in ESTRATEGIAS), brl=bool(p.get("brl")),
-                 regra=",".join("%s:%g:%g" % (k, v[0], v[1]) for k, v in regras_de(p.get("regra")).items()))
+                 regra=",".join("%s:%g:%g" % (k, v[0], v[1]) for k, v in regras_de(p.get("regra")).items()),
+                 qual=p.get("qual") if p.get("qual") in ("A+", "A", "B") else "")
         with self.trava:
             l = self.lista(uid)
             if len([y for y in l if not y.get("ate")]) >= 30:
@@ -1821,6 +1853,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(dict(ok=True, usuarios=ACESSOS.listar()))
             if cam == "/api/conexao":
                 p = self._corpo(4000)
+                if p.get("acao") == "piloto":
+                    return self._json(_ligar_piloto(uid, p, ip, u))
                 if p.get("acao") == "ligar" and p.get("ligado"):
                     tid = CONEX.publico(uid)["cfg"].get("teste")
                     if tid and not any(str(x["id"]) == str(tid) and not x.get("ate") for x in TESTES.lista(uid)):

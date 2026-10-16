@@ -319,7 +319,7 @@ void Executar(string sinal)
   {
    string linhas[];
    int n = StringSplit(sinal, '\n', linhas);
-   bool ok = false, ligado = false, real = false;
+   bool ok = false, ligado = false, real = false, zerar = false;
    string simbolo = "", pos = "";
    double perdaRobo = 0;
    string ords[];
@@ -356,6 +356,12 @@ void Executar(string sinal)
                         else
                            if(StringFind(l, "MOTIVO=") == 0)
                               Aviso("espera", StringSubstr(l, 7));
+                           else
+                              if(StringFind(l, "ZERAR=") == 0)
+                                 zerar = StringSubstr(l, 6) == "1";
+                              else
+                                 if(StringFind(l, "PAUSA=") == 0)
+                                    Aviso("pausa", StringSubstr(l, 6));       // trava do robo: nada de ordem nova
      }
    if(!ok)
       return;                                          // o robo nao tem certeza agora: nao mexe em nada
@@ -376,6 +382,13 @@ void Executar(string sinal)
    if(simbolo != "" && simbolo != _Symbol)
      {
       Aviso("simbolo", "o robo espera " + simbolo + " e o EA esta em " + _Symbol);
+      return;
+     }
+   if(zerar)                                           // botao de emergencia do robo: zera e cancela tudo
+     {
+      CancelarPendentes();
+      FecharPosicao("botao de emergencia do robo");
+      Aviso("emergencia", "botao de emergencia: ordens canceladas e posicao zerada");
       return;
      }
    if(!ligado)

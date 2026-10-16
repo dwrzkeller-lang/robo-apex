@@ -16,6 +16,31 @@ estudos (RSI-2 de Connors, ORB de Zarattini & Aziz, fechamento de gap e o moment
 
 ---
 
+## Novidades da versão 3.2
+
+- **Dados de verdade à noite:** moedas (EUR/USD, GBP/USD, USD/JPY, AUD/USD), ouro, prata e petróleo agora têm candles
+  24 horas, de domingo à noite até sexta, como no TradingView. Antes o robô cortava tudo depois das 17h de Brasília e
+  parecia que o mercado tinha fechado. S&P 500, Nasdaq (USTEC) e Dow Jones passaram a usar o contrato futuro (ES, NQ e
+  YM), que negocia quase 24 horas (o Yahoo entrega o futuro com uns 10 minutos de atraso; a tela avisa).
+- **Piloto automático (aba Conectar):** um botão liga a estratégia na conta do usuário pelo MetaTrader 5: o robô cria o
+  teste ao vivo no ativo da corretora e o EA segue. Travas do servidor, além das do EA: horário de operação (pode
+  passar da meia-noite), máximo de operações no dia e perda máxima do dia (nenhuma ordem nova; a posição aberta segue
+  com o stop e o alvo). **Botão de emergência:** desliga e manda o EA zerar a posição e cancelar as ordens; o EA
+  confirma. Painel com o estado (operando, pausado e por quê, emergência), operações e resultado do dia.
+- **Nota de qualidade A+, A, B, C em cada entrada** (price action, só com o passado): estrutura a favor, espaço até a
+  próxima barreira de pelo menos 2 vezes o risco, diário a favor e rejeição no candle do sinal. Filtro "Qualidade da
+  entrada" na aba Plano e no piloto (B para cima, só A, só A+). A aba Resultado mostra como cada nota se saiu no ativo.
+  Teste com custos em 90.798 operações (12 ativos; 5, 15 e 60 min): todas −0,117R por operação; só A e A+ −0,095R
+  (cerca de 20% menos perda, melhor em 19 de 22 estratégias); só A+ no 5 min −0,003R. Ajuda, mas não deixa nenhuma
+  estratégia lucrativa sozinha.
+- **Raio-X do price action:** botão "◎ Raio-X" no gráfico e cartão na aba Agora. Topos e fundos (HH, HL, LH, LL),
+  rompimentos de estrutura (BOS a favor, CHoCH contra), as zonas de demanda e oferta mais perto do preço, desequilíbrios
+  (FVG) e liquidez (topos e fundos iguais), com a distância em pontos e em reais. No replay, ele lê o mercado como
+  estava naquela hora.
+- **Visual novo:** fundo com aurora e grade fina, cartões de vidro com borda de luz, números em fonte mono, gráfico com
+  moldura de HUD e candles neon.
+- Corrigido: a boleta mostrava "0,000130000000000002" na distância do stop em moedas.
+
 ## Novidades da versão 3.1
 
 - **Testar estratégia com a curva do resultado:** a curva soma o resultado dia a dia (ou operação a operação), verde

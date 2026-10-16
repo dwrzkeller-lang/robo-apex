@@ -17,7 +17,7 @@
   function mostrarForm() {
     const p = AX.pref, a = AX.infoAtivo(p.ativo) || {};
     $("plCapital").value = p.capital; $("plStops").value = p.maxstops; $("plRisco").value = p.risco;
-    $("plLoss").value = p.lossDia || ""; $("plMeta").value = p.metaDia || ""; $("plSeletivo").checked = !!p.seletivo;
+    $("plLoss").value = p.lossDia || ""; $("plMeta").value = p.metaDia || ""; $("plSeletivo").checked = !!p.seletivo; $("plQual").value = p.qual || "";
     $("plMetaMes").value = p.metaMes || ""; $("plQueda").value = p.quedaMax || "";
     document.querySelectorAll("#plTam button").forEach((b) => b.classList.toggle("on", b.dataset.v === p.tam));
     $("plRiscoBox").classList.toggle("oculto", p.tam !== "risco");
@@ -30,6 +30,7 @@
   $("plLoss").onchange = (e) => { AX.pref.lossDia = num(e.target, 0, 0); mudou(); };
   $("plMeta").onchange = (e) => { AX.pref.metaDia = num(e.target, 0, 0); mudou(); };
   $("plSeletivo").onchange = (e) => { AX.pref.seletivo = e.target.checked; mudou(); };
+  $("plQual").onchange = (e) => { AX.pref.qual = e.target.value; mudou(); };
   document.querySelectorAll("#aba-plano input[data-prot]").forEach((c) => {
     c.checked = (AX.pref.prot || []).includes(c.dataset.prot);
     c.onchange = () => {

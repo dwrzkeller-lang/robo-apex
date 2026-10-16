@@ -221,7 +221,7 @@
       return `<div class="op${sel ? " sel" : ""}" data-j="${j}">
           <span class="op-h">${AX.quandoT(t.t_ent, meta.intraday)}</span><span class="op-e">${t.est}</span>
           <span class="${t.dir > 0 ? "bom" : "ruim"}">${t.dir > 0 ? "C" : "V"}</span>
-          <span class="op-m">${editada(t) ? `<span class="op-ed" data-dica="Operação editada por você no E se…: o resultado já é o da sua edição.">✎</span> ` : ""}${aberta ? '<i class="luz vivo"></i> aberta' : AX.esc(t.motivo)}${t.manual && !editada(t) ? " ✋" : ""}</span>
+          <span class="op-m">${t.qual ? `<i class="nota-mini n-${t.qual.replace("+", "p")}" data-dica="Nota de qualidade da entrada (price action): ${AX.esc(t.qual)}">${AX.esc(t.qual)}</i> ` : ""}${editada(t) ? `<span class="op-ed" data-dica="Operação editada por você no E se…: o resultado já é o da sua edição.">✎</span> ` : ""}${aberta ? '<i class="luz vivo"></i> aberta' : AX.esc(t.motivo)}${t.manual && !editada(t) ? " ✋" : ""}</span>
           <b class="${AX.cls(t.R)}">${AX.emR() ? AX.R(t.R, 1) : ""}</b><b class="op-d ${AX.cls(din)}">${AX.dinheiro(din, { meta }, true)}</b>
         </div>${sel ? comoFoi(t, meta, aberta) : ""}`;
     };
@@ -372,7 +372,7 @@
     try {
       await pedir({ acao: "ligar", ativo: p.ativo, tf: +p.tf, est: p.est, gestao: p.gestao, contratos: p.contratos, capital: p.capital, maxstops: p.maxstops,
         tam: p.tam, risco: p.risco, lossDia: p.lossDia, metaDia: p.metaDia, seletivo: !!p.seletivo, prot: p.prot || [],
-        cods: p.est === "TODAS" ? (p.minhas || []).join(",") : "", regra: AX.regraTxt(), brl: p.emReais !== false });      // o plano fica gravado no teste
+        cods: p.est === "TODAS" ? (p.minhas || []).join(",") : "", regra: AX.regraTxt(), brl: p.emReais !== false, qual: p.qual || "" });      // o plano fica gravado no teste
       AX.pref.opsVista = "teste"; AX.salvarPref();
       AX.som("ordem");
       AX.toast("Teste ao vivo ligado: o robô registra as operações a partir do próximo candle, mesmo com esta tela fechada.", "ok");

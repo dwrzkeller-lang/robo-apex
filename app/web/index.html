@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="opcoes.css">
 <link rel="stylesheet" href="perfil.css">
 <link rel="stylesheet" href="tema.css">
+<link rel="stylesheet" href="tema2.css">
 </head>
 <body>
 
@@ -112,6 +113,7 @@
     <div class="graf-botoes">
       <button id="btCandles" data-dica="Aparência dos candles: cores de alta e de baixa, candle cheio ou vazado e a opção de colorir pela tendência das médias. Duplo clique num candle abre a mesma janela.">Candles</button>
       <button id="btPerfil" data-dica="Volume por preço, estilo Profit: onde houve mais negócio em cada faixa de preço, os principais pontos de compra e de venda e quantas entradas das estratégias aconteceram em cada lugar.">Volume por preço</button>
+      <button id="btRaiox" class="bt-raiox" data-dica="Raio-X do price action: estrutura (HH, HL, LH, LL), rompimentos (BOS e CHoCH), zonas de demanda e oferta, desequilíbrios (FVG) e liquidez desenhados no gráfico. Clique para ligar ou desligar.">◎ Raio-X</button>
       <button id="btInd" data-dica="Indicadores: médias móveis à escolha, VWAP, Bollinger, Keltner, volume, IFR e estocástico; os níveis que o robô traça sozinho; e como as operações aparecem no gráfico. São só para leitura: as estratégias não mudam.">Indicadores</button>
       <button id="btPeriodoTodo" data-dica="Mostra o período inteiro escolhido no topo.">↔</button>
       <button id="btCentro" data-dica="Volta para o último candle com a escala de preço automática (tecla Home).">⌖ Centralizar</button>
@@ -143,6 +145,7 @@
     <section class="aba on" id="aba-vivo">
       <div class="erro oculto" id="erroVivo"></div>
       <div class="card momento" id="cardVivo"><div class="estado">-</div></div>
+      <div class="card raiox oculto" id="cardRaiox"></div>
       <div id="chipRobo"></div>
       <div class="card boleta oculto" id="cardBoleta"></div>
       <div class="card oculto" id="cardCripto"></div>
@@ -175,6 +178,8 @@
           <label class="campo"><span>Parar o dia ao perder <i class="q" data-dica="Perda no dia que encerra as operações do dia. 0 = não usa."></i></span><input type="number" id="plLoss" min="0" step="10" placeholder="0 = não usa"></label>
           <label class="campo"><span>Parar o dia ao ganhar <i class="q" data-dica="Ganho no dia que encerra as operações do dia (a “meta diária”). 0 = não usa. Nos testes não houve evidência de que ajuda: ela corta os dias grandes das estratégias de tendência."></i></span><input type="number" id="plMeta" min="0" step="10" placeholder="0 = não usa"></label>
         </div>
+        <label class="campo" style="margin-top:10px"><span>Qualidade da entrada <i class="q" data-dica="Nota de price action de cada sinal: estrutura a favor, espaço até a próxima barreira (2x o risco), diário a favor e rejeição no candle. A+ = as 4; A = 3; B = 2; C = 0 ou 1. Filtrando, o robô só arma as entradas com a nota escolhida (vale para o gráfico, os resultados, os testes ao vivo e o piloto automático). Nos testes com custos em 90 mil operações, “só A” reduziu a perda média em cerca de 20%, mas não deixou nenhuma estratégia lucrativa sozinha."></i></span>
+          <select id="plQual"><option value="">Todas as entradas</option><option value="B">B para cima</option><option value="A">Só A e A+</option><option value="A+">Só A+</option></select></label>
         <label class="chk" style="margin-top:10px"><input type="checkbox" id="plSeletivo"> <span><b>Modo seletivo</b>: só opera a favor da tendência do diário e, nas estratégias de correção, só com movimento limpo</span></label>
         <div class="campo" style="margin-top:10px"><span>Proteções do stop <i class="q" data-dica="Quatro regras para perder menos quando a operação dá errado. Cada uma muda o resultado: veja logo abaixo, em “O que cada regra fez”, a mesma simulação com e sem ela no período do topo. Nos testes com 48 mil operações elas diminuíram a perda média, mas também aumentaram o número de perdas; nenhuma virou o resultado sozinha."></i></span></div>
         <label class="chk"><input type="checkbox" data-prot="curto"> <span><b>Stop curto</b>: nenhuma operação arrisca mais que 1 ATR (o movimento médio de um candle); o stop largo de uma estratégia é trazido para essa distância</span></label>
@@ -311,6 +316,7 @@
 <script src="desenho.js"></script>
 <script src="ops.js"></script>
 <script src="aovivo.js"></script>
+<script src="raiox.js"></script>
 <script src="plano.js"></script>
 <script src="opcoes.js"></script>
 <script src="perfil.js"></script>

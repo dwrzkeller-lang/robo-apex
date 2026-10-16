@@ -19,7 +19,7 @@
     const k = m.iFim, n = Math.min(14, k);
     let s = 0; for (let i = k - n + 1; i <= k; i++) s += D.h[i] - D.l[i];
     const tk = m.tick || Math.pow(10, -m.decimais), a = Math.max(tk, Math.round(s / n / tk) * tk);
-    return { stop: a, alvo: 2 * a };
+    return { stop: +a.toFixed(m.decimais), alvo: +(2 * a).toFixed(m.decimais) };       // sem lixo de vírgula (0,000130000000002)
   }
   const lerNum = (v) => { const x = String(v || "").trim().replace(/\s/g, ""); if (!x) return null; const n = parseFloat(x.replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".")); return n > 0 ? n : NaN; };
 
@@ -36,13 +36,19 @@
       <span class="dir">sem dinheiro <button class="mini-btn" id="bolRec">${B.recolhido ? "abrir ▾" : "recolher ▴"}</button></span></div>`;
     if (B.recolhido) { c.innerHTML = h + resumoPos(); ligar(); return; }
     const sug = sugestao() || { stop: "", alvo: "" }, mem = ((AX.pref.bol || {})[m.ativo]) || {};      // cada ativo lembra os seus valores
+    const casas = (v) => {                     // número com as casas do ativo (valores antigos guardados com lixo de vírgula também)
+      if (v === "" || v == null) return "";
+      const n = typeof v === "number" ? v : parseFloat(String(v).replace(",", "."));
+      return Number.isFinite(n) && /\d{7,}/.test(String(v).split(/[.,]/)[1] || (typeof v === "number" ? String(v).split(".")[1] || "" : ""))
+        ? n.toFixed(m.decimais).replace(".", ",") : String(v).replace(".", ",");
+    };
     h += `<div class="bol-topo"><div><small>${AX.esc(AX.rotAtivo(m.ativo))}</small><b id="bolAgora">${agora != null ? f(agora) : "-"}</b>${atraso ? '<em class="alerta">preço com ~15 min de atraso</em>' : ""}</div>
         <div class="seg mini" id="bolTipo">${[["mercado", "A mercado"], ["limite", "Limitada"], ["stop", "Stop"]].map(([k, t]) => `<button data-t="${k}" class="${B.tipo === k ? "on" : ""}">${t}</button>`).join("")}</div></div>
       <div class="bol-grade">
         <label class="campo"><span>${m.fracionado ? "Lotes" : "Contratos"}</span><div class="bol-qtd"><button data-q="-1" type="button">−</button><input id="bolQtd" inputmode="decimal" value="${mem.q || (m.cripto || !m.fracionado ? 1 : 0.01)}"><button data-q="1" type="button">+</button></div></label>
         <label class="campo ${B.tipo === "mercado" ? "oculto" : ""}" id="bolPrecoBox"><span>Preço da ordem</span><input id="bolPreco" inputmode="decimal" value="${agora != null ? String(agora).replace(".", ",") : ""}"></label>
-        <label class="campo"><span>Stop (distância)</span><input id="bolStop" inputmode="decimal" placeholder="sem stop" value="${mem.s ?? String(sug.stop).replace(".", ",")}"></label>
-        <label class="campo"><span>Alvo (distância)</span><input id="bolAlvo" inputmode="decimal" placeholder="sem alvo" value="${mem.a ?? String(sug.alvo).replace(".", ",")}"></label>
+        <label class="campo"><span>Stop (distância)</span><input id="bolStop" inputmode="decimal" placeholder="sem stop" value="${casas(mem.s ?? sug.stop)}"></label>
+        <label class="campo"><span>Alvo (distância)</span><input id="bolAlvo" inputmode="decimal" placeholder="sem alvo" value="${casas(mem.a ?? sug.alvo)}"></label>
       </div>
       <div class="bol-risco" id="bolRisco"></div>
       <div class="bol-bts"><button class="bol-compra" id="bolCompra">COMPRAR</button><button class="bol-venda" id="bolVenda">VENDER</button></div>

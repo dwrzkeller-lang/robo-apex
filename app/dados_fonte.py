@@ -32,13 +32,20 @@ import historico
 
 BRT = timezone(timedelta(hours=-3))
 
-# ativos internacionais (horario de Brasilia): Londres de madrugada, Nova York a partir das 10:30
-INTL_PRM = dict(HoraInicio=400, HoraFimEntradas=1500, HoraZeragem=1600)
+# moedas e commodities negociam quase 24 horas (de domingo a noite ate sexta a tarde): o robo usa todos os candles,
+# como o TradingView. Antes so ia das 3h as 17h de Brasilia e, depois das 17h, parecia que o mercado tinha fechado.
+INTL_PRM = dict(HoraInicio=0, HoraFimEntradas=2330, HoraZeragem=2355)
+SESSAO_24H = (0, 2359)
 
 
 def _intl(nome, yahoo, tick, dec, valor, lote, slip):
-    return dict(nome=nome, yahoo=yahoo, escala=1.0, tick=tick, sessao=(300, 1700), decimais=dec,
+    return dict(nome=nome, yahoo=yahoo, escala=1.0, tick=tick, sessao=SESSAO_24H, fim_de_semana=True, decimais=dec,
                 valor_ponto=valor, moeda="US$", lote=lote, prm=INTL_PRM, slip=slip, custo=3.5, fracionado=True)
+
+
+# indices dos EUA pelo contrato futuro (CME, quase 24 horas, no horario de Nova York): e o que o TradingView e as
+# corretoras de CFD mostram a noite. O indice a vista so tem candles das 9:30 as 16:00.
+FUT_PRM = dict(HoraInicio=0, HoraFimEntradas=2330, HoraZeragem=2355)
 
 
 # acoes da B3 (Yahoo, ~15 min de atraso): 1 lote = 100 acoes; custo = emolumentos de day trade (~0,025% por lado)
@@ -65,9 +72,9 @@ ATIVOS = {
     "USDJPY": _intl("USD/JPY", "JPY=X", 0.001, 3, 667.0, "lote padrão (100 mil) - valor aproximado", 0.008),
     "AUDUSD": _intl("AUD/USD", "AUDUSD=X", 0.00001, 5, 100000.0, "lote padrão (100 mil)", 0.00006),
     "XAUUSD": _intl("XAU/USD - Ouro", "GC=F", 0.01, 2, 100.0, "lote de 100 onças", 0.2),
-    "USTEC": dict(nome="USTEC - Nasdaq 100 (horário de Nova York)", yahoo="^NDX", escala=1.0, tick=0.1, fuso="NY",
-                  sessao=(930, 1600), decimais=1, valor_ponto=1.0, moeda="US$", lote="lote (US$ 1 por ponto)",
-                  prm=dict(HoraInicio=935, HoraFimEntradas=1530, HoraZeragem=1555), slip=1.0, custo=0.0, fracionado=True),
+    "USTEC": dict(nome="USTEC - Nasdaq 100 (futuro NQ, quase 24 h, horário de Nova York)", yahoo="NQ=F", escala=1.0, tick=0.25,
+                  fuso="NY", sessao=SESSAO_24H, fim_de_semana=True, decimais=2, valor_ponto=1.0, moeda="US$",
+                  lote="lote (US$ 1 por ponto)", prm=FUT_PRM, slip=1.0, custo=0.0, fracionado=True),
     "JP225": dict(nome="JP225 - Nikkei 225 (horário de Tóquio)", yahoo="^N225", escala=1.0, tick=1.0, fuso="TOQUIO",
                   sessao=(900, 1530), decimais=0, valor_ponto=0.67, moeda="US$", lote="lote (¥100 por ponto ≈ US$ 0,67)",
                   prm=dict(HoraInicio=905, HoraFimEntradas=1500, HoraZeragem=1525), slip=5.0, custo=0.0, fracionado=True),
@@ -76,12 +83,12 @@ ATIVOS = {
                    prm=dict(HoraInicio=0, HoraFimEntradas=2300, HoraZeragem=2355), slip=10.0, custo=0.0, fracionado=True),
     "PRATA": _intl("Prata (XAG/USD - futuro SI)", "SI=F", 0.005, 3, 5000.0, "lote de 5.000 onças", 0.01),
     "PETROLEO": _intl("Petróleo WTI (futuro CL)", "CL=F", 0.01, 2, 1000.0, "lote de 1.000 barris", 0.02),
-    "SPX500": dict(nome="S&P 500 (horário de Nova York)", yahoo="^GSPC", escala=1.0, tick=0.1, fuso="NY",
-                   sessao=(930, 1600), decimais=1, valor_ponto=1.0, moeda="US$", lote="lote (US$ 1 por ponto)",
-                   prm=dict(HoraInicio=935, HoraFimEntradas=1530, HoraZeragem=1555), slip=0.5, custo=0.0, fracionado=True),
-    "US30": dict(nome="Dow Jones 30 (horário de Nova York)", yahoo="^DJI", escala=1.0, tick=1.0, fuso="NY",
-                 sessao=(930, 1600), decimais=0, valor_ponto=1.0, moeda="US$", lote="lote (US$ 1 por ponto)",
-                 prm=dict(HoraInicio=935, HoraFimEntradas=1530, HoraZeragem=1555), slip=3.0, custo=0.0, fracionado=True),
+    "SPX500": dict(nome="S&P 500 (futuro ES, quase 24 h, horário de Nova York)", yahoo="ES=F", escala=1.0, tick=0.25, fuso="NY",
+                   sessao=SESSAO_24H, fim_de_semana=True, decimais=2, valor_ponto=1.0, moeda="US$", lote="lote (US$ 1 por ponto)",
+                   prm=FUT_PRM, slip=0.5, custo=0.0, fracionado=True),
+    "US30": dict(nome="Dow Jones 30 (futuro YM, quase 24 h, horário de Nova York)", yahoo="YM=F", escala=1.0, tick=1.0, fuso="NY",
+                 sessao=SESSAO_24H, fim_de_semana=True, decimais=0, valor_ponto=1.0, moeda="US$", lote="lote (US$ 1 por ponto)",
+                 prm=FUT_PRM, slip=3.0, custo=0.0, fracionado=True),
 }
 for _c, _n in (("PETR4", "Petrobras PN"), ("VALE3", "Vale ON"), ("ITUB4", "Itaú Unibanco PN"), ("BBDC4", "Bradesco PN"),
                ("BBAS3", "Banco do Brasil ON"), ("ABEV3", "Ambev ON"), ("B3SA3", "B3 ON"), ("WEGE3", "WEG ON"),
@@ -98,6 +105,19 @@ for _k, _v in ATIVOS.items():
 TEMPOS = {2: ("2m", "60d"), 5: ("5m", "60d"), 15: ("15m", "60d"), 30: ("30m", "60d"), 60: ("60m", "730d"),
           1440: ("1d", "10y")}
 NOME_TEMPO = {2: "2 min", 5: "5 min", 15: "15 min", 30: "30 min", 60: "60 min", 1440: "Diário"}
+
+
+def etiqueta_fonte(chave):
+    """Pedaco do nome dos arquivos guardados: muda quando o simbolo ou o horario do ativo mudam."""
+    if chave not in FONTE_NOVA_31:
+        return chave
+    cfg = ATIVOS[chave]
+    sim = "".join(ch for ch in cfg.get("yahoo", "") if ch.isalnum())
+    return "%s_%s_24h" % (chave, sim)
+
+
+# ativos que ganharam o horario de 24 horas (ou o contrato futuro) na 3.1: os arquivos antigos ficam de lado
+FONTE_NOVA_31 = {"EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "XAUUSD", "PRATA", "PETROLEO", "USTEC", "SPX500", "US30"}
 
 
 def sessao_cfg(cfg):
@@ -364,10 +384,12 @@ def carregar_yahoo(base, chave, tf=5, guardar=True, max_idade=None):
     def fabrica():
         intervalo, periodo = TEMPOS[tf]
         sufixo = "" if tf == 5 else ("_D" if tf == 1440 else "_%dm" % tf)
-        arq_cache = os.path.join(pasta_dados(base), "cache", "yahoo_%s%s.json" % (chave, sufixo))
-        arq_hist = os.path.join(pasta_dados(base), "historico", "yahoo", "%s_%d.json" % (chave, tf))
+        nome = etiqueta_fonte(chave)
+        arq_cache = os.path.join(pasta_dados(base), "cache", "yahoo_%s%s.json" % (nome, sufixo))
+        arq_hist = os.path.join(pasta_dados(base), "historico", "yahoo", "%s_%d.json" % (nome, tf))
         st = dict(completo=0.0, gravado=0.0, n_gravado=0, ok=0.0)
-        rotulo = "Yahoo Finance (%s%s)" % (NOME_TEMPO[tf], ", atraso ~15 min" if tf < 1440 and cfg.get("mercado") == "b3" else "")
+        atraso = ", atraso ~15 min" if cfg.get("mercado") == "b3" else ", futuro com atraso ~10 min" if cfg.get("yahoo", "").endswith("=F") else ""
+        rotulo = "Yahoo Finance (%s%s)" % (NOME_TEMPO[tf], atraso if tf < 1440 else "")
 
         def gravar_hist(b):
             try:
@@ -470,7 +492,7 @@ def _historia(base, chave, tf):
         v = _base_cache.get(ck)
         if v and (v["ass"] == ass or (v["ass"][2] == ass[2] and agora - v["feito"] < 600)):
             return v["b"]
-        arq = os.path.join(pasta_dados(base), "cache", "base_%s_%d.json" % (chave, tf))
+        arq = os.path.join(pasta_dados(base), "cache", "base_%s_%d.json" % (etiqueta_fonte(chave), tf))
         if v is None and os.path.exists(arq):
             try:
                 with open(arq, encoding="utf-8") as f:

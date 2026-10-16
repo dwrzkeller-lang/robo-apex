@@ -10,6 +10,10 @@ Como funciona (e por que a responsabilidade fica com quem opera):
      stop e alvo, ou nenhuma posicao. E ele, dentro do MetaTrader, quem envia, muda e cancela as ordens.
   5. Travas: o EA vem preso a conta DEMO; conta real so com a opcao ligada no EA E aqui (com confirmacao escrita).
      Lote maximo, perda maxima no dia e o botao LIGADO/DESLIGADO (desliga cancela as ordens pendentes na hora).
+  6. PILOTO AUTOMATICO (3.1): um botao so liga o teste ao vivo no ativo da corretora com a estrategia, o tempo, a gestao e
+     o filtro de qualidade escolhidos e manda o EA seguir. O servidor tem travas proprias, alem das do EA: horario de
+     operacao, maximo de operacoes no dia e perda maxima do dia (nenhuma ordem NOVA sai depois disso; a posicao aberta
+     continua com o stop e o alvo). O botao de EMERGENCIA desliga tudo e manda o EA zerar a posicao e cancelar as ordens.
 Tudo fica registrado (aceite do termo com data e IP, cada mudanca de configuracao e o que o EA informou)."""
 import hashlib
 import json
@@ -17,6 +21,9 @@ import os
 import secrets
 import threading
 import time
+from datetime import datetime, timedelta, timezone
+
+BRT = timezone(timedelta(hours=-3))
 
 TERMO_VERSAO = "2026-10-15"
 TERMO = (
@@ -63,6 +70,8 @@ class Conexao:
         if e is None:
             e = self.ler_json(self._arq(uid), {}) or {}
             e.setdefault("cfg", dict(simbolo="", ativo="WIN", teste=None, mult=1.0, max_lote=1.0, perda_dia=0.0, ligado=False, real=False))
+            for k, v in (("max_ops", 0), ("hora_ini", 0), ("hora_fim", 0), ("zerar", False)):
+                e["cfg"].setdefault(k, v)
             e.setdefault("log", [])
             self.mem[uid] = e
         return e
@@ -97,7 +106,8 @@ class Conexao:
             online = bool(st) and _agora() - st.get("quando", 0) < 20
             return dict(termo=TERMO, termoVersao=TERMO_VERSAO, aceite=e.get("aceite"), temToken=bool(e.get("token_fim")),
                         tokenFim=e.get("token_fim"), cfg=e["cfg"], ea=st, eaOnline=online, log=e["log"][-60:][::-1],
-                        simbolos=sorted(k for k, v in self.velas.items() if v.get("uid") == uid), porta=porta)
+                        simbolos=sorted(k for k, v in self.velas.items() if v.get("uid") == uid), porta=porta,
+                        piloto=e.get("piloto") or {})
 
     def acao(self, uid, p, ip=""):
         acao = p.get("acao")
@@ -130,7 +140,9 @@ class Conexao:
                          teste=p.get("teste", c.get("teste")),
                          mult=max(0.01, min(100.0, float(p.get("mult", c["mult"]) or 1))),
                          max_lote=max(0.01, min(1000.0, float(p.get("max_lote", c["max_lote"]) or 1))),
-                         perda_dia=max(0.0, float(p.get("perda_dia", c["perda_dia"]) or 0)))
+                         perda_dia=max(0.0, float(p.get("perda_dia", c["perda_dia"]) or 0)),
+                         max_ops=max(0, min(100, int(p.get("max_ops", c.get("max_ops", 0)) or 0))),
+                         hora_ini=_hhmm(p.get("hora_ini", c.get("hora_ini", 0))), hora_fim=_hhmm(p.get("hora_fim", c.get("hora_fim", 0))))
                 self._log(e, "config", "símbolo %s, teste %s, multiplicador %g, lote máximo %g, perda máxima no dia %g"
                           % (c["simbolo"] or "-", c["teste"] or "-", c["mult"], c["max_lote"], c["perda_dia"]))
             elif acao == "ligar":
@@ -138,7 +150,12 @@ class Conexao:
                 if quer and not e["cfg"].get("teste"):
                     raise ValueError("Escolha o teste ao vivo que o EA vai seguir.")
                 e["cfg"]["ligado"] = quer
+                if quer:
+                    e["cfg"]["zerar"] = False
                 self._log(e, "ligar", "envio de ordens LIGADO" if quer else "envio de ordens DESLIGADO (o EA cancela as ordens pendentes)")
+            elif acao == "emergencia":
+                e["cfg"].update(ligado=False, zerar=True)
+                self._log(e, "emergencia", "BOTÃO DE EMERGÊNCIA: envio desligado; o EA zera a posição e cancela as ordens")
             elif acao == "real":
                 quer = bool(p.get("real"))
                 if quer and str(p.get("confirmo", "")).strip().upper() != "CONTA REAL":
@@ -162,6 +179,9 @@ class Conexao:
                       posicoes=d.get("posicoes") if isinstance(d.get("posicoes"), list) else [], resultadoDia=d.get("resultadoDia"),
                       quando=_agora())
             e["ea"] = st
+            if e["cfg"].get("zerar") and not st["posicoes"]:
+                e["cfg"]["zerar"] = False
+                self._log(e, "emergencia", "o EA confirmou: sem posição aberta")
             if antes.get("tipo") != st["tipo"] or antes.get("conta") != st["conta"]:
                 self._log(e, "ea", "EA conectado: conta %s (%s) na %s" % (st["conta"], st["tipo"] or "?", st["corretora"] or "corretora"))
             for ev in (d.get("eventos") or [])[:30]:
@@ -170,7 +190,7 @@ class Conexao:
             if d.get("eventos"):
                 self._gravar(uid)
             c = e["cfg"]
-            return "OK=1\nLIGADO=%d\nREAL=%d\n" % (1 if c.get("ligado") else 0, 1 if c.get("real") else 0)
+            return "OK=1\nLIGADO=%d\nREAL=%d\n%s" % (1 if c.get("ligado") else 0, 1 if c.get("real") else 0, "ZERAR=1\n" if c.get("zerar") else "")
 
     def receber_candles(self, uid, d):
         """Candles de 1 minuto da corretora: [[t (hora do servidor da corretora), o, h, l, c, v], ...] e o fuso do servidor."""
@@ -235,6 +255,37 @@ class Conexao:
                 x = self.velas[sim] = dict(minutos={int(m[0]): tuple(m) for m in antigas if isinstance(m, list) and len(m) == 6}, uid=None, gravado=_agora())
             return [m for _, m in sorted(x["minutos"].items())], x.get("versao", 0)
 
+    def _piloto(self, uid, estado, motivo, **extra):
+        with self.trava:
+            e = self._est(uid)
+            antes = (e.get("piloto") or {}).get("estado")
+            e["piloto"] = dict(estado=estado, motivo=motivo, quando=round(_agora(), 1), **extra)
+            if antes != estado and estado in ("pausado", "operando"):
+                self._log(e, "piloto", motivo)
+
+    def _travas(self, uid, c, r):
+        """Travas do servidor (alem das do EA). Devolve o motivo da pausa ou "" se pode mandar ordens novas."""
+        agora = datetime.now(BRT)
+        hoje = agora.strftime("%Y%m%d")
+        # os horarios do teste sao o relogio da bolsa "vestido" de UTC: para o dia, basta a data em UTC
+        dia_c = lambda t: datetime.fromtimestamp(t, timezone.utc).strftime("%Y%m%d")      # noqa: E731
+        trades = [t for t in (r.get("trades") or []) if dia_c(t.get("t_ent", 0)) == hoje]
+        abertas = [a for a in (r.get("abertas") or []) if dia_c(a.get("t_ent", 0)) == hoje]
+        ops = len(trades) + len(abertas)
+        res = round(sum(t.get("dinheiro", 0.0) for t in trades), 2)
+        hm = agora.hour * 100 + agora.minute
+        motivo = ""
+        ini, fim = c.get("hora_ini") or 0, c.get("hora_fim") or 0
+        dentro = (ini <= hm <= fim) if ini <= fim else (hm >= ini or hm <= fim)      # janela que passa da meia-noite
+        if (ini or fim) and not dentro:
+            motivo = "fora do horário de operação (%02d:%02d às %02d:%02d)" % (c["hora_ini"] // 100, c["hora_ini"] % 100, c["hora_fim"] // 100, c["hora_fim"] % 100)
+        elif c.get("max_ops") and ops >= c["max_ops"]:
+            motivo = "limite de %d operações no dia atingido" % c["max_ops"]
+        elif c.get("perda_dia") and res <= -c["perda_dia"]:
+            motivo = "perda máxima do dia atingida (%s)" % res
+        self._piloto(uid, "pausado" if motivo else "operando", motivo or "operando: seguindo a estratégia", opsHoje=ops, resultadoHoje=res)
+        return motivo
+
     def sinal(self, uid, resultado_do_teste):
         """Texto para o EA: o que o teste escolhido quer agora. resultado_do_teste(uid, id) -> (x, r, quando) ou None."""
         with self.trava:
@@ -242,7 +293,12 @@ class Conexao:
             c = dict(e["cfg"])
         linhas = ["LIGADO=%d" % (1 if c.get("ligado") else 0), "REAL=%d" % (1 if c.get("real") else 0), "SIMBOLO=%s" % c["simbolo"],
                   "MULT=%g" % c["mult"], "MAXLOTE=%g" % c["max_lote"], "PERDADIA=%g" % c["perda_dia"]]
+        if c.get("zerar"):
+            linhas.append("ZERAR=1")
+            self._piloto(uid, "emergencia", "botão de emergência: zerando a posição")
+            return "OK=1\n" + "\n".join(linhas) + "\n"
         if not c.get("ligado") or not c.get("teste"):
+            self._piloto(uid, "desligado", "piloto desligado")
             return "OK=1\n" + "\n".join(linhas) + "\n"
         rt = resultado_do_teste(uid, c["teste"])
         if not rt:
@@ -254,16 +310,29 @@ class Conexao:
             return "OK=0\nMOTIVO=o teste está sem dados novos há mais de %d s\n" % FRESCO
         if not str(x.get("ativo", "")).upper() == "MT5:" + c["simbolo"]:
             return "OK=0\nMOTIVO=o teste precisa ser no ativo MT5:%s (dados da sua corretora)\n" % c["simbolo"]
+        pausa = self._travas(uid, c, r)
         q0 = float(x.get("contratos") or 1)
         qtd = lambda q: min(c["max_lote"], round((q or q0) * c["mult"], 2))        # noqa: E731
         for a in r.get("abertas") or []:
             linhas.append("POS=P|%s|%d;%d;%g;%s;%s" % (a["est"], int(a["t_ent"]), a["dir"], qtd(a.get("q")),
                                                        _num(a.get("stop")), _num(a.get("alvo"))))
-        for o in r.get("pend") or []:
+        if pausa:
+            linhas.append("PAUSA=%s" % pausa)                # nenhuma ordem NOVA; a posicao aberta segue com o stop e o alvo dela
+        for o in [] if pausa else (r.get("pend") or []):
             tipo = "mercado" if o.get("tipo") == "abertura" else ("limite" if o.get("tipo") == "limite" else "stop")
             linhas.append("ORD=O|%s|%d|%d;%d;%s;%s;%g;%s;%s" % (o["est"], int(o["t_sinal"]), o["dir"], o["dir"], tipo, _num(o.get("gatilho")),
                                                                 qtd(o.get("q")), _num(o.get("stop")), _num(o.get("alvo"))))
         return "OK=1\n" + "\n".join(linhas) + "\n"
+
+
+def _hhmm(v):
+    """'9:05', '0905' ou 905 -> 905 (0 = sem limite)."""
+    try:
+        t = str(v or "0").replace(":", "").strip()
+        n = int(t) if t else 0
+    except ValueError:
+        return 0
+    return n if 0 <= n <= 2359 and n % 100 < 60 else 0
 
 
 def _num(v):
